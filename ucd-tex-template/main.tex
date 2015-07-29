@@ -1,0 +1,51 @@
+\documentclass[a4paper,12pt,oneside]{book}
+\usepackage[toc,page]{appendix}
+\usepackage{lmodern}
+\usepackage[T1]{fontenc}
+\usepackage[procnames]{listings}
+\usepackage{color}
+\begin{document}
+\definecolor{keywords}{RGB}{255,0,90}
+\definecolor{comments}{RGB}{0,0,113}
+\definecolor{red}{RGB}{160,0,0}
+\definecolor{green}{RGB}{0,150,0}
+\lstset{language=Python, 
+        basicstyle=\ttfamily\small, 
+        keywordstyle=\color{keywords},
+        commentstyle=\color{comments},
+        stringstyle=\color{red},
+        showstringspaces=false,
+        identifierstyle=\color{green},
+        procnamekeys={def,class}}
+
+\begin{titlepage}
+\include{conf}
+\newcommand{\HRule}{\rule{\linewidth}{0.5mm}}
+\center
+\HRule \\[0.4cm]
+{ \Large \bfseries \mymaintitle}\\[0.4cm]
+\emph{\large{\mysubtitle}}
+\\[20pt]
+{ \large \bfseries \myauthor}\\[0.3cm]
+\HRule \\[1.5cm]
+A minor thesis submitted in part fulfilment of the degree of \mytitle in \myfield with the supervision of Dr. \mysupervisor.
+\\[10cm]
+{\large \myschool}\\[12pt]
+{\large \myuniversity}\\[12pt]
+{\large \today}
+\vfill
+\end{titlepage}
+\include{abstract}
+\tableofcontents
+\include{introduction}
+\include{literature}
+\include{problem}
+\include{approach}
+\include{results}
+\include{evaluation}
+\include{references}
+\begin{appendices}
+\include{appendix1}
+\end{appendices}
+
+\end{document}
