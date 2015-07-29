@@ -1,0 +1,36 @@
+digraph modules {
+"outlook'"  [shape=box];
+"strings'"  [shape=box];
+"mailwash'"  [shape=box];
+"zip'"  [shape=box];
+"carver'"  [shape=box];
+"vinettocfa'"  [shape=box];
+"snorkelkickstart'"  [shape=box];
+"pdftotext'"  [shape=box];
+"excel'"  [shape=box];
+"antiword'"  [shape=box];
+    "file"  ->  "excel" [ style=dashed ] ;
+    "vinettocfa'"  ->  "digest" [ color=green, style=dashed ] ;
+    "file"  ->  "ole2txt" [ label="2.3", color=red ] ;
+    "zip'"  ->  "digest";
+    "ole2txt"  ->  "excel" [ label="2.3", color=red ] ;
+    "snorkelkickstart'"  ->  "carver" [ label="73.02", color=red, style=dotted ] ;
+    "file"  ->  "pdftotext" [ style=dashed ] ;
+    "antiword"  ->  "strings" [ style=dashed ] ;
+    "outlook'"  ->  "mailwash" [ style=dashed ] ;
+    "digest"  ->  "file" [ label="25.49", color=red ] ;
+    "snorkelkickstart'"  ->  "digest" [ label="15.12", color=red ] ;
+    "strings'"  ->  "indexer" [ color=green, style=dashed ] ;
+    "file"  ->  "exif" [ label="2.32", color=red ] ;
+    "antiword'"  ->  "indexer" [ color=green, style=dashed ] ;
+    "mailwash'"  ->  "indexer" [ color=green ] ;
+    "mailwash"  ->  "indexer" [ style=dashed ] ;
+    "file"  ->  "objdump" [ style=dashed ] ;
+    "file"  ->  "zip" [ style=dotted ] ;
+    "pdftotext'"  ->  "indexer" [ color=green, style=dashed ] ;
+    "file"  ->  "indexer";
+    "carver'"  ->  "digest" [ label="9.96", color=red, style=dashed ] ;
+    "file"  ->  "antiword" [ style=dashed ] ;
+    "excel'"  ->  "indexer" [ color=green ] ;
+    "file"  ->  "outlook" [ style=dotted ] ;
+}

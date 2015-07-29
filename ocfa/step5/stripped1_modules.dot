@@ -1,0 +1,26 @@
+digraph modules {
+"strings'"  [shape=box];
+"mailwash'"  [shape=box];
+"zip'"  [shape=box];
+"carver'"  [shape=box];
+"snorkelkickstart'"  [shape=box];
+"excel'"  [shape=box];
+"antiword'"  [shape=box];
+    "file"  ->  "ole2txt" [ style=dashed ] ;
+    "zip'"  ->  "digest" [ color=green ] ;
+    "ole2txt"  ->  "excel" [ style=dashed ] ;
+    "snorkelkickstart'"  ->  "carver" [ label="87.51", color=red, style=dotted ] ;
+    "antiword"  ->  "strings";
+    "file"  ->  "indexer" [ color=green ] ;
+    "file"  ->  "excel" [ color=green, style=dashed ] ;
+    "strings'"  ->  "indexer" [ color=green ] ;
+    "file"  ->  "exif";
+    "antiword'"  ->  "indexer" [ color=green ] ;
+    "snorkelkickstart'"  ->  "digest" [ label="5.96", color=red ] ;
+    "mailwash'"  ->  "indexer" [ color=green, style=dashed ] ;
+    "file"  ->  "objdump" [ style=dashed ] ;
+    "digest"  ->  "file" [ label="10.7", color=red ] ;
+    "carver'"  ->  "digest" [ label="6.29", color=red ] ;
+    "file"  ->  "antiword";
+    "excel'"  ->  "indexer" [ color=green, style=dashed ] ;
+}

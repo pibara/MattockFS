@@ -1,0 +1,31 @@
+digraph modules {
+"outlook'"  [shape=box];
+"strings'"  [shape=box];
+"mailwash'"  [shape=box];
+"tskfs'"  [shape=box];
+"ocr'"  [shape=box];
+"zip'"  [shape=box];
+"pdfimages'"  [shape=box];
+"carver'"  [shape=box];
+"snorkelkickstart'"  [shape=box];
+"anytotiff'"  [shape=box];
+    "file"  ->  "indexer" [ color=green ] ;
+    "zip'"  ->  "digest";
+    "snorkelkickstart'"  ->  "carver" [ label="82.69", color=red, style=dotted ] ;
+    "file"  ->  "pdftotext" [ label="1.11", color=red, style=dotted ] ;
+    "outlook'"  ->  "mailwash" [ color=green, style=dashed ] ;
+    "snorkelkickstart'"  ->  "digest" [ label="7.21", color=red ] ;
+    "strings'"  ->  "indexer" [ color=green, style=dashed ] ;
+    "tskfs'"  ->  "digest" [ style=dotted ] ;
+    "file"  ->  "exif" [ style=dashed ] ;
+    "mailwash'"  ->  "indexer" [ color=green, style=dashed ] ;
+    "pdfimages'"  ->  "anytotiff" [ label="1.23", color=red ] ;
+    "file"  ->  "objdump";
+    "pdftotext"  ->  "pdfimages" [ label="1.1", color=red, style=dotted ] ;
+    "ocr'"  ->  "indexer" [ color=green, style=dashed ] ;
+    "digest"  ->  "file" [ label="14.41", color=red ] ;
+    "anytotiff'"  ->  "ocr" [ label="1.02", color=red ] ;
+    "carver'"  ->  "digest" [ label="6.88", color=red, style=dashed ] ;
+    "ole2txt"  ->  "strings" [ color=green, style=dashed ] ;
+    "mailwash"  ->  "indexer" [ color=green, style=dashed ] ;
+}
