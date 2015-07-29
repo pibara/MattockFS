@@ -6,6 +6,10 @@ ocfa/*/stripped1
 ocfa/*/stripped2
 ocfa/*/stripped3
 ocfa/*/stripped4
+*.log
+*.aux
+*.pdf
+*.toc
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
