@@ -2,6 +2,10 @@
 ocfa/step1/stripped2.bz2
 ocfa/step1/stripped3.bz2
 ocfa/step1/stripped4.bz2
+ocfa/*/stripped1
+ocfa/*/stripped2
+ocfa/*/stripped3
+ocfa/*/stripped4
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
