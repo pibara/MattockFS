@@ -60,7 +60,7 @@ for lkey in range(int(minslot*10),int(maxslot*10)+1):
     x.append(key)
     if key in omhisto:
         #place our histo value as probability density on the y axis.
-        y.append(1.0*omhisto[key]/totalseconds)
+        y.append(10.0*omhisto[key]/totalseconds)
         #Update the comultative probability density.
         ycum += 1.0*omhisto[key]/totalseconds
     else:
@@ -69,10 +69,11 @@ for lkey in range(int(minslot*10),int(maxslot*10)+1):
     #Add comultative probability to our second set of y values
     y2.append(ycum)
 #Plot the probability density and comultative probability density .
-fig=matplotlib.pyplot.figure()    
+fig=matplotlib.pyplot.figure()
+matplotlib.pyplot.axis((6,14,0,1))
 matplotlib.pyplot.plot(x,y)
 matplotlib.pyplot.plot(x,y2)
-matplotlib.pyplot.fill_between(x,0,y,facecolor='blue', alpha=0.5)
+matplotlib.pyplot.fill_between(x,0,y,facecolor='yellow', alpha=0.5)
 matplotlib.pyplot.xlabel(r'$\log_{10}(C)$')
 matplotlib.pyplot.ylabel('p')
 matplotlib.pyplot.title('Probability distribution of $\log_{10}$ of cache demand')
