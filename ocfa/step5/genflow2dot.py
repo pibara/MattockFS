@@ -23,7 +23,7 @@ def modtype(modname):
     if modname in ["carver","file","digest"]:
         return modname
     else:
-        if modname in ["snorkelkickstart","e01","resubmitter","fsstat","mmls","tskfs"] :
+        if modname in ["snorkelkickstart","e01","resubmitter","fsstat","mmls","tskfs","blkls"] :
             return "kick"
         if modname == "photorec":
             return "carver"
