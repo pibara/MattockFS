@@ -18,7 +18,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot
 
 #Simple helper function for generating a plot
-def plotresult (arr,out,name,totalcount):
+def plotresult (arr,out,name,totalcount,maxy):
     #Find the lowest and highest number in our arr histo.
     minslot=None
     maxslot=None
@@ -53,7 +53,7 @@ def plotresult (arr,out,name,totalcount):
         y2.append(ycum)
     #Create our plot.
     fig=matplotlib.pyplot.figure()
-    matplotlib.pyplot.axis((1,7,0,2.5))
+    matplotlib.pyplot.axis((1,7,0,maxy))
     matplotlib.pyplot.plot(x,y)
     matplotlib.pyplot.plot(x,y2)
     matplotlib.pyplot.fill_between(x,0,y,facecolor='yellow', alpha=0.5)
@@ -125,8 +125,8 @@ for jsonline in jsonstream:
         totalsize += osize
         totalcount += 1
 #Plot all the results in four seperate eps graphs.
-plotresult (bysize,out1,"start/stop time difference by bytecount",totalsize)
-plotresult (bycount,out2,"start/stop time difference by evidence count",totalcount)
-plotresult (bysize2,out3,"inter-module time difference by bytecount",totalsize2)
-plotresult (bycount2,out4,"inter-module time difference by forward count",totalcount2)
+plotresult (bysize,out1,"start/stop time difference by bytecount",totalsize,2.5)
+plotresult (bycount,out2,"start/stop time difference by evidence count",totalcount,1)
+plotresult (bysize2,out3,"inter-module time difference by bytecount",totalsize2,2.5)
+plotresult (bycount2,out4,"inter-module time difference by forward count",totalcount2,1)
         

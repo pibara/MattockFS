@@ -20,7 +20,7 @@ def plotresult (arrin,arrout,out,name):
     minslot=None
     maxslot=None
     for key in arrin:
-        if minslot == None:
+        if minslot == None and key > 0:
             minslot=key
             maxslot=key
         else:
@@ -43,11 +43,11 @@ def plotresult (arrin,arrout,out,name):
         key=lkey*1.0/10
         x.append(key)
         if key in arrin:
-            y.append(1.0*arrin[key]/totalcount) 
+            y.append(10.0*arrin[key]/totalcount) 
         else:
             y.append(0.0)
         if key in arrout:
-            y2.append(-1.0*arrout[key]/totalcount2)
+            y2.append(-10.0*arrout[key]/totalcount2)
         else:
             y2.append(0.0)
     y[0]=0.0
@@ -62,12 +62,12 @@ def plotresult (arrin,arrout,out,name):
     matplotlib.pyplot.title('Probability distribution of ' + name)
     fig.savefig(out)
 
-if len(sys.argv) < 2:
-    print "usage :\n\t\t" + sys.argv[0] + " <inputfile>"
+if len(sys.argv) < 3:
+    print "usage :\n\t\t" + sys.argv[0] + " <inputfile> <outputprefix>"
     sys.exit()
 
 jsonstream = open(sys.argv[1])
-out = sys.argv[1] + "_inflow.eps"
+out = sys.argv[2] + "_inflow.eps"
 inflow  = {} 
 outflow = {}
 for jsonline in jsonstream:
