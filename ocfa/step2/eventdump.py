@@ -25,7 +25,7 @@ for jsonline in jsonstream:
     exittime=None
     for job in obj["jobs"]:
         curmodule = job["module"]
-        if lastmodule == None
+        if lastmodule == None:
             #Only print start time for first module.
             print job["time_start"], "+", osize
             pass
