@@ -43,7 +43,7 @@ def plotresult (arr,out,name,totalcount):
         x.append(key)
         if key in arr:
             #Append our scaled y
-            y.append(1.0*arr[key]/totalcount)
+            y.append(10.0*arr[key]/totalcount)
             #Update our comultative probability
             ycum += 1.0*arr[key]/totalcount
         else:
@@ -53,24 +53,25 @@ def plotresult (arr,out,name,totalcount):
         y2.append(ycum)
     #Create our plot.
     fig=matplotlib.pyplot.figure()
+    matplotlib.pyplot.axis((1,7,0,2.5))
     matplotlib.pyplot.plot(x,y)
     matplotlib.pyplot.plot(x,y2)
-    matplotlib.pyplot.fill_between(x,0,y,facecolor='blue', alpha=0.5)
+    matplotlib.pyplot.fill_between(x,0,y,facecolor='yellow', alpha=0.5)
     matplotlib.pyplot.xlabel(r'$log_{10}(\Delta t)$')
     matplotlib.pyplot.ylabel('p')
     matplotlib.pyplot.title('Probability distribution of ' + name)
     #And write it to an eps file for inclusion in our OCFA appendix.
     fig.savefig(out)
 
-if len(sys.argv) < 2:
-    print "usage :\n\t\t" + sys.argv[0] + " <inputfile>"
+if len(sys.argv) < 3:
+    print "usage :\n\t\t" + sys.argv[0] + " <inputfile> <outputprefix>"
     sys.exit()
 
 jsonstream = open(sys.argv[1])
-out1 = sys.argv[1] + "_startstop_by_size.eps"
-out2 = sys.argv[1] + "_startstop_by_count.eps"
-out3 = sys.argv[1] + "_prevnext_by_size.eps"
-out4 = sys.argv[1] + "_prevnext_by_count.eps"
+out1 = sys.argv[2] + "_startstop_by_size.eps"
+out2 = sys.argv[2] + "_startstop_by_count.eps"
+out3 = sys.argv[2] + "_prevnext_by_size.eps"
+out4 = sys.argv[2] + "_prevnext_by_count.eps"
 #Keep up with each of our four target comultative value
 totalsize = 0
 totalsize2 = 0
