@@ -11,6 +11,8 @@ ocfa/*/stripped4
 *.pdf
 *.toc
 *.dot
+*.bak
+*.out
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

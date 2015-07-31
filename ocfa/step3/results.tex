@@ -1,5 +1,4 @@
 \subsection{Inter-job timing}
-FIXME, we need text here.
 \begin{figure}
 \centering
 \subfloat[case 1]{
@@ -19,7 +18,7 @@ FIXME, we need text here.
 \label{fig:InterJob}
 \end{figure}
  ~\ref{fig:InterJob} on page ~\pageref{fig:Interjob} shows the probability density function of the inter-module time for modules processing the same evidence.
-In the last subsection we discovered the the fact that the most of the active data would not fit in the physical memory of an OCFA server. When we look however at the probability density function ot hte time between two jobs, we discover that a majority of between about 60\% and 90\% of all inter-job times falls below $10^1$ seconds mark. While there are times extending up to and exeeding the $10^6$ seconds visible in some of the graphs, most of the inter-module times are so small in comparison that disk cache hits would seem almost inevetable. These results are quite inconclusive so far, so we need to look at other results still.
+In the last subsection we discovered the the fact that the most of the active data would not fit in the physical memory of an OCFA server. When we look however at the probability density function of the time between two jobs, we discover that a majority of between about 60\% and 90\% of all inter-job times falls below $10^1$ seconds mark. While there are times extending up to and exceeding the $10^6$ seconds visible in some of the graphs, most of the inter-module times are so small in comparison that disk cache hits would seem almost inevitable. These results are quite inconclusive so far, so we need to look at other results still.
 \subsection{Inter-job timing by content size}
 \begin{figure}
 \centering
@@ -39,7 +38,7 @@ In the last subsection we discovered the the fact that the most of the active da
 \caption{Inter-job time probability density by volume}
 \label{fig:InterJobBySize}
 \end{figure}
-If instead of weighing the probability density function by the number data events, we weigh it by the amount of data, the picture that we saw in the previuous subsection shifts significantly. ~\ref{fig:InterJobBySize} on page ~\pageref{fig:InterjobBySize} shows this shift. A relatively large portion of the data now shows to have a job time interval of well over $10^4$ seconds. That means multiple hours, long enough to expect any disk caching to long have been overwritten so that a consecutive read would surely lead to a disk-cahche mis.
+If instead of weighing the probability density function by the number data events, we weigh it by the amount of data, the picture that we saw in the previous subsection shifts significantly. ~\ref{fig:InterJobBySize} on page ~\pageref{fig:InterjobBySize} shows this shift. A relatively large portion of the data now shows to have a job time interval of well over $10^4$ seconds. That means multiple hours, long enough to expect any disk caching to long have been overwritten so that a consecutive read would surely lead to a disk-cache miss.
 \subsection{First-last timing}
 \begin{figure}
 \centering
@@ -76,8 +75,8 @@ Given that our inter-job timing stats were inconclusive, we look at the timing i
 \subfloat[case 4]{
   \includegraphics[width=70mm]{ocfa/step3/stripped4_startstop_by_size.eps}
 }
-\caption{Firtst-last time probability density by volume}
+\caption{First-last time probability density by volume}
 \label{fig:FirstLastiBySize}
 \end{figure}
 
-In ~\ref{fig:FirstLastBySize} on page ~\pageref{fig:FirstLastBySize} we see the pattern we saw earlier in ~\ref{fig:InterJobBySize}, yet much more expressed. In most of the four investigations, a majority of the data will take multiple hours to get from the first module to touch/produce it to the last module to process its data. This is again a clea sign that we can expect a whole lot of disk cache misses during the lifetime of a piece of larger data within the OCFA system.
+In ~\ref{fig:FirstLastBySize} on page ~\pageref{fig:FirstLastBySize} we see the pattern we saw earlier in ~\ref{fig:InterJobBySize}, yet much more expressed. In most of the four investigations, a majority of the data will take multiple hours to get from the first module to touch/produce it to the last module to process its data. This is again a clear sign that we can expect a whole lot of disk cache misses during the lifetime of a piece of larger data within the OCFA system.
