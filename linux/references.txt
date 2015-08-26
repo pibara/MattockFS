@@ -7,4 +7,11 @@ https://www.kernel.org/doc/Documentation/sysctl/vm.txt
     * drop_caches
     * vfs_cache_pressure (just for doc)
 
+https://www.kernel.org/doc/Documentation/filesystems/proc.txt
+    * meminfo
+
+https://www.kernel.org/doc/Documentation/ABI/testing/procfs-diskstats
+
+https://www.usenix.org/legacy/events/usenix01/freenix01/full_papers/riel/riel_html/
+
 
