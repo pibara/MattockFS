@@ -1,0 +1,27 @@
+\chapter{Page-cache in the Linux operating-system}
+In this appendix we examine the core properties of the Linux page-cache and the possibilities for interacting with the page-cache and related memory layout parameters in a way that could limit the disk-cache miss rate of a multi-process system running on this OS. First we will look at the main memory usage strategy used by Linux and at the way that page-cache competes for RAM with other RAM consuming Linux subsystems. We will look at information we can extract from the virtual /proc filesystem and at POSIX APIs that provide a way to interact with the way the page-cache works. We than move on to project this knowledge to our ficticious computer-forensic framework and discuss what measures can be taken to effectively interact with the Linux system in order to limit page-cache misses on a Linux system that is hosting such a framework. We close this appendix by reasoning about possible strategies that could be used by a computer-forensic framework in an attempt to optimize disk-cache hit percentages while at the same time not introducing other sources of stagnating troughput to the resulting setup.
+\section{Allocation and use of page-cache}
+RAM in a computer is a shared resource. It is a scarce resource that is managed by the operating system. The OS kernel itself runs in RAM as do the user processes. Both kernel/process code, heap and stack take up pieces of RAM and on a bussy system some RAM pages may end up getting swapped out of RAM to an on-disk swap facility. Not all RAM is kept available to kernel and processes. Part of RAM is allocated to hold a copy of on-disk data and to act as a cache for file data that the Linux kernel assumes is likely to be read again in the forseeable future, allowing for more efficient use of the relatively slow reading from hard disk media. An other part is allocated to temporary hold data pages that should eventualy end up on disk and arn't synced to disk yet as to improve the overall system performance related to issues with frequent short writes. The Linux kernel needs to balance the desire to avoid wasting disk-IO on swapping out process memory with the desire to not waste disk-IO on data that could have been cached. Its like there is a rubber band between the process oriented RAM usage and the file-IO orented RAM usage. As such, memory available to page-cache is not static. It depends on the process behaviour of the different processes on the system. Our main interest in RAM for the purpose of this research is an interest in the part of the RAM used for the read-part of the page cache. While there is a lot to say about the use and tuning of write oriented caches, this falls outside of the scope of this paper and thuss shall not be discussed here. 
+\section{/proc/meminfo}
+In the /proc filesystem, the pseudo file /proc/meminfo can be used to access kernel information about the size and use of the system RAM. Some potentialy interesting variables that can be retreived from this pseudo file are:
+\begin{itemize}
+\item \emph{Cached} : In-memory cache for files read from dish (the pagecache).
+\item \emph{MemFree} : The total of memory that is free to be used for anything.
+\item \emph{Active} : Recently used memory that idealy isn't reclaimed.
+\item \emph{MemTotal} : The total usable system RAM.
+\item \emph{SwapTotal} : Total amount of swap space available.
+\item \emph{SwapFree} : The currently unused portion of the swap space.
+\end{itemize}
+The information from this pseudo file can be used to initialize or later tune our efforts at throtling data input into our system. 
+\subsection{Starting off with a clean slate}
+If we want to repeatedly run tests with the page-cache behaviour of the system, it will be important that we can reinitialize our page-cache so that a first test does not mess with a second or third test. So how do we reinitialize the page cache so we can start our test with a clean slate? There are two things we need to do.  First make sure all page cache \emph{can} be initialized cleanly by invoking \emph{sync} as root. After that we run the following command (as root):
+\begin{itemize}
+\item \emph{echo 3 > /proc/sys/vm/drop\_caches}
+\end{itemize}
+This command will write the number \emph{3} to the pseudo file /proc/sys/vm/drop\_caches. Doing so will prompt the kernel to free the cache and slab objects. 
+\section{API interaction with the page-cache part of the Linux kernel}
+
+\section{Interaction between a computer-forensic framework and the Linux kernel}
+\section{Possible strategies}
+\section{Conclusions}
+
