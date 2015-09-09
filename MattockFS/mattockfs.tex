@@ -1,4 +1,5 @@
 \chapter{MattockFS: A CarvFS successor.}
+In this appendix we describe the functionality and design of a new user-space file-system. MattockFS is meant to be a successor to the user space file-system named CarvFS that was released by the Dutch National Police in 2010 to act as an annotation based pseudo file-system aimed at facilitating zero-storage carving to the OCFA forensic framework. While CarvFS was retrofitted to work with OCFA, we aim to create a new user-space file-systemed modeled partially after CarvFS that should act as the potential foundation of new message passing oriented forensic framework. We envission that MattockFS, together with a serialization library and message bus technology could form the foundation for a yet ficticious future \emph{Mattock} forensic framework, loosely modeled after the OCFA forensic framework. The aim is to implement as much as is logical and sensible of the main aspects of disk-cache optimization techniques into this user space file-system. This should include facilities for querying throttling relevant information, facilities for keeping track of \emph{active} CarvPaths, facilities for marking expected read-access patterns for a given CarvPath and for marking a CarvPath as no longer needed. Also it shall include facilities for opportunistic hashing. Finaly, while in OCFA, the concept of a growing archive was implemented by allowing a data-generating module access to the raw data-file underlying the file-system, in MattockFS we shall opt to implement this trough a file-system layer.
 \section{FUSE: File-system in userspace}
 \section{MattockFS functionality}
 \subsection{Adding data to the archives}
@@ -9,10 +10,10 @@
 \subsection{Opportunistic hashing}
 \subsection{Distributed access concerns}
 \section{Sub-functionality in shared libraries}
-\subsection{A CarvPath annotation library}
-\subsection{A longpath database hook}
-\subsection{A CarvStack library}
-\section{LibHashStack}
-\section{LibLongPath}
+\subsection{LibCarvPath++: A C++ CarvPath annotation library}
+\subsection{LibCarvStack++: A C++ CarvStack library}
 \section{Required file-system interfaces}
 \section{An extended attribute based control interface}
+\section{Convenience API's}
+\subsection{LibMattockFS++ \& PyMattockFS: Extended-attribute interface wrappers for C++ and Python}
+\subsection{PyCarvPath: A Python port of LibCarvPath++}
