@@ -1,32 +1,32 @@
 \section{Conclusions of the OCFA timing analysis}
-In this section we look at the information gathered from analyzing the OCFA timing info from four investigations and try to draw funded conclusions from this data by combining it with knowledge about the OCFA architecture.
+In this section we look at the information gathered from analyzing the OCFA timing info from four investigations and try to draw well foundedconclusions from this data by combining it with knowledge about the OCFA architecture.
 \subsection{Effectiveness of OCFA throughput measures}
-As we have seen in the event based graphs looking at the probability density of per data entity timing, the priority queuing would seem to be effective, and would probably be quite effective if all data entities were similarly sized. Looking though at the data volume compensated probability density graphs, we see that the effectiveness of priority queuing becomes questionable at best. We don't have sufficient proof to state that the measure may be anti productive from a cache hit rate point of view, but its something that at this point in time seems like a viable hypothesis. A hypothesis though that we must leave untested as there is no comparative material available to test it. It is safe to say though that from a cache-hit efficiency point of view, the priority queuing mechanism proofs to be at best insufficient.
+As we have seen in the event based graphs looking at the probability density of per data entity timing, the priority queuing would seem to be effective, and would probably be quite effective if all data entities were similarly sized. Looking though at the data volume compensated probability density graphs, we see that the effectiveness of priority queuing becomes questionable at best. We don't have sufficient proof to state that the measure may be anti productive from a cache hit rate point of view, but its something that at this point in time seems like a viable hypothesis. A hypothesis though that we must leave untested as there is no comparative material available to test it. It is safe to say though that from a cache-hit efficiency point of view, the priority queuing mechanism proves to be at best insufficient.
 \subsection{The effects of meta-data messaging inefficiency and centralized router}
-One of the known performance bottlenecks of OCFA is the implementation of the meta-data access. Conceptually an evidence entity is forwarded between modules trough the messaging system. Due to monitoring concerns though, an approach was taken where short messages were used instead with an internal reference to a BLOB inside of the Postgres database. The process for processing and forwarding an evidence entity to a module or router is the following:
+One of the known performance bottlenecks of OCFA is the implementation of the meta-data access. Conceptually an evidence entity is forwarded between modules through the messaging system. Due to monitoring concerns though, an approach was taken where short messages were used instead with an internal reference to a BLOB inside of the Postgres database. The process for processing and forwarding an evidence entity to a module or router is the following:
 \begin{itemize}
 \item Module receives an incoming message from the Anycast relay.
 \item Module extracts the meta-data ID from the message
 \item Module retrieves the XML blob containing the evidence trace from Postgres
-\item Module validates and parse the XML into a DOM tree
-\item Module extract the data ID from the XML
+\item Module validates and parses the XML into a DOM tree
+\item Module extracts the data ID from the XML
 \item Module retrieves the evidence data filesystem path from Postgres
 \item \emph{Process the data}
 \item Module adds additional meta-data to the DOM tree.
 \item Module serializes the DOM tree to a new version of the XML trace
 \item Module updates the XML BLOB in the Postgres database
-\item Module send a return message to the Anycast asking to forward it to the router.
-\item Anycast marks old message as processed and places the new message in the router queue.
+\item Module sends a return message to the Anycast asking to forward it to the router.
+\item Anycast marks the old message as processed and places the new message in the router queue.
 \item When router queue reaches message, Anycast sends message to the router
 \item Router receives an incoming message from the Anycast relay.
 \item Router extracts the meta-data ID from the message
 \item Router retrieves the XML blob containing the evidence trace from Postgres
-\item Router validates and parse the XML into a DOM tree
+\item Router validates and parses the XML into a DOM tree
 \item Router traverses the meta-data and determines the next module to process the evidence entity
 \item Router adds additional meta-data to the DOM tree.
 \item Router serializes the DOM tree to a new version of the XML trace
 \item Router updates the XML BLOB in the Postgres database
-\item Router send a return message to the Anycast asking to forward it to the specific next module.
+\item Router sends a return message to the Anycast asking to forward it to the specific next module.
 \item Anycast marks old message as processed and places the new message in the router queue.
 \item When router queue reaches message, Anycast sends message to the next module
 \item When module queue reaches message, Anycast sends message to the next module
@@ -42,8 +42,8 @@ would likely have been significantly less overhead. Further, a custom container 
 \end{itemize}
 So to summarize, there is quite some room for improvement in the efficiency of the cross module timing. We can assume that any future OCFA successor that aims to use a similar message based concurrency model will implement such improvements. The subject of this thesis though is concerned not with these particular efficiency issues but with issues related to disk-cache hit rates. So how would faster inter-module communication affect the timing we have seen in our evaluation? Some considerations:
 \begin{itemize}
-\item More efficient inter-module messaging, especially with respect to the database bottlenecks, could significantly speed up the frequency at what the main kickstart and carving functionality, and other evidence entity producers could increase the amount of \emph{active} data in the system. 
-\item The per-module overhead is most dominant in fast modules and in the full processing of smaller files. This stands to reason that the observed inefficiency of priorities for larger data entities would thus further deteriorate.
+\item More efficient inter-module messaging, especially with respect to the database bottlenecks, could significantly speed up the frequency at which the main kickstart and carving functionality, and other evidence entity producers could increase the amount of \emph{active} data in the system. 
+\item The per-module overhead is most dominant in fast modules and in the full processing of smaller files. It stands to reason that the observed inefficiency of priorities for larger data entities would thus further deteriorate.
 \item As has been observed in the past when running additional routers on additional CPU's or servers, the presence of the routing bottleneck serves as a major enabler for the priorities system. Given that the priorities work on a per module basis, without a router bottleneck the priority system only works with other bottleneck modules. The router bottleneck works as a distribution point for the priority queuing. Combined with the previous point this could very well mean that an increase in performance using the measures above would fully deprecate the usefulness of such per message queue based priorities. 
 \end{itemize}
 \subsection{Conclusions and lessons learned}
@@ -51,11 +51,11 @@ From the analysis of the timing information from four real life OCFA runs, and o
 \begin{itemize}
 \item The un-throttled input of new data into the system creates an imbalance between inflow and outflow that leads to much higher amount's of \emph{active} data than can be accounted for by disk cache, inevitably leading to massive amounts of disk cache misses. A form of throttling for new data submission is a necessity for effectively addressing disk cache efficiency.
 \item The percentage of data that is discarded after a file-type check is significant when compared to the percentage of data that is discarded after a hash value check. It would seem logical to design a new system in such a way that file-type checking happens before the file is actually read by the framework, as to remove unneeded overhead from reading the file data, either to copy it out or to determine the file hash. This seems one argument in favor of opportunistic hashing. 
-\item When looking at the chain of modules that processes particular data, its not uncommon for the first full read to be the result of the on-creation hashing, while the second and often last full read happens in the last module before the (in OCFA) meta-data-only Data Store Module. This means that if hashing could be delayed to a later module, that while the entity processing time may stay approximately the same, the disk-cache hit probability could improve resulting from the reduced first full-read last full-read timing. 
+\item When looking at the chain of modules that processes particular data, it is not uncommon for the first full read to be the result of the on-creation hashing, while the second and often last full read happens in the last module before the (in OCFA) meta-data-only Data Store Module. This means that if hashing could be delayed to a later module, that while the entity processing time may stay approximately the same, the disk-cache hit probability could improve resulting from the reduced first full-read last full-read timing. 
 \item The percentage of data that constitutes large entities without in anyway meaningful hash value (such as whole partitions or unallocated space cluster collections) makes up a majority of all data processed. Traversing such large data chunks for the sole purpose of calculating a set of hashes, as is done in the OCFA architecture is wasteful. This seems a second argument in favor of opportunistic hashing.
 \item The percentage of larger data that is processed that is a chunk of other data being processed is significant. This implies that the disk cache size requirements could be reduced by making extensive use of annotation based addressing such as in CarvFS.
 \end{itemize}
-So basically, from a disk-cache efficiency viewpoints, we are proposing three distinct yet interdependent measures:
+So basically, from a disk-cache efficiency viewpoint, we are proposing three distinct yet interdependent measures:
 \begin{itemize}
 \item \emph{Opportunistic hashing}: Calculate hashes opportunistically when an entity as a whole is either being written or read or explicitly when the hashes are needed for further processing.
 \item \emph{Annotation based data access}: Use a CarvFS alike system for accessing data as chunks within a bigger whole.
