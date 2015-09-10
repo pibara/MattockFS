@@ -13,7 +13,55 @@ In this appendix we describe the functionality and design of a new user-space fi
 \subsection{LibCarvPath++: A C++ CarvPath annotation library}
 \subsection{LibCarvStack++: A C++ CarvStack library}
 \section{Required file-system interfaces}
-\section{An extended attribute based control interface}
-\section{Convenience API's}
-\subsection{LibMattockFS++ \& PyMattockFS: Extended-attribute interface wrappers for C++ and Python}
-\subsection{PyCarvPath: A Python port of LibCarvPath++}
+\section{Basic directory structure}
+MattockFS uses the following base directory structure:
+\begin{Itemize}
+\item \emph{cp.crv}
+\item \emph{cp/}
+\item \emph{mattockfs.ctl}
+\item \emph{newdata/}
+\end{itemize}
+The cp.crv file and cp/ directory work in exactly the same way that CarvFS did. Nested CarvPath annotations redirect to first level flattened CarvPath annotations that are than accessible as pseudo files. What is different about the cp directory is that the pseudo files inside of it allow for a close interaction of the framework using MattockFS with the throtling, pagecache management and opportunistic hashing logic inside of MattockFS and indirectly with the pagecache control functionality within the Linux Kernel. This interaction is done through the use of an extended attribute based controll mechanism. Some interactions don't make sense on a per-carvpath basis and are done against the MattockFS file-system as a whole. For that reason the pseudo file mattockfs.ctl acts as a front for MattockFS as a whole. This file comes with its own distinct extended attributes. Finaly the directory newdata. This directory allow each distinct process accessing MattockFS to create a new pseudo file what's content is to be appended to the growing archive underlying the file-system. 
+\section{CarvPath level attribute based control}
+\begin{itemize}
+\item \emph{batch} : Settable boolean variable denoting if framework or script will access this CarvPath agian with an other module soon. If \emph{true} MattockFS will attempt to have the kernel keep the accessed part of this carvpath in the pagecache untill set to \emph{false}. Setting \emph{active-batch} to \emph{true} will also initiate opportunistic hashing for the Carvpath.
+\item \emph{facurrent}: Setable variable denoting the currently set \emph{advice} value as set for the CarvPath.
+\begin{itemize}
+\item \emph{normal}: Set to POSIX\_FADV\_NORMAL
+\item \emph{sequential}: Set to POSIX\_FADV\_SEQUENTIAL
+\item \emph{random}: Set to POSIX\_FADV\_RANDOM
+\item \emph{noreuse}: Set to POSIX\_FADV\_NOREUSE
+\item \emph{willneed}: Set to  POSIX\_FADV\_WILLNEED
+\item \emph{dontneed}: Nothing set or explicitly set to POSIX\_FADV\_DONTNEED.
+\item \emph{ambiguous}: Different parts 
+\end{itemize} 
+The \emph{ambiguous} value can not explicitly be set by the user. This variable may only be set on a CarvPath for what an open file handle exists. Otherwise the operation will be silently discarded.
+\item \emph{fanext}: Settable variable denoting the value for this CarvPath that the file-system will use on the next \emph{open} operation. This variable may only be set on a Carvpath for what an active batch has been initiated. Otherwise the operation shall be silently discarded.
+\item \emph{incore} This attribute represents two distinct operations. When read, this variable will return a boolean indicating if the CarvPath is available in full from the pagechache. When set to \emph{true}, the CarvPath is set to POSIX\_FADV\_WILLNEED and the \emph{readahead} system API is invoked to read any uncached file data into the pagecache. This write operation will only be honoured when invoked while a batch is active for this CarvPath. 
+\item \emph{refcount} : This read-only attribute returns two semicolon seperated integers denoting the number minimum and maximum reference count for fragments within the CarvPath indicated. If an iSO image containing a mailbox containing an individual mail is processed and all three levels are still active, requesting \emph{refcount} for the ISO image should yield \emph{1;3}, for the mailbox: {2,3} and for the individual mail \emph{3;3}. This functionality is meant for debug purposes only. 
+\item \emph{throttle} : This read-only attribute returns two semicolon seperated numbers indicating the price (pagecache wise) of submitting a specific CarvPath. The two numbers returned are:
+\begin{itemize} 
+\item The \emph{current} size of the total archive fragments for what \emph{fadvise} was invoked with a last value other than POSIX\_FADV\_DONTNEED. 
+\item The total size of the additional fragments that will be marked if a batch is actively marked or the CarvPath is opened as a file. 
+\end{itemize}
+The result of this information is expected to be used for throtling purposes by the Mattock library.   
+\item \emph{b2b} : If fully hashed (and if the file-system has been configured to use BLAKE2b), this read-only attribute contains the 64 character hexadecimal representaion of the 32 byte BLAKE2b hash of the data. This hash, while being non standard within the field of computer forensics, is at least as fast if not significantly faster than the cryptographically controversial yet still commonly used SHA-1 (or the now long depricated MD5) while being as cryptographically secure as more secure hashing algoritms like SHA-2 or SHA-3. As no successor to SHA-1 has currently gained wide acceptance within the computer forensics community that would warant adjusting hashing support to a new defacto standard hash, we opt to make BLAKE2b the default hashing algoritm for MattockFS based purely on its technological merits.BLAKE2b hasing is enabled by default but may be disabled in the config if an other hashing algoritm is enabled.
+\item \emph{sha1} :If fully hashed (and if the file-system has been configured to use SHA-1), this read-only attribute contains the 40 character hexadecimal representaion of the 20 byte SHA-1 hash of the data. While use of SHA-1 is believed soon to become depricated, within computer forensics systems the use of SHA-1 based, accepted and widely used data sets still depend on SHA-1. SHA-1 based hashing in MattockFS is disabled by default but can be enabled in the configuration.
+\item \emph{readoffset} : If not fully hashed yet, this read-only attribute contains the offset of the first byte in the file not sequentially read yet by the opportunistic hasing engine. If a hash is required from the file-system, a user can simply read the remainder of the file stating at the indicated offset. After the whole remainder of the file has been processed, the \emph{b2b} or/and \emph{sha1} attribute will be set appropriately.
+\end{itemize}
+\section{FS level attribute based control}
+While most interaction between MattockFS and the framework using it, will go through CarvPath anotated pseudo files, a limited set of information exists only at a file-sytem level. This is done using the extended attributes of the pseudo file \emph{mattockfs.ctl}. The following attributes are defined:
+\begin{itemize}
+\item \emph{pctotal} : Read only attribute denoting the size of the \emph{fadviced} file fragments that have not yet been set to DONTNEED.
+\item \emph{pcnormal} : Read only attribute denoting the size of the \emph{fadviced} file fragments that have been explicitly marked as NORMAL.
+\item \emph{pcsequential} : Read only attribute denoting the size of the \emph{fadviced} file fragments that have been explicitly marked as SEQUENTIAL.
+\item \emph{pcrandom} : Read only attribute denoting the size of the \emph{fadviced} file fragments that have been explicitly marked as RANDOM.
+\item \emph{pcnoreuse} : Read only attribute denoting the size of the \emph{fadviced} file fragments that have been explicitly marked as NOREUSE.
+\item \emph{pcwillneed} : Read only attribute denoting the size of the \emph{fadviced} file fragments that have been explicitly marked as WILLNEED.
+\item \emph{batchactive} : Read only attribute denoting the current number of active batch markings for carvpath annotations.
+\item \emph{fdactive} : Read only attribute denoting the current number of open pseudo files for carvpath annotations.
+\item \emph{hashactive} : Read only attribute denoting the current number of incomplete non abandoned opportunistic hashing state objects.
+\item \emph{algorithms} : Read only attribute that returns the names of the hasing algoritms that have currently been configured.
+\end{itemize}
+\section{Creating new files}
+
