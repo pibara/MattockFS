@@ -1,8 +1,0 @@
-Some half done ideas for a possible CarvPile functionality for an AnyCast like system.
-The idea is that the AnyCast functionality is CarvPath aware and keeps track of all
-CarvPath entities running on a specific host.
-
-1) If a CarvPath originates from or arives on a host and isn't targeted for an other host, the CarcPath gets registered.
-2) If a CarvPath leaves a host or is to be forwarded to a metadata store module, the carvpath gets deregistered.
-3) If the accumulation of CarvPaths reaches a predefined treshold, known producers get trottled.
-4) When derigistration results in RC=0, posix_fadvice is used to tell kernal to release page cache.
