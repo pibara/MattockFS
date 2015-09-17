@@ -51,26 +51,34 @@ def asdigest(path):
 class Entity:
   def __init__(self,a1=None):
     global _longpathmap
+    fragments=[]
+    self.fragments=[]
     if isinstance(a1,basestring):
       if a1[0] == 'D':
         carvpath=_longpathmap[a1[1:]]
       else:
         carvpath=a1
-      self.fragments=map(asfrag,carvpath.split("_"))
+      fragments=map(asfrag,carvpath.split("_"))
     else:
       if isinstance(a1,list):
-        self.fragments = a1
+        fragments = a1
       else:
         if a1 == None: 
-          self.fragments=[]
+          fragments=[]
         else:
           raise TypeError('Entity constructor needs a string or list of fragments')
-    totalsize=0
-    for frag in self.fragments:
-      totalsize += frag.getsize()
-    self.totalsize=totalsize
+    self.totalsize=0
+    for frag in fragments:
+      if frag.getsize() > 0:
+        if len(self.fragments) > 0 and self.fragments[-1].issparse() == frag.issparse() and (frag.issparse() or self.fragments[-1].offset+self.fragments[-1].size == frag.offset):
+          self.fragments[-1].size += frag.size
+        else:
+          self.fragments.append(frag) 
+        self.totalsize += frag.getsize()
   def __str__(self):
     global _maxfstoken
+    if len(self.fragments) == 0:
+      return "S0"
     rval = "_".join(map(str,self.fragments))
     if len(rval) > _maxfstoken:
       return asdigest(rval)
@@ -103,7 +111,11 @@ class Entity:
     startsize = size
     for parentfrag in self.fragments:
       if (start + parentfrag.getsize()) > startoffset:
-        chunksize = parentfrag.getsize() + start - startoffset
+        maxchunk = parentfrag.getsize() + start - startoffset
+        if maxchunk > startsize:
+          chunksize=startsize
+        else:
+          chunksize=maxchunk
         if parentfrag.issparse():
           yield Sparse(chunksize)
         else:
@@ -112,7 +124,7 @@ class Entity:
         if startsize > 0:
           startoffset += chunksize
         else:
-          startoffset=self.totalsize
+          startoffset=self.totalsize + 1
       start += parentfrag.getsize() 
   def subentity(self,childent):
     subfrags=[]
@@ -123,6 +135,20 @@ class Entity:
         for subfrag in self.subchunk(childfrag.offset,childfrag.size):
           subfrags.append(subfrag)
     return Entity(subfrags) 
+
+class Top:
+  def __init__(self,size=0):
+    self.size=size
+    self.topentity=Entity([Fragment(0,size)])
+  def grow(self,chunk):
+    self.size +=chunk
+    self.topentity=Entity([Fragment(0,size)])
+  def test(self,child):
+    try:
+      b=self.topentity.subentity(child)
+    except IndexError:
+      return False
+    return True
 
 def moduleinit(ltmap,hashfunct,maxfstokenlen):
   global _longpathmap
@@ -144,27 +170,36 @@ def parse(path):
 class _Test:
   def testflatten(self,pin,pout):
     a=parse(pin)
-    if str(a) == pout:
-      print "OK : in='" + pin +  "' result='" + str(a) + "'"
-    else:
+    if str(a) != pout:
       print "FAIL: in='" + pin + "' expected='" + pout + "' result='" + str(a) + "'"
+  def testrange(self,topsize,carvpath,expected):
+    top=Top(topsize)
+    entity=parse(carvpath)
+    if top.test(entity) != expected:
+      print "FAIL: topsize=",topsize,"path=",carvpath,"result=",(not expected)
 
 
 if __name__ == "__main__":
   import blake2
   moduleinit({},lambda x: blake2.blake2b(x,hashSize=32),160)
   t=_Test()
+  t.testflatten("0+20000_40000+20000/10000+20000","10000+10000_40000+10000")
+  t.testflatten("0+20000_40000+20000/10000+20000/5000+10000","15000+5000_40000+5000")
+  t.testflatten("0+20000_40000+20000/10000+20000/5000+10000/2500+5000","17500+2500_40000+2500")
+  t.testflatten("0+20000_40000+20000/10000+20000/5000+10000/2500+5000/1250+2500","18750+1250_40000+1250")
   t.testflatten("0+20000_40000+20000/10000+20000/5000+10000/2500+5000/1250+2500/625+1250","19375+625_40000+625")
   t.testflatten("0+20000_20000+20000/0+40000","0+40000")
   t.testflatten("0+20000_20000+20000","0+40000")
   t.testflatten("S100_S200","S300")
   t.testflatten("S1_S1","S2")
   t.testflatten("0+5","0+5")
-  t.testflatten("0+0","0+0")
-  t.testflatten("20000+0","0+0")
-  t.testflatten("S0","0+0")
-  t.testflatten("20000+0_89765+0","0+0")
-  t.testflatten("1000+0_2000+0/0+0","0+0")
-  t.testflatten("0+0/0+0","0+0")
-  t.testflatten("0+100_101+100_202+100_303+100_404+100_505+100_606+100_707+100_808+100_909+100_1010+100_1111+100_1212+100_1313+100_1414+100_1515+100_1616+100_1717+100_1818+100_1919+100_2020+100_2121+100_2222+100_2323+100_2424+100","Dfa357c3b750fcb2244b113d4ac904f757232ae43")
+  t.testflatten("0+0","S0")
+  t.testflatten("20000+0","S0")
+  t.testflatten("S0","S0")
+  t.testflatten("20000+0_89765+0","S0")
+  t.testflatten("1000+0_2000+0/0+0","S0")
+  t.testflatten("0+0/0+0","S0")
+  t.testflatten("0+100_101+100_202+100_303+100_404+100_505+100_606+100_707+100_808+100_909+100_1010+100_1111+100_1212+100_1313+100_1414+100_1515+100_1616+100_1717+100_1818+100_1919+100_2020+100_2121+100_2222+100_2323+100_2424+100","D901141262aa24eaaddbce2f470615b6a47639f7a62b3bc7c65335251fe3fa480")
+  t.testrange(200000000000,"0+100000000000/0+50000000",True)
+  t.testrange(20000,"0+100000000000/0+50000000",False)
    
