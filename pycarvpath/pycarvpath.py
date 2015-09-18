@@ -33,10 +33,12 @@
 #facilities or other processes where designation of of potentially fragmented and sparse 
 #sub-entities is esential.
 #
+import base64
+
 class Fragment:
   def __init__(self,a1,a2=None):
-    if isinstance(a1,basestring):
-      (self.offset,self.size) = map(long,a1.split('+'))
+    if isinstance(a1,str):
+      (self.offset,self.size) = map(int,a1.split('+'))
     else:
       self.offset=a1
       self.size=a2
@@ -53,8 +55,8 @@ class Fragment:
 
 class Sparse:
   def __init__(self,a1):
-    if isinstance(a1,basestring):
-      self.size = long(a1[1:])
+    if isinstance(a1,str):
+      self.size = int(a1[1:])
     else:
       self.size = a1
   def __str__(self):
@@ -86,7 +88,7 @@ class Entity:
     global _longpathmap
     fragments=[]
     self.fragments=[]
-    if isinstance(a1,basestring):
+    if isinstance(a1,str):
       if a1[0] == 'D':
         carvpath=_longpathmap[a1[1:]]
       else:
@@ -120,7 +122,7 @@ class Entity:
   def getsize(self):
     return self.totalsize
   def __eq__(self,other):
-    if self.totalsize == other.totalsize and len(self.fragments) == len(other.fragments):
+    if other != None and self.totalsize == other.totalsize and len(self.fragments) == len(other.fragments):
       for index in range(0,len(self.fragments)):
         if not self.fragments[index] == other.fragments[index]:
           return False
@@ -195,7 +197,7 @@ def parse(path):
   levelmin=None
   for level in path.split("/"):
     level=Entity(level)
-    if levelmin != None:
+    if not levelmin == None:
       level = levelmin.subentity(level)
     levelmin = level
   return level 
@@ -213,8 +215,13 @@ class _Test:
 
 
 if __name__ == "__main__":
-  import blake2
-  moduleinit({},lambda x: blake2.blake2b(x,hashSize=32),160)
+  try:
+    import blake2
+    moduleinit({},lambda x: base64.b32encode(blake2.blake2b(x,hashSize=32,rawOutput=0))[:-4],160)
+  except ImportError:
+    import hmac
+    import hashlib
+    moduleinit({},lambda x: base64.b32encode(hmac.new(b"carvpath", msg=x.encode(), digestmod=hashlib.sha256).digest())[:-4].decode("utf-8"),160)
   t=_Test()
   t.testflatten("0+20000_40000+20000/10000+20000","10000+10000_40000+10000")
   t.testflatten("0+20000_40000+20000/10000+20000/5000+10000","15000+5000_40000+5000")
