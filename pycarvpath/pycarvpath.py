@@ -204,12 +204,12 @@ class _Test:
   def testflatten(self,pin,pout):
     a=parse(pin)
     if str(a) != pout:
-      print "FAIL: in='" + pin + "' expected='" + pout + "' result='" + str(a) + "'"
+      print("FAIL: in='" + pin + "' expected='" + pout + "' result='" + str(a) + "'")
   def testrange(self,topsize,carvpath,expected):
     top=Top(topsize)
     entity=parse(carvpath)
     if top.test(entity) != expected:
-      print "FAIL: topsize=",topsize,"path=",carvpath,"result=",(not expected)
+      print("FAIL: topsize=",topsize,"path=",carvpath,"result=",(not expected))
 
 
 if __name__ == "__main__":
