@@ -8,7 +8,11 @@ ocfa/*/stripped3
 ocfa/*/stripped4
 *.log
 *.aux
-*.pdf
+ucd_fcci_rob_j_meijer.pdf
+ocfa/step2/*.pdf
+ocfa/step3/*.pdf
+ocfa/step4/*.pdf
+ocfa/step5/*.pdf
 *.toc
 *.dot
 *.bak
