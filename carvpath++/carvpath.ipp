@@ -45,6 +45,7 @@ namespace carvpath {
     virtual uint64_t getoffset()=0;
     virtual uint64_t getsize()=0;
     virtual bool issparse()=0;
+    virtual void grow(uint64_t)=0;
     virtual operator std::string()=0;
   };
   struct Fragment: public FragmentInterface {
@@ -53,9 +54,10 @@ namespace carvpath {
       uint64_t getoffset(){return mOffset;}
       uint64_t getsize(){return mSize;}
       bool issparse(){return false;}
+      void grow(uint64_t chunk){ mSize += chunk;}
     private:
       const uint64_t mOffset;
-      const uint64_t mSize;
+      uint64_t mSize;
   };
   struct Sparse: public FragmentInterface {
       Sparse(uint64_t size):mSize(size){}
@@ -63,8 +65,9 @@ namespace carvpath {
       uint64_t getoffset(){throw std::logic_error("getoffset should not be called on a Sparse!");}
       uint64_t getsize(){return mSize;}
       bool issparse(){return true;}
+      void grow(uint64_t chunk){ mSize += chunk;}
     private:
-      const uint64_t mSize;        
+      uint64_t mSize;        
   };  
   struct FragWrapper: public FragmentInterface {
       FragWrapper(FragmentInterface *frag):mImpl(frag){}
@@ -72,6 +75,7 @@ namespace carvpath {
       uint64_t getoffset(){return mImpl->getoffset();}
       uint64_t getsize(){return mImpl->getsize();}
       bool issparse(){return mImpl->issparse();}
+      void grow(uint64_t chunk){ mImpl->grow(chunk);}
     private:
       std::shared_ptr<FragmentInterface> mImpl;   
   };
@@ -93,10 +97,30 @@ namespace carvpath {
   template <typename M,int Maxtokenlen>
   struct Entity {
       Entity(std::function<std::string(std::string)> &hashfunc,M &map):mTotalsize(0),mHashFunction(hashfunc),mLongPathMap(map){}
-      Entity& operator+=(const FragmentInterface& rhs){/*FIXME*/ return *this;}
-      operator std::string() {/*FIXME*/ return "BOGUS";}
+      Entity& operator+=(FragmentInterface& rhs){
+        Fragment &lastfrag=mFragments[mFragments.size()-1];
+        if (lastfrag.issparse() == rhs.issparse() and (lastfrag.issparse() or (rhs.getoffset() == lastfrag.getoffset() + lastfrag.getsize()))) {
+          mFragments[mFragments.size()-1].grow(rhs.getsize()); 
+        } else {
+          mFragments.push_back(rhs);
+        }
+        return *this;
+      }
+      operator std::string() {
+        std::string rval = "";
+        for (FragWrapper& f : mFragments ) {
+          if (rval != "") {
+            rval += "_";
+          }
+          rval += static_cast<std::string>(f);
+        }
+        return rval;
+      }
       uint64_t getsize() { return mTotalsize;}
-      Entity<M,Maxtokenlen> subentity(Entity &subent) { /*FIXME*/ return Entity<M,Maxtokenlen>(mHashFunction,mLongPathMap);}
+      Entity<M,Maxtokenlen> subentity(Entity &subent) { 
+         /*FIXME*/ 
+         return Entity<M,Maxtokenlen>(mHashFunction,mLongPathMap);
+      }
     private:
       std::vector<FragWrapper> mFragments;
       uint64_t mTotalsize;
@@ -118,9 +142,18 @@ namespace carvpath {
   struct Context {
       Context(M &map,std::function<std::string(std::string)> hash):mMap(map),mHash(hash){}
       Top<M,Maxtokenlen> top(uint64_t size=0){return Top<M,Maxtokenlen>(mMap,mHash,size);}
-      Entity<M,Maxtokenlen> parse(std::string entitystring){/*FIXME*/ return Entity<M,Maxtokenlen>(mHash,mMap);}
-      void testflatten(std::string pin,std::string pout){/*FIXME*/ return;}
-      void testrange(uint64_t topsize,std::string carvpath,bool expected){/*FIXME*/ return;}
+      Entity<M,Maxtokenlen> parse(std::string entitystring){
+        /*FIXME*/ 
+        return Entity<M,Maxtokenlen>(mHash,mMap);
+      }
+      void testflatten(std::string pin,std::string pout){
+        /*FIXME*/ 
+        return;
+      }
+      void testrange(uint64_t topsize,std::string carvpath,bool expected){
+        /*FIXME*/ 
+        return;
+      }
     private:
       M &mMap;
       std::function<std::string(std::string)> mHash;
@@ -128,11 +161,13 @@ namespace carvpath {
 }
 
 bool operator==(const carvpath::FragmentInterface& lhs, const carvpath::FragmentInterface & rhs){
-  /*FIXME*/ return false;
+  /*FIXME*/ 
+  return false;
 }
 
 template <typename M,int Maxtokenlen>
 bool operator==(const carvpath::Entity<M,Maxtokenlen> & lhs, const carvpath::Entity<M,Maxtokenlen> & rhs){
-  /*FIXME*/ return false;
+  /*FIXME*/ 
+  return false;
 }
 #endif
