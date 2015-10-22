@@ -41,6 +41,7 @@
 #include <boost/lexical_cast.hpp>
 
 namespace carvpath {
+  //The gereric interface for both fragments and chunks of sparse
   struct FragmentInterface {
     virtual uint64_t getoffset()=0;
     virtual uint64_t getsize()=0;
@@ -48,8 +49,9 @@ namespace carvpath {
     virtual void grow(uint64_t)=0;
     virtual operator std::string()=0;
   };
-  struct Fragment: public FragmentInterface {
-      Fragment(uint64_t offset,uint64_t size):mOffset(offset),mSize(size){}
+  //A regular fragment
+  struct FragmentImpl: public FragmentInterface {
+      FragmentImpl(uint64_t offset,uint64_t size):mOffset(offset),mSize(size){}
       operator std::string(){return std::to_string(mOffset) + "+" + std::to_string(mSize);}
       uint64_t getoffset(){return mOffset;}
       uint64_t getsize(){return mSize;}
@@ -59,8 +61,9 @@ namespace carvpath {
       const uint64_t mOffset;
       uint64_t mSize;
   };
-  struct Sparse: public FragmentInterface {
-      Sparse(uint64_t size):mSize(size){}
+  //A sparse fragment
+  struct SparseImpl: public FragmentInterface {
+      SparseImpl(uint64_t size):mSize(size){}
       operator std::string(){return "S" + std::to_string(mSize);}
       uint64_t getoffset(){throw std::logic_error("getoffset should not be called on a Sparse!");}
       uint64_t getsize(){return mSize;}
@@ -69,8 +72,9 @@ namespace carvpath {
     private:
       uint64_t mSize;        
   };  
-  struct FragWrapper: public FragmentInterface {
-      FragWrapper(FragmentInterface *frag):mImpl(frag){}
+  //A forwarder for either of the two fragment types.
+  struct Fragment: public FragmentInterface {
+      Fragment(FragmentInterface *frag):mImpl(frag){}
       operator std::string(){return static_cast<std::string>(*mImpl);}
       uint64_t getoffset(){return mImpl->getoffset();}
       uint64_t getsize(){return mImpl->getsize();}
@@ -80,23 +84,24 @@ namespace carvpath {
       std::shared_ptr<FragmentInterface> mImpl;   
   };
 
-  FragWrapper asfrag(std::string fragstring){
+  //Convert a fragment carvpath substring to a fragment.
+  Fragment asfrag(std::string fragstring){
     if ((fragstring.size() > 1) and (fragstring[0] == 'S')) {
-      return FragWrapper(new Sparse(boost::lexical_cast<uint64_t>(fragstring.substr(1))));
+      return Fragment(new SparseImpl(boost::lexical_cast<uint64_t>(fragstring.substr(1))));
     } else {
       off_t found=fragstring.find('+');
       if ((found!=std::string::npos) and (found != (fragstring.size()-1))) {
         std::string num1=fragstring.substr(0,found);
         std::string num2=fragstring.substr(found+1);
-        return FragWrapper(new Fragment(boost::lexical_cast<uint64_t>(num1),boost::lexical_cast<uint64_t>(num2)));
+        return Fragment(new FragmentImpl(boost::lexical_cast<uint64_t>(num1),boost::lexical_cast<uint64_t>(num2)));
       }
     }
     throw std::runtime_error("Invalid CarvPath fragment string!");
   };
 
-  template <typename M,int Maxtokenlen>
+  template <typename M,int Maxtokenlen> //Note: M is the type of our pseudo map for storing long paths by hash.
   struct Entity {
-      Entity(std::function<std::string(std::string)> &hashfunc,M &map):mTotalsize(0),mHashFunction(hashfunc),mLongPathMap(map){}
+      Entity(M &map):mTotalsize(0),mLongPathMap(map){}
       Entity& operator+=(FragmentInterface& rhs){
         Fragment &lastfrag=mFragments[mFragments.size()-1];
         if (lastfrag.issparse() == rhs.issparse() and (lastfrag.issparse() or (rhs.getoffset() == lastfrag.getoffset() + lastfrag.getsize()))) {
@@ -104,6 +109,7 @@ namespace carvpath {
         } else {
           mFragments.push_back(rhs);
         }
+        mTotalsize += rhs.getsize();       
         return *this;
       }
       operator std::string() {
@@ -114,18 +120,47 @@ namespace carvpath {
           }
           rval += static_cast<std::string>(f);
         }
-        return rval;
+        if (rval.size() > Maxtokenlen) {
+          mLongPathMap[hashFunction(rval)]=rval;
+        } else {
+          return rval;
+        }
       }
-      uint64_t getsize() { return mTotalsize;}
+      uint64_t datasize() { return mTotalsize;}
       Entity<M,Maxtokenlen> subentity(Entity &subent) { 
-         /*FIXME*/ 
-         return Entity<M,Maxtokenlen>(mHashFunction,mLongPathMap);
+         Entity result(mLongPathMap);
+         for(std::vector<Fragment>::iterator it = subent.begin(); it != subent.end(); ++it) {
+           Fragment &frag=*it;
+           if (frag.issparse()) {
+              result += frag;
+           } else {
+              
+           }
+         }
+         return Entity<M,Maxtokenlen>(mLongPathMap);
+      }
+      size_t size(){
+        return mFragments.size();
+      }      
+      Fragment &operator[](size_t index){
+        return mFragments[index];
       }
     private:
-      std::vector<FragWrapper> mFragments;
+      std::string hashFunction(std::string longpath) {
+        uint8_t out[32];
+        char hexout[65];
+        hexout[0]='D';
+        blake2bp(out,longpath.c_str(),NULL,32,longpath.size(),0);
+        for (int i=0;i<32;i++) {
+           std::sprintf(hexout+2*i+1, "%02X", out[i]);
+        }
+        return std::string(hexout,65);   
+      }
+      std::vector<Fragment> mFragments;
       uint64_t mTotalsize;
-      std::function<std::string(std::string)> &mHashFunction;
       M &mLongPathMap;
+    protected:
+      std::vector<Fragment> mFragments;
   };
 
   template <typename M,int Maxtokenlen>
