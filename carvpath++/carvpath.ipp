@@ -39,6 +39,7 @@
 #include <memory>
 #include <stdint.h>
 #include <boost/lexical_cast.hpp>
+#include <iostream>
 
 namespace carvpath {
   //The gereric interface for both fragments and chunks of sparse
@@ -102,6 +103,22 @@ namespace carvpath {
   template <typename M,int Maxtokenlen> //Note: M is the type of our pseudo map for storing long paths by hash.
   struct Entity {
       Entity(M &map):mTotalsize(0),mLongPathMap(map){}
+      Entity(M &map,std::string cp):mTotalsize(0),mLongPathMap(map){
+        std::string carvpath=cp;
+        if (cp.at(0) == 'D') {
+          carvpath=mLongPathMap[cp];
+        }
+        std::vector<std::string> tokens;
+        boost::split(tokens,carvpath,boost::is_any_of("_"));
+        for(std::vector<std::string>::iterator it = tokens.begin(); it != tokens.end(); ++it) {
+          mFragments.append(asfrag(*it));
+        }   
+      }
+      Entity(M &map,uint64_t topsize):mTotalsize(topsize),mLongPathMap(map){
+        Fragment f(new FragmentImpl(0,topsize));
+        mFragments.append(f);
+      }
+      Entity(M &map,std::vector<Fragment> &fragments):mTotalsize(0),mLongPathMap(map),mFragments(fragments){}
       Entity& operator+=(FragmentInterface& rhs){
         Fragment &lastfrag=mFragments[mFragments.size()-1];
         if (lastfrag.issparse() == rhs.issparse() and (lastfrag.issparse() or (rhs.getoffset() == lastfrag.getoffset() + lastfrag.getsize()))) {
@@ -113,6 +130,9 @@ namespace carvpath {
         return *this;
       }
       operator std::string() {
+        if (mFragments.size() == 0) {
+          return "S0";
+        }
         std::string rval = "";
         for (FragWrapper& f : mFragments ) {
           if (rval != "") {
@@ -121,12 +141,15 @@ namespace carvpath {
           rval += static_cast<std::string>(f);
         }
         if (rval.size() > Maxtokenlen) {
-          mLongPathMap[hashFunction(rval)]=rval;
+          std::string hash=hashFunction(rval);
+          mLongPathMap[hash]=rval;
+          return hash;
         } else {
           return rval;
         }
       }
-      uint64_t datasize() { return mTotalsize;}
+      uint64_t getsize() { return mTotalsize;}
+      //FIXME start of todo for this class.
       Entity<M,Maxtokenlen> subentity(Entity &subent) { 
          Entity result(mLongPathMap);
          for(std::vector<Fragment>::iterator it = subent.begin(); it != subent.end(); ++it) {
@@ -145,6 +168,10 @@ namespace carvpath {
       Fragment &operator[](size_t index){
         return mFragments[index];
       }
+      void grow(uint64_t chunk){
+         //FIXME, grow last fragment or create a fragment if non exists.
+      }
+      bool test(Entity<M,Maxtokenlen> &child) {/*FIXME*/ return false;}
     private:
       std::string hashFunction(std::string longpath) {
         uint8_t out[32];
@@ -164,35 +191,60 @@ namespace carvpath {
   };
 
   template <typename M,int Maxtokenlen>
-  struct Top {
-      Top(M &map,std::function<std::string(std::string)> hash,uint64_t size):mSize(size),mTopentity(Entity<M,Maxtokenlen>(hash,map)){}
-      void grow(uint64_t chunksize){mSize += chunksize;}
-      bool test(Entity<M,Maxtokenlen> &child) {/*FIXME*/ return false;}
-    private:
-      uint64_t mSize;
-      Entity<M,Maxtokenlen> mTopentity;
+  class Top {
+      Top(M &map,uint64_t sz): mMap(map),mTopEntity(map,sz){}
+      void grow(uint64_t chunk) {
+        mTopEntity.grow(chunk);
+      }
+      bool test(Entity<M,Maxtokenlen> &child) {
+        try:
+          Entity b=mTopentity.subentity(child);
+        catch (...) {
+          return false;
+        }
+        return true;
+      }
   };
 
   template <typename M,int Maxtokenlen>
   struct Context {
-      Context(M &map,std::function<std::string(std::string)> hash):mMap(map),mHash(hash){}
-      Top<M,Maxtokenlen> top(uint64_t size=0){return Top<M,Maxtokenlen>(mMap,mHash,size);}
-      Entity<M,Maxtokenlen> parse(std::string entitystring){
-        /*FIXME*/ 
-        return Entity<M,Maxtokenlen>(mHash,mMap);
+    Context(M &map):mMap(map){}
+    Entity<M,Maxtokenlen> create_top(uint64_t size=0){return Top<M,Maxtokenlen>(mMap,size);}
+    Entity<M,Maxtokenlen> parse(std::string path) {
+      Entity<M,Maxtokenlen> none(mMap);
+      Entity<M,Maxtokenlen> levelmin(mMap);
+      Entity<M,Maxtokenlen> ln(mMap);
+      std::vector<std::string> tokens;
+      boost::split(tokens,path,boost::is_any_of("\/"));
+      for(std::vector<std::string>::iterator it = tokens.begin(); it != tokens.end(); ++it) {
+        ln = Entity(mMap,*it);
+        if (not (levelmin == none)) {
+          ln = levelmin.subentity(ln);
+        }
+        levelmin = ln
       }
-      void testflatten(std::string pin,std::string pout){
-        /*FIXME*/ 
-        return;
-      }
-      void testrange(uint64_t topsize,std::string carvpath,bool expected){
-        /*FIXME*/ 
-        return;
-      }
-    private:
-      M &mMap;
-      std::function<std::string(std::string)> mHash;
+      return ln;
+    }
+    bool testflatten(std::string pin,std::string pout){
+          Entity a=parse<M,Maxtokenlen>(pin);
+          if (static_cast<std::string>(a) != pout) {
+            std::cerr << "FAIL: in='" <<  pin << "' expected='" << pout << "' result='" << static_cast<std::string>(a) << "'" << std::endl;
+            return false
+          return true
+    }
+    void testrange(uint64_t topsize,std::string carvpath,bool expected){
+          Top<M,Maxtokenlen> top(topsize);
+          Entity<M,Maxtokenlen> entity=parse<M,Maxtokenlen>(carvpath);
+          if (top.test(entity) != expected) {
+            std::cerr << "FAIL: topsize=" << topsize << "path=" << carvpath << "result=" << (not expected) << std::endl;
+            return false;
+          }
+          return true;
+    }
+   private:
+    M &mMap;
   };
+
 }
 
 bool operator==(const carvpath::FragmentInterface& lhs, const carvpath::FragmentInterface & rhs){
