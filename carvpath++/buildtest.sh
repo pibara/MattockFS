@@ -1,2 +1,2 @@
 #!/bin/bash
-clang++ -std=c++11 test.cpp
+clang++ -std=c++11 testrange.cpp
