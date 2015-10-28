@@ -40,127 +40,167 @@
 #include <stdint.h>
 #include <boost/lexical_cast.hpp>
 #include <iostream>
+#include <blake2.h>
 
 namespace carvpath {
-  //The gereric interface for both fragments and chunks of sparse
-  struct FragmentInterface {
-    virtual uint64_t getoffset()=0;
-    virtual uint64_t getsize()=0;
-    virtual bool issparse()=0;
-    virtual void grow(uint64_t)=0;
-    virtual operator std::string()=0;
-  };
-  //A regular fragment
-  struct FragmentImpl: public FragmentInterface {
-      FragmentImpl(uint64_t offset,uint64_t size):mOffset(offset),mSize(size){}
-      operator std::string(){return std::to_string(mOffset) + "+" + std::to_string(mSize);}
-      uint64_t getoffset(){return mOffset;}
-      uint64_t getsize(){return mSize;}
-      bool issparse(){return false;}
-      void grow(uint64_t chunk){ mSize += chunk;}
-    private:
-      const uint64_t mOffset;
-      uint64_t mSize;
-  };
-  //A sparse fragment
-  struct SparseImpl: public FragmentInterface {
-      SparseImpl(uint64_t size):mSize(size){}
-      operator std::string(){return "S" + std::to_string(mSize);}
-      uint64_t getoffset(){throw std::logic_error("getoffset should not be called on a Sparse!");}
-      uint64_t getsize(){return mSize;}
-      bool issparse(){return true;}
-      void grow(uint64_t chunk){ mSize += chunk;}
-    private:
-      uint64_t mSize;        
-  };  
   //A forwarder for either of the two fragment types.
-  struct Fragment: public FragmentInterface {
-      Fragment(FragmentInterface *frag):mImpl(frag){}
-      operator std::string(){return static_cast<std::string>(*mImpl);}
-      uint64_t getoffset(){return mImpl->getoffset();}
-      uint64_t getsize(){return mImpl->getsize();}
-      bool issparse(){return mImpl->issparse();}
-      void grow(uint64_t chunk){ mImpl->grow(chunk);}
-    private:
-      std::shared_ptr<FragmentInterface> mImpl;   
-  };
-
-  //Convert a fragment carvpath substring to a fragment.
-  Fragment asfrag(std::string fragstring){
-    if ((fragstring.size() > 1) and (fragstring[0] == 'S')) {
-      return Fragment(new SparseImpl(boost::lexical_cast<uint64_t>(fragstring.substr(1))));
-    } else {
-      off_t found=fragstring.find('+');
-      if ((found!=std::string::npos) and (found != (fragstring.size()-1))) {
-        std::string num1=fragstring.substr(0,found);
-        std::string num2=fragstring.substr(found+1);
-        return Fragment(new FragmentImpl(boost::lexical_cast<uint64_t>(num1),boost::lexical_cast<uint64_t>(num2)));
+  struct Fragment: {
+      struct SPARSE{};
+      Fragment(uint64_t offset,uint64_t size):mIsSparse(false),mOffset(offset),mSize(size){}
+      Fragment(SPARSE,uint64_t size):mIsSparse(true),mOffset(0),mSize(size){}
+      Fragment(std::string carvpath):mIsSparse(false),mOffset(0),mSize(0) {
+        try {
+          if (carvpath.at(0) == 'S') {
+            mIsSparse=true;
+            mSize=boost::lexical_cast<uint64_t>(carvpath.substr(1);
+          } else {
+            std::vector<std::string> tokens;
+            boost::split(tokens,carvpath,boost::is_any_of("+"));
+            mOffset=boost::lexical_cast<uint64_t>(tokens[0]);
+            mSize=boost::lexical_cast<uint64_t>(tokens[1]);
+          }
+        } 
+        catch (const boost::bad_lexical_cast &e) { 
+          throw std::runtime_error("Invalid CarvPath fragment string!");
+        }
+        catch (const std::out_of_range& oor) {
+          throw std::runtime_error("Invalid CarvPath fragment string!");
+        }
       }
-    }
-    throw std::runtime_error("Invalid CarvPath fragment string!");
+      operator std::string(){
+        if (mIsSparse) {
+          return std::string("S") + std::to_string(mSize);
+        } else {
+          return std::to_string(mOffset) + "+" + std::to_string(mSize);
+        }
+      }
+      uint64_t getoffset(){return mOffset}
+      uint64_t getsize(){return mSize;}
+      bool issparse(){return mIsSparse}
+      void grow(uint64_t chunk){mSize += chunk;}
+    private:
+      bool mIsSparse;
+      uint64_t mOffset;
+      uint64_t mSize;
   };
 
   template <typename M,int Maxtokenlen> //Note: M is the type of our pseudo map for storing long paths by hash.
   struct Entity {
-      Entity(M &map):mTotalsize(0),mLongPathMap(map){}
-      Entity(M &map,std::string cp):mTotalsize(0),mLongPathMap(map){
+      Entity(M &map):mTotalsize(0),mLongPathMap(map){} //New zero size entity.
+      Entity(M &map,std::string cp):mTotalsize(0),mLongPathMap(map){ //Entity from carvpath
         std::string carvpath=cp;
+        //If the carvpath was so long that it needed representation as a hash, lookup the original carvpath using the hash.
         if (cp.at(0) == 'D') {
           carvpath=mLongPathMap[cp];
         }
+        //Now split the carvpath into its individual fragments.
         std::vector<std::string> tokens;
         boost::split(tokens,carvpath,boost::is_any_of("_"));
+        //Convert each fragment string to a fragment and append it to our mFragments vector.
         for(std::vector<std::string>::iterator it = tokens.begin(); it != tokens.end(); ++it) {
-          mFragments.append(asfrag(*it));
-        }   
+          Fragment frag(*it);
+          mFragments.append(frag);
+          mTotalsize += frag.getsize();
+        }
       }
       Entity(M &map,uint64_t topsize):mTotalsize(topsize),mLongPathMap(map){
-        Fragment f(new FragmentImpl(0,topsize));
-        mFragments.append(f);
+        mFragments.append(Fragment(0,topsize));
       }
       Entity(M &map,std::vector<Fragment> &fragments):mTotalsize(0),mLongPathMap(map),mFragments(fragments){}
-      Entity& operator+=(FragmentInterface& rhs){
-        Fragment &lastfrag=mFragments[mFragments.size()-1];
-        if (lastfrag.issparse() == rhs.issparse() and (lastfrag.issparse() or (rhs.getoffset() == lastfrag.getoffset() + lastfrag.getsize()))) {
-          mFragments[mFragments.size()-1].grow(rhs.getsize()); 
+      Entity& operator+=(const Fragment& rhs){
+        if (mFragments.size() != 0 and //Non empty fragmentlist to begin with.
+            mFragments.back().issparse() == rhs.issparse() and //Fragements are either both sparse or both normal fragments.
+            ( mFragments.back().issparse() or  //And either both are sparse; or:
+              ( rhs.getoffset() == mFragments.back().getoffset() +mFragments.back().getsize()) //The new fragment begins at old one's end.
+            )
+           ) {
+          //perfect fit, we can just grow the last fragment.
+          mFragments.back().grow(rhs.getsize()); 
         } else {
+          //not a perfect fit, need to add as new fragment.
           mFragments.push_back(rhs);
         }
-        mTotalsize += rhs.getsize();       
+        mTotalsize += rhs.getsize(); //Update the total size.
         return *this;
       }
+      Entity& operator+(const Entity &rhs) {
+         size_t sz=rhs.size();
+         for(size_t index=0;index<sz;index++) {
+            (*this) += rhs[index];
+         }
+      }
       operator std::string() {
-        if (mFragments.size() == 0) {
+        //Check for zero size.
+        if (mTotalsize == 0) {
           return "S0";
         }
+        //Non zero: start of with empty string.
         std::string rval = "";
+        //Process each fragment.
         for (FragWrapper& f : mFragments ) {
           if (rval != "") {
-            rval += "_";
+            rval += "_"; //Fragment seperator character.
           }
-          rval += static_cast<std::string>(f);
+          rval += static_cast<std::string>(f); //Append string representation of fragment.
         }
+        //Check if result exceeds maximum string size for token. 
         if (rval.size() > Maxtokenlen) {
-          std::string hash=hashFunction(rval);
-          mLongPathMap[hash]=rval;
-          return hash;
+          std::string hash=hashFunction(rval); //Calculate the hash
+          mLongPathMap[hash]=rval; //Store the original carvpath in some distributed key/value store.
+          return hash; //Return the hash, not the real carvpath.
         } else {
-          return rval;
+          return rval; //Return the regular carvpath.
         }
       }
       uint64_t getsize() { return mTotalsize;}
-      //FIXME start of todo for this class.
-      Entity<M,Maxtokenlen> subentity(Entity &subent) { 
-         Entity result(mLongPathMap);
-         for(std::vector<Fragment>::iterator it = subent.begin(); it != subent.end(); ++it) {
+      Entity subchunk(uint64_t offset,uint64_t size) {
+        if (offset + size > mTotalsize) {
+          throw std::out_of_range("Sub entity outside of entity bounds for carvpath Entity");
+        }
+        uint64_t start=0;
+        uint64_t startoffset=0;
+        uint64_t startsize=0;
+        Entity rval(mLongPathMap);
+        size_t sz=this->size();
+        for (size_t index=0;index < sz;index++) {
+           Fragment &parentfrag=(*this)[index];
+           if ((start + parentfrag.getsize()) > startoffset) {
+             uint64_t maxchunk = parentfrag.getsize() + start - startoffset;
+             if (maxchunk > startsize) {
+               chunksize=startsize;
+             } else {
+               chunksize=maxchunk;
+             }
+             if parentfrag.issparse() {
+               rval+=Fragment(Fragment::SPARSE(),chunksize);
+             } else {
+               rval+=Fragment(parentfrag.getoffset()+startoffset-start,chunksize);
+             }
+             startsize -= chunksize;
+             if (startsize > 0) {
+               startoffset += chunksize;
+             } else {
+               startoffset=this->totalsize + 1
+             }
+           }
+           start += parentfrag.getsize();
+        }
+      }
+      Entity<M,Maxtokenlen> subentity(Entity &childent) { 
+         Entity<M,Maxtokenlen> rval(mLongPathMap);
+         for(std::vector<Fragment>::iterator it = childent.begin(); it != childent.end(); ++it) {
            Fragment &frag=*it;
            if (frag.issparse()) {
-              result += frag;
+              rval += frag;
            } else {
-              
+              Entity chunk=subchunk(childfrag.offset,childfrag.size);
+              size_t sz=chunk.size();
+              for (size_t index=0;index < sz;index++) {
+                rval+=chunk[index];
+              }
            }
          }
-         return Entity<M,Maxtokenlen>(mLongPathMap);
+         return rval;
       }
       size_t size(){
         return mFragments.size();
@@ -169,9 +209,20 @@ namespace carvpath {
         return mFragments[index];
       }
       void grow(uint64_t chunk){
-         //FIXME, grow last fragment or create a fragment if non exists.
+         if (this->size() == 0) {
+           (*this) += Fragment(0,chunk);     
+         } else {
+           mFragments.back().grow(chunk);
+         }
       }
-      bool test(Entity<M,Maxtokenlen> &child) {/*FIXME*/ return false;}
+      bool test(Entity<M,Maxtokenlen> &child) {
+         try {
+           Entity<M,Maxtokenlen> testval=this->subentity(child);
+         } catch (...) {
+           return false;
+         }
+         return true;
+      }
     private:
       std::string hashFunction(std::string longpath) {
         uint8_t out[32];
@@ -186,30 +237,30 @@ namespace carvpath {
       std::vector<Fragment> mFragments;
       uint64_t mTotalsize;
       M &mLongPathMap;
-    protected:
       std::vector<Fragment> mFragments;
   };
 
   template <typename M,int Maxtokenlen>
   class Top {
-      Top(M &map,uint64_t sz): mMap(map),mTopEntity(map,sz){}
+      Top(M &map,uint64_t sz): size(sz),mMap(map),mTopEntity(map,sz){}
       void grow(uint64_t chunk) {
         mTopEntity.grow(chunk);
+        size += chunk;
       }
       bool test(Entity<M,Maxtokenlen> &child) {
-        try:
-          Entity b=mTopentity.subentity(child);
-        catch (...) {
-          return false;
-        }
-        return true;
+        return mTopentity.test(child);
       }
+      const Entity<M,Maxtokenlen> &entity(){return topenetity;}
+     private:
+      uint64_t size;
+      M &mMap;
+      Entity<M,Maxtokenlen> topenetity;
   };
 
   template <typename M,int Maxtokenlen>
   struct Context {
     Context(M &map):mMap(map){}
-    Entity<M,Maxtokenlen> create_top(uint64_t size=0){return Top<M,Maxtokenlen>(mMap,size);}
+    Top<M,Maxtokenlen> create_top(uint64_t size=0){return Top<M,Maxtokenlen>(mMap,size);}
     Entity<M,Maxtokenlen> parse(std::string path) {
       Entity<M,Maxtokenlen> none(mMap);
       Entity<M,Maxtokenlen> levelmin(mMap);
@@ -247,14 +298,29 @@ namespace carvpath {
 
 }
 
-bool operator==(const carvpath::FragmentInterface& lhs, const carvpath::FragmentInterface & rhs){
-  /*FIXME*/ 
-  return false;
+bool operator==(const carvpath::Fragment& lhs, const carvpath::Fragment & rhs){
+  return ( lsh.issparse() == rsh.issparse()) and 
+         ( lsh.getsize() == rsh.getsize()) and 
+         ( lsh.issparse() or 
+           ( lsh.getoffset() == rsh.getoffset())
+         );
 }
 
 template <typename M,int Maxtokenlen>
 bool operator==(const carvpath::Entity<M,Maxtokenlen> & lhs, const carvpath::Entity<M,Maxtokenlen> & rhs){
-  /*FIXME*/ 
+  if (lhs.getsize() == rsh.getsize() and
+      lsh.size() == rsh.size()) {
+    size_t sz=lsh.size();
+    for (size_t index=0;index<sz;index++) {
+      //If a single fragment is inequal, than everything is inequal.
+      if (lsh[index] != rsh[index]) {
+        return false;
+      }
+    }
+    //All fragments are the same for both entities.
+    return true;
+  }
+  //Not the same size or number of fragments, so entities can't be equal.
   return false;
 }
 #endif
