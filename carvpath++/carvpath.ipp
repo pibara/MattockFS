@@ -86,12 +86,6 @@ namespace carvpath {
       uint64_t mSize;
   };
 
-  template <typename M,int Maxtokenlen>
-  struct Entity;
-
-  template <typename M,int Maxtokenlen>
-  bool operator==(const carvpath::Entity<M,Maxtokenlen> & lhs, const carvpath::Entity<M,Maxtokenlen> & rhs);
-
   template <typename M,int Maxtokenlen> //Note: M is the type of our pseudo map for storing long paths by hash.
   struct Entity {
       Entity(M &map):mTotalsize(0),mLongPathMap(map){} //New zero size entity.
@@ -150,7 +144,7 @@ namespace carvpath {
         mFragments=std::move(ent.mFragments);
         return *this;
       }
-      operator std::string() {
+      operator std::string() const {
         //Check for zero size.
         if (mTotalsize == 0) {
           return "S0";
@@ -173,8 +167,8 @@ namespace carvpath {
           return rval; //Return the regular carvpath.
         }
       }
-      uint64_t getsize() { return mTotalsize;}
-      Entity subchunk(uint64_t offset,uint64_t size) {
+      uint64_t getsize() const { return mTotalsize;}
+      Entity subchunk(uint64_t offset,uint64_t size) const {
         if (offset + size > mTotalsize) {
           throw std::out_of_range("Sub entity outside of entity bounds for carvpath Entity");
         }
@@ -207,7 +201,7 @@ namespace carvpath {
         }
         return rval;
       }
-      Entity<M,Maxtokenlen> subentity(Entity &childent) { 
+      Entity<M,Maxtokenlen> subentity(Entity &childent) const { 
          Entity<M,Maxtokenlen> rval(mLongPathMap);
          for(std::vector<Fragment>::iterator it = childent.mFragments.begin(); it != childent.mFragments.end(); ++it) {
            Fragment &frag=*it;
@@ -223,10 +217,10 @@ namespace carvpath {
          }
          return rval;
       }
-      size_t size(){
+      size_t size() const{
         return mFragments.size();
       }      
-      Fragment &operator[](size_t index){
+      Fragment &operator[](size_t index) const{
         return mFragments[index];
       }
       void grow(uint64_t chunk){
@@ -236,7 +230,7 @@ namespace carvpath {
            mFragments.back().grow(chunk);
          }
       }
-      bool test(Entity<M,Maxtokenlen> &child) {
+      bool test(Entity<M,Maxtokenlen> &child) const {
          try {
            Entity<M,Maxtokenlen> testval=this->subentity(child);
          } catch (...) {
@@ -267,10 +261,10 @@ namespace carvpath {
         topentity.grow(chunk);
         size += chunk;
       }
-      bool test(Entity<M,Maxtokenlen> &child) {
+      bool test(Entity<M,Maxtokenlen> &child) const {
         return topentity.test(child);
       }
-      const Entity<M,Maxtokenlen> &entity(){return topentity;}
+      const Entity<M,Maxtokenlen> &entity() const {return topentity;}
      private:
       uint64_t size;
       M &mMap;
@@ -281,7 +275,7 @@ namespace carvpath {
   struct Context {
     Context(M &map):mMap(map){}
     Top<M,Maxtokenlen> create_top(uint64_t size=0){return Top<M,Maxtokenlen>(mMap,size);}
-    Entity<M,Maxtokenlen> parse(std::string path) {
+    Entity<M,Maxtokenlen> parse(std::string path) const {
       Entity<M,Maxtokenlen> none(mMap);
       Entity<M,Maxtokenlen> levelmin(mMap);
       Entity<M,Maxtokenlen> ln(mMap);
@@ -296,7 +290,7 @@ namespace carvpath {
       }
       return ln;
     }
-    bool testflatten(std::string pin,std::string pout){
+    bool testflatten(std::string pin,std::string pout) const {
           Entity<M,Maxtokenlen> a=std::move(parse(pin));
           if (static_cast<std::string>(a) != pout) {
             std::cerr << "FAIL: in='" <<  pin << "' expected='" << pout << "' result='" << static_cast<std::string>(a) << "'" << std::endl;
@@ -304,7 +298,7 @@ namespace carvpath {
           }
           return true;
     }
-    bool testrange(uint64_t topsize,std::string carvpath,bool expected){
+    bool testrange(uint64_t topsize,std::string carvpath,bool expected) const{
           Top<M,Maxtokenlen> top(topsize);
           Entity<M,Maxtokenlen> entity=parse(carvpath);
           if (top.test(entity) != expected) {
@@ -314,12 +308,10 @@ namespace carvpath {
           return true;
     }
    private:
-    M &mMap;
+    M const & mMap;
   };
 
-}
-
-bool operator==(const carvpath::Fragment& lhs, const carvpath::Fragment & rhs){
+bool operator==(const carvpath::Fragment& lhs, const carvpath::Fragment & rhs) const {
   return ( lhs.issparse() == rhs.issparse()) and 
          ( lhs.getsize() == rhs.getsize()) and 
          ( lhs.issparse() or 
@@ -328,7 +320,7 @@ bool operator==(const carvpath::Fragment& lhs, const carvpath::Fragment & rhs){
 }
 
 template <typename M,int Maxtokenlen>
-bool operator==(const carvpath::Entity<M,Maxtokenlen> & lhs, const carvpath::Entity<M,Maxtokenlen> & rhs){
+bool operator==(const carvpath::Entity<M,Maxtokenlen> & lhs, const carvpath::Entity<M,Maxtokenlen> & rhs) const{
   if (lhs.getsize() == rhs.getsize() and
       lhs.size() == rhs.size()) {
     size_t sz=lhs.size();
@@ -344,4 +336,6 @@ bool operator==(const carvpath::Entity<M,Maxtokenlen> & lhs, const carvpath::Ent
   //Not the same size or number of fragments, so entities can't be equal.
   return false;
 }
+
+};
 #endif
