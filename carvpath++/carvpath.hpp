@@ -139,7 +139,7 @@ namespace carvpath {
         mFragments=ent.mFragments;
         return *this;
       }
-      Entity(Entity const &&ent):mTotalsize(ent.mTotalsize),mFragments(std::move(ent.mFragments)),mLongPathMap(ent.mLongPathMap){}
+      Entity(Entity const &&ent):mTotalsize(ent.mTotalsize),mLongPathMap(ent.mLongPathMap),mFragments(std::move(ent.mFragments)){}
       Entity & operator=(Entity &&ent) {
         mTotalsize = ent.mTotalsize;
         mFragments=std::move(ent.mFragments);
