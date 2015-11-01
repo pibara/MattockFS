@@ -274,10 +274,10 @@ namespace carvpath {
         char hexout[65]; //Hex result
         hexout[0]='D'; //Prefix hex result with a 'D'
         //Call the core hash function
-        blake2bp(out,longpath.c_str(),NULL,32,longpath.size(),0);
+        blake2b(out,longpath.c_str(),NULL,32,longpath.size(),0);
         //Convert to hex
         for (int i=0;i<32;i++) {
-           std::sprintf(hexout+2*i+1, "%02X", out[i]);
+           std::sprintf(hexout+2*i+1, "%02x", out[i]);
         }
         //return as string
         return std::string(hexout,65);   
