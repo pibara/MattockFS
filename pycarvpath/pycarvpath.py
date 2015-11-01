@@ -33,7 +33,17 @@
 #facilities or other processes where designation of of potentially fragmented and sparse 
 #sub-entities is esential.
 #
-import base64
+try:
+    from pyblake2 import blake2b
+except ImportError:
+    import sys
+    print("")
+    print("\033[93mERROR:\033[0m Pyblake2 module not installed. Please install blake2 python module. Run:")
+    print("")
+    print("    sudo pip install pyblake2")
+    print("")
+    sys.exit()
+
 
 class Fragment:
   def __init__(self,a1,a2=None):
@@ -77,11 +87,10 @@ def asfrag(fragstring):
     return Fragment(fragstring)
 
 def asdigest(path):
-  global _hashfunction
   global _longpathtmap
-  rval = _hashfunction(path)
+  rval = "D" + blake2b(path,digest_size=32).hexdigest()
   _longpathmap[rval] = path
-  return "D" + rval
+  return rval
 
 class Entity:
   def __init__(self,a1=None):
@@ -90,7 +99,7 @@ class Entity:
     self.fragments=[]
     if isinstance(a1,str):
       if a1[0] == 'D':
-        carvpath=_longpathmap[a1[1:]]
+        carvpath=_longpathmap[a1]
       else:
         carvpath=a1
       fragments=map(asfrag,carvpath.split("_"))
@@ -185,12 +194,10 @@ class Top:
       return False
     return True
 
-def moduleinit(ltmap,hashfunct,maxfstokenlen):
+def moduleinit(ltmap,maxfstokenlen):
   global _longpathmap
-  global _hashfunction
   global _maxfstoken
   _longpathmap = ltmap
-  _hashfunction = hashfunct
   _maxfstoken = maxfstokenlen
 
 def parse(path):
@@ -207,39 +214,42 @@ class _Test:
     a=parse(pin)
     if str(a) != pout:
       print("FAIL: in='" + pin + "' expected='" + pout + "' result='" + str(a) + "'")
+    else:
+      print("OK: in='" + pin + "' expected='" + pout + "' result='" + str(a) + "'")
   def testrange(self,topsize,carvpath,expected):
     top=Top(topsize)
     entity=parse(carvpath)
     if top.test(entity) != expected:
       print("FAIL: topsize=",topsize,"path=",carvpath,"result=",(not expected))
-
+    else:
+      print("OK: topsize=",topsize,"path=",carvpath,"result=",expected)
 
 if __name__ == "__main__":
-  try:
-    import blake2
-    moduleinit({},lambda x: base64.b32encode(blake2.blake2b(x,hashSize=32,rawOutput=0))[:-4],160)
-  except ImportError:
-    import hmac
-    import hashlib
-    moduleinit({},lambda x: base64.b32encode(hmac.new(b"carvpath", msg=x.encode(), digestmod=hashlib.sha256).digest())[:-4].decode("utf-8"),160)
+  moduleinit({},160)
   t=_Test()
-  t.testflatten("0+20000_40000+20000/10000+20000","10000+10000_40000+10000")
-  t.testflatten("0+20000_40000+20000/10000+20000/5000+10000","15000+5000_40000+5000")
-  t.testflatten("0+20000_40000+20000/10000+20000/5000+10000/2500+5000","17500+2500_40000+2500")
-  t.testflatten("0+20000_40000+20000/10000+20000/5000+10000/2500+5000/1250+2500","18750+1250_40000+1250")
-  t.testflatten("0+20000_40000+20000/10000+20000/5000+10000/2500+5000/1250+2500/625+1250","19375+625_40000+625")
-  t.testflatten("0+20000_20000+20000/0+40000","0+40000")
-  t.testflatten("0+20000_20000+20000","0+40000")
-  t.testflatten("S100_S200","S300")
-  t.testflatten("S1_S1","S2")
-  t.testflatten("0+5","0+5")
-  t.testflatten("0+0","S0")
-  t.testflatten("20000+0","S0")
-  t.testflatten("S0","S0")
-  t.testflatten("20000+0_89765+0","S0")
-  t.testflatten("1000+0_2000+0/0+0","S0")
-  t.testflatten("0+0/0+0","S0")
-  t.testflatten("0+100_101+100_202+100_303+100_404+100_505+100_606+100_707+100_808+100_909+100_1010+100_1111+100_1212+100_1313+100_1414+100_1515+100_1616+100_1717+100_1818+100_1919+100_2020+100_2121+100_2222+100_2323+100_2424+100","D901141262aa24eaaddbce2f470615b6a47639f7a62b3bc7c65335251fe3fa480")
+  t.testflatten("0+0","S0");
+  t.testflatten("S0","S0");
+  t.testflatten("0+0/0+0","S0");
+  t.testflatten("20000+0","S0");
+  t.testflatten("20000+0_89765+0","S0");
+  t.testflatten("1000+0_2000+0/0+0","S0");
+  t.testflatten("0+5","0+5");
+  t.testflatten("S1_S1","S2");
+  t.testflatten("S100_S200","S300");
+  t.testflatten("0+20000_20000+20000","0+40000");
+  t.testflatten("0+20000_20000+20000/0+40000","0+40000");
+  t.testflatten("0+20000_20000+20000/0+30000","0+30000");
+  t.testflatten("0+20000_20000+20000/10000+30000","10000+30000");
+  t.testflatten("0+20000_40000+20000/10000+20000","10000+10000_40000+10000");
+  t.testflatten("0+20000_40000+20000/10000+20000/5000+10000","15000+5000_40000+5000");
+  t.testflatten("0+20000_40000+20000/10000+20000/5000+10000/2500+5000","17500+2500_40000+2500");
+  t.testflatten("0+20000_40000+20000/10000+20000/5000+10000/2500+5000/1250+2500","18750+1250_40000+1250");
+  t.testflatten("0+20000_40000+20000/10000+20000/5000+10000/2500+5000/1250+2500/625+1250","19375+625_40000+625");
+  t.testflatten("0+100_101+100_202+100_303+100_404+100_505+100_606+100_707+100_808+100_909+100_1010+100_1111+100_1212+100_1313+100_1414+100_1515+100_1616+100_1717+100_1818+100_1919+100_2020+100_2121+100_2222+100_2323+100_2424+100","D901141262aa24eaaddbce2f470615b6a47639f7a62b3bc7c65335251fe3fa480");
+  t.testflatten("0+100_101+100_202+100_303+100_404+100_505+100_606+100_707+100_808+100_909+100_1010+100_1111+100_1212+100_1313+100_1414+100_1515+100_1616+100_1717+100_1818+100_1919+100_2020+100_2121+100_2222+100_2323+100_2424+100/1+2488","D0e2ded6b35aa15baabd679f7d8b0a7f0ad393948988b6b2f28db7c283240e3b6");
+  t.testflatten("D901141262aa24eaaddbce2f470615b6a47639f7a62b3bc7c65335251fe3fa480/1+2488","D0e2ded6b35aa15baabd679f7d8b0a7f0ad393948988b6b2f28db7c283240e3b6");
+  t.testflatten("D901141262aa24eaaddbce2f470615b6a47639f7a62b3bc7c65335251fe3fa480/350+100","353+50_404+50");
+
   t.testrange(200000000000,"0+100000000000/0+50000000",True)
   t.testrange(20000,"0+100000000000/0+50000000",False)
    
