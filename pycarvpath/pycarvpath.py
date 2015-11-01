@@ -180,6 +180,70 @@ class Entity:
           subfrags.append(subfrag)
     return Entity(subfrags) 
 
+class Box:
+  def __init__(self,top):
+    self.top=top #Top entity used for all entities in the box
+    self.content=dict() #Dictionary with all entities in the box.
+    self.entityrefcount=dict() #Entity refcount for handling multiple instances of the exact same entity.
+    self.fragmentrefstack=[] #A stack of fragments with different refcounts for keeping reference counts on fragments.
+    self.fragmentrefstack.append(Entity) #At least one empty entity on the stack
+  #Add a new entity to the box. Returns two entities: 
+  # 1) An entity with all fragments that went from zero to one reference count.(can be used for fadvice purposes)
+  # 2) An entity with all fragments already in the box before add was invoked (can be used for opportunistic hashing purposes).
+  def add(self,carvpath):
+    if carvpath in self.entityrefcount:
+      self.entityrefcount[carvpath] += 1
+      ent=self.content[carvpath]
+      return [Entity(),ent]
+    else:
+      ent=Entity(carvpath)
+      ent=self.top.topentity.subentity(ent)
+      self.content[carvpath]=ent
+      self.entityrefcount[carvpath] = 1
+      return self.stackextend(0,ent)
+  #Remove an existing entity from the box. Returns two entities:
+  # 1) An entity with all fragments that went from one to zero refcount (can be used for fadvice purposes).
+  # 2) An entity with all fragments still remaining in the box. 
+  def remove(self,carvpath):
+    if carvpath in self.entityrefcount:
+      self.entityrefcount[carvpath] -= 1
+      ent=self.content[carvpath]
+      return [Entity(),ent]
+    else:
+      ent=self.content.pop(carvpath)
+      return self.stackdiminish(len(self.fragmentrefstack),ent)
+  #Request a list of entities that overlap from the box that overlap (for opportunistic hashing purposes).
+  def overlaps(self,offset,size):
+    rval=[]
+    for carvpath in self.content:
+      if self.content.overlaps(offset,size):
+        rval.append(carvpath)
+    return rval
+  def stackextend(level,entity):
+    if not level in self.fragmentrefstack:
+      self.fragmentrefstack.append(Entity)
+    res=self.fragmentrefstack[level].merge(entity)
+    unmerged=res[0]
+    merged=res[1]
+    if (unmerged.size()!=0) :
+      self.stackextend(level+1,unmerged)  
+    return [merged,unmerged]
+  def stackdiminish(level,entity):
+    res=self.fragmentrefstack[level].unmerge(entity)
+    unmerged=res[0]
+    remaining=res[1]
+    if remaining:
+      if level == 0:
+        raise RuntimeError    
+      res2=self.stackdiminish(level-1,remaining)
+      unmerged.merge(res2[1])
+      return [res2[1],unmerged]
+    else:
+      if level == 0:
+        return [unmerged,remaining]
+      else:
+        return [remaining,unmerged];
+
 class Top:
   def __init__(self,size=0):
     self.size=size
