@@ -139,9 +139,11 @@ class Entity:
     else:
       return False
   def __add__(self,other):
+    print other
     fragments=self.fragments
-    if (self.fragments[-1].getoffset() + self.fragments[-1].getsize()) == other.getoffset():
+    if (len(self.fragments) > 0) and (self.fragments[-1].getoffset() + self.fragments[-1].getsize() == other.getoffset()):
       fragments = self.fragments[:-1]
+      print(len(self.fragments))
       fragments.append(Fragment(self.fragments[-1].getoffset(),self.fragments[-1].getsize()+other.getsize()))
     else:
       fragments=self.fragments[:]
@@ -179,15 +181,58 @@ class Entity:
         for subfrag in self.subchunk(childfrag.offset,childfrag.size):
           subfrags.append(subfrag)
     return Entity(subfrags) 
-  def stripsparse(self):
-    newfragments=[]
-    for i in range(len(self.fragments)):
-      if self.fragments[i].issparse() == False:
-        newfragments.append(self.fragments[i])
-    self.fragments=newfragments
+  def stripsortsparse(self):
+    newfragments=Entity()
+    sortedfragments=sorted(self.fragments)
+    for i in range(len(sortedfragments)):
+      if sortedfragments[i].issparse() == False:
+        newfragments += sortedfragments[i]
+    self.fragments=newfragments.fragments
+  def mergefragment(self,fragment):
+    moffset=fragment.getoffset()
+    msize=fragment.getsize()
+    unmerged=[]
+    merged=[]
+    for frag in self.fragments:
+      if msize > 0 and moffset+msize > frag.getoffset() and frag.getoffset()+frag.getsize() > moffset:
+        if moffset < frag.getoffset():
+          merged.append(Fragment(moffset,frag.getoffset()-moffset))
+          msize -= frag.getoffset()-moffset
+          moffset=frag.getoffset()
+        nextsize=0
+        nextoffset=frag.getoffset() + frag.getsize()
+        if moffset+msize > frag.getoffset() + frag.getsize():
+          nextsize=moffset+msize-frag.getoffset()-frag.getsize()
+          msize -= nextsize
+        unmerged.append(Fragment(moffset,msize))
+        msize=nextsize
+        moffset=nextoffset
+    if msize > 0:
+      merged.append(Fragment(moffset,msize))
+    return [unmerged,merged]
+  def flatten(self):
+    flattened=[self.fragments[0]]
+    for index in range(1,len(self.fragments)):
+      if (self.fragments[index].getoffset() == self.fragments[index-1].getoffset()+self.fragments[index-1].getsize()):
+        flattened[-1].size += self.fragments[index-1].getsize()
+      else:
+        flattened.append(self.fragments[index])
+    self.fragments=flattened
   def merge(self,entity):
-    print("OOPS: Merge not yet implemented")
-    return [[],[]]
+    newfragments=[]
+    merged=Entity()
+    unmerged=Entity()
+    for i in range(len(entity.fragments)):
+      print(entity.fragments)
+      if entity.fragments[i].issparse() == False:
+        res=self.mergefragment(entity.fragments[i])
+        unmerged.fragments.append(res[0])
+        merged.fragments.append(res[1])
+    longlist=self.fragments
+    longlist.append(merged)
+    self.fragments=sorted(longlist)
+    self.flatten()
+    return [unmerged,merged]
 
 class Box:
   def __init__(self,top):
@@ -206,7 +251,7 @@ class Box:
       return [Entity(),ent]
     else:
       ent=Entity(carvpath)
-      ent.stripsparse()
+      ent.stripsortsparse()
       ent=self.top.topentity.subentity(ent)
       self.content[carvpath]=ent
       self.entityrefcount[carvpath] = 1
@@ -323,8 +368,8 @@ class Box:
     res=ent.merge(entity)
     unmerged=res[0]
     merged=res[1]
-    if (len(unmerged)!=0) :
-      self.stackextend(level+1,unmerged)  
+    if (len(unmerged.fragments)!=0) :
+      self._stackextend(level+1,unmerged)  
     return [merged,unmerged]
   def _stackdiminish(self,level,entity):
     res=self.fragmentrefstack[level].unmerge(entity)
@@ -426,5 +471,5 @@ if __name__ == "__main__":
 
   t.testrange(200000000000,"0+100000000000/0+50000000",True)
   t.testrange(20000,"0+100000000000/0+50000000",False)
-  t.testbox()
+  #t.testbox()
    
