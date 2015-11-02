@@ -131,7 +131,7 @@ class Entity:
   def getsize(self):
     return self.totalsize
   def __eq__(self,other):
-    if other != None and self.totalsize == other.totalsize and len(self.fragments) == len(other.fragments):
+    if other != None and (self.totalsize == other.totalsize) and len(self.fragments) == len(other.fragments):
       for index in range(0,len(self.fragments)):
         if not self.fragments[index] == other.fragments[index]:
           return False
@@ -179,6 +179,15 @@ class Entity:
         for subfrag in self.subchunk(childfrag.offset,childfrag.size):
           subfrags.append(subfrag)
     return Entity(subfrags) 
+  def stripsparse(self):
+    newfragments=[]
+    for i in range(len(self.fragments)):
+      if self.fragments[i].issparse() == False:
+        newfragments.append(self.fragments[i])
+    self.fragments=newfragments
+  def merge(self,entity):
+    print("OOPS: Merge not yet implemented")
+    return [[],[]]
 
 class Box:
   def __init__(self,top):
@@ -186,7 +195,7 @@ class Box:
     self.content=dict() #Dictionary with all entities in the box.
     self.entityrefcount=dict() #Entity refcount for handling multiple instances of the exact same entity.
     self.fragmentrefstack=[] #A stack of fragments with different refcounts for keeping reference counts on fragments.
-    self.fragmentrefstack.append(Entity) #At least one empty entity on the stack
+    self.fragmentrefstack.append(Entity()) #At least one empty entity on the stack
   #Add a new entity to the box. Returns two entities: 
   # 1) An entity with all fragments that went from zero to one reference count.(can be used for fadvice purposes)
   # 2) An entity with all fragments already in the box before add was invoked (can be used for opportunistic hashing purposes).
@@ -197,10 +206,11 @@ class Box:
       return [Entity(),ent]
     else:
       ent=Entity(carvpath)
+      ent.stripsparse()
       ent=self.top.topentity.subentity(ent)
       self.content[carvpath]=ent
       self.entityrefcount[carvpath] = 1
-      return self.stackextend(0,ent)
+      return self._stackextend(0,ent)
   #Remove an existing entity from the box. Returns two entities:
   # 1) An entity with all fragments that went from one to zero refcount (can be used for fadvice purposes).
   # 2) An entity with all fragments still remaining in the box. 
@@ -211,7 +221,7 @@ class Box:
       return [Entity(),ent]
     else:
       ent=self.content.pop(carvpath)
-      return self.stackdiminish(len(self.fragmentrefstack),ent)
+      return self._stackdiminish(len(self.fragmentrefstack),ent)
   #Request a list of entities that overlap from the box that overlap (for opportunistic hashing purposes).
   def overlaps(self,offset,size):
     rval=[]
@@ -219,16 +229,104 @@ class Box:
       if self.content.overlaps(offset,size):
         rval.append(carvpath)
     return rval
-  def stackextend(level,entity):
-    if not level in self.fragmentrefstack:
-      self.fragmentrefstack.append(Entity)
-    res=self.fragmentrefstack[level].merge(entity)
+  #From the entities pick one according to a strategy string.
+  #  R: selecht/filter on highest refcount fragment containing entities
+  #  O: select/filter on lowest offset of first fragment in entity.
+  #  D: select/filter on highest density of highest refcount fragments in entity.
+  #  S: select/filter on largest entity size.
+  #  s: select/filter on smallest entity size. 
+  def pickspecial(self,strategy):
+    if len(self.fragmentrefstack) == 0:
+      return None
+    myset=None
+    for letter in strategy:
+      if letter == "R":
+        myset=_filterhighestrefcount(myset)
+      if letter == "O":
+        myset=_filterlowestoffset(myset)
+      if letter == "D":
+        myset=_filterrefcountdensity(myset)
+      if letter == "S":
+        myset=_filtersize(true,myset)
+      if letter == "s":
+        myset=_filtersize(false,myset)
+    for carvpath in myset:
+      return carvpath
+    return None
+  def _filterhighestrefcount(self,inset=None):
+    if inset == None:
+      inset=self.content.keys()
+    stacksize=len(self.fragmentrefstack)
+    looklevel=stacksize-1
+    for index in range(looklevel,0,-1):
+      lnentities=_highrefcountfragmentities(index)
+      intersection = inset.intersection(lnentities)
+      if len(intersection) > 0:
+        return intersection
+    return set()
+  def _filterlowestoffset(self,inset=None):
+    if inset == None:
+      inset=self.content.keys()
+    best = set()
+    bestoffset=None
+    for carvpath in inset:
+      offset=self.content[carvpath].getoffset()
+      if bestoffset == None or offset < bestoffset:
+        best=set()
+        bestoffset=offset
+      if  offset == bestoffset:
+        best.add(carvpath)
+    return best
+  def _filterrefcountdensity(self,inset=None):
+    if inset == None:
+      inset=self.content.keys()
+    best = set()
+    bestdensity=None
+    for index in range(looklevel,0,-1):
+      lnentities=_highrefcountfragmentities(index)
+      intersection = inset.intersection(lnentities)
+      if len(intersection) > 0:
+        highcountentity=frag=self.fragmentrefstack[index]
+        best = set()
+        bestdensity=None
+        for carvpath in inset:
+          density=self.content[carvpath].density(highcountentity)
+          if bestdensity == None or density > bestdensity:
+            best=set()
+            bestdensity=density
+          if bestdensity == density:
+            best.add(carvpath)
+        return best
+    return set()
+  def _filtersize(self,biggest=True,inset=None):
+    if inset == None:
+      inset=self.content.keys()
+    best = set()
+    bestsize=None
+    for carvpath in inset:
+      cpsize = self.content[carvpath].getsize()
+      if bestsize == None or (biggest and cpsize > bestsize) or ((not biggest) and cpsize < bestsize):
+        best=set()
+        bestsize=cpsize
+      if bestsize == cpsize:
+        best.add(carvpath)
+    return best
+  def _highrefcountfragmentities(self,level=-1):
+    withhighrefcount = set()
+    for index in self.fragmentrefstack[level]:
+      frag=self.fragmentrefstack[index]
+      withhighrefcount  |= self.overlaps(frag.getoffset(),frag.getsize()) 
+  def _stackextend(self,level,entity):
+    if not (level < len(self.fragmentrefstack)):
+      self.fragmentrefstack.append(Entity())
+    ent=self.fragmentrefstack[level]
+    res=ent.merge(entity)
     unmerged=res[0]
     merged=res[1]
-    if (unmerged.size()!=0) :
+    if (len(unmerged)!=0) :
       self.stackextend(level+1,unmerged)  
     return [merged,unmerged]
-  def stackdiminish(level,entity):
+  def _stackdiminish(self,level,entity):
     res=self.fragmentrefstack[level].unmerge(entity)
     unmerged=res[0]
     remaining=res[1]
@@ -287,6 +385,18 @@ class _Test:
       print("FAIL: topsize=",topsize,"path=",carvpath,"result=",(not expected))
     else:
       print("OK: topsize=",topsize,"path=",carvpath,"result=",expected)
+  def testbox(self):
+    top=Top(1000000)
+    box=Box(top)
+    print "Box test not yet implemented."
+    box.add("0+20000_40000+20000")
+    box.add("10000+40000")
+    box.add("15000+30000")
+    box.add("16000+28000")
+    box.add("0+100000")
+    box.add("0+500000")
+    box.add("1000+998000")
+    box.remove("15000+30000")    
 
 if __name__ == "__main__":
   moduleinit({},160)
@@ -316,4 +426,5 @@ if __name__ == "__main__":
 
   t.testrange(200000000000,"0+100000000000/0+50000000",True)
   t.testrange(20000,"0+100000000000/0+50000000",False)
+  t.testbox()
    
