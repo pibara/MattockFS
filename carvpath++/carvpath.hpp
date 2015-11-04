@@ -97,8 +97,8 @@ namespace carvpath {
   //direcory token sizes.
   template <typename M,int Maxtokenlen> //Note: M is the type of our pseudo map for storing long paths by hash.
   struct Entity {
-      Entity(M & map):mTotalsize(0),mLongPathMap(map){} //New zero size entity.
-      Entity(M & map,std::string cp):mTotalsize(0),mLongPathMap(map){ //Entity from carvpath token.
+      Entity(M & map):mTotalsize(0),mLongPathMap(map),mFragments(){} //New zero size entity.
+      Entity(M & map,std::string cp):mTotalsize(0),mLongPathMap(map),mFragments(){ //Entity from carvpath token.
         std::string carvpath=cp;
         //If the carvpath was so long that it needed representation as a hash, lookup the original carvpath using the hash.
         if (cp.at(0) == 'D') {
@@ -112,7 +112,7 @@ namespace carvpath {
           (*this) += Fragment(token);
         }
       }
-      Entity(M & map,uint64_t topsize):mTotalsize(topsize),mLongPathMap(map){ //Construct with a single zero offset fragment.
+      Entity(M & map,uint64_t topsize):mTotalsize(topsize),mLongPathMap(map),mFragments(){ //Construct with a single zero offset fragment.
         mFragments.push_back(Fragment(0,topsize));
       }
       //Construct from vector of fragments (Note, no tests for merging needs or range matches)
@@ -142,7 +142,7 @@ namespace carvpath {
          return *this;
       }
       //Copy constructor
-      Entity(Entity<M,Maxtokenlen> const &ent):mTotalsize(ent.mTotalsize),mFragments(ent.mFragments),mLongPathMap(ent.mLongPathMap){}
+      Entity(Entity<M,Maxtokenlen> const &ent):mTotalsize(ent.mTotalsize),mFragments(ent.mFragments),mLongPathMap(ent.mLongPathMap),mFragments(){}
       //Copy assignment
       Entity & operator=(Entity<M,Maxtokenlen> &ent) {
         mTotalsize = ent.mTotalsize;
@@ -186,14 +186,14 @@ namespace carvpath {
       std::vector<Fragment>::const_iterator end() const { return mFragments.end();}
       uint64_t getsize() const { return mTotalsize;}
       //Helper for getting fragments from parrent defined for one single child chunk.
-      Entity<M,Maxtokenlen> subchunk(uint64_t offset,uint64_t size) const {
+      Entity<M,Maxtokenlen> subchunk(uint64_t offset,uint64_t fsize) const {
         //First check if child chunk isn't outside of the spacce defined for the parent.
-        if (offset + size > mTotalsize) {
+        if (offset + fsize > mTotalsize) {
           throw std::out_of_range("Sub entity outside of entity bounds for carvpath Entity");
         }
         uint64_t parentfragstart=0; //Start within our parent entity.
         uint64_t startoffset=offset; //Start-offset within our result
-        uint64_t startsize=size; 
+        uint64_t startsize=fsize; 
         Entity<M,Maxtokenlen> rval(mLongPathMap); //Start off with an empty Entity for return value
         for (Fragment parentfrag: mFragments) {
            //Parent fragment ends AFTER startoffset ? Than we need to look at it.

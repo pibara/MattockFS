@@ -59,9 +59,21 @@ class Fragment:
   def getsize(self):
     return self.size
   def __eq__(self,other):
-    return other.issparse() == False and self.offset == other.offset and self.size == other.size
+    return (other.issparse() == False and self.offset == other.offset and self.size == other.size) or other.size==0
+  def __ne__(self,other):
+    return not (self==other)
+  def __lt__(self,other):
+    if other.issparse() == True:
+      return False
+    if self.offset < other.offset:
+      return True
+    if self.offset > other.offset:
+      return False
+    return self.size < other.size
   def issparse(self):
-    return False
+    return self.size == 0
+  def grow(self,sz):
+    self.size+=sz
 
 class Sparse:
   def __init__(self,a1):
@@ -77,14 +89,25 @@ class Sparse:
     return self.size
   def __eq__(self,other):
     return other.issparse() == True and self.size == other.size
+  def __ne__(self,other):
+    return not (self==other)
+  def __lt__(self,other):
+    if other.issparse() == False:
+      return True
+    return self.size < other.size
   def issparse(self):
     return True
+  def grow(self,sz):
+    self.size+=sz
 
 def asfrag(fragstring):
   if fragstring[0] == 'S':
     return Sparse(fragstring)
   else:
-    return Fragment(fragstring)
+    rval = Fragment(fragstring)
+    if rval.getsize() == 0:
+      return Sparse("S0")
+    return rval
 
 def asdigest(path):
   global _longpathtmap
@@ -113,12 +136,7 @@ class Entity:
           raise TypeError('Entity constructor needs a string or list of fragments')
     self.totalsize=0
     for frag in fragments:
-      if frag.getsize() > 0:
-        if len(self.fragments) > 0 and self.fragments[-1].issparse() == frag.issparse() and (frag.issparse() or self.fragments[-1].offset+self.fragments[-1].size == frag.offset):
-          self.fragments[-1].size += frag.size
-        else:
-          self.fragments.append(frag) 
-        self.totalsize += frag.getsize()
+      self._unaryplus(frag)
   def __str__(self):
     global _maxfstoken
     if len(self.fragments) == 0:
@@ -138,17 +156,24 @@ class Entity:
       return True
     else:
       return False
+  def __ne__(self,other):
+    return not (self==other)
+  def _unaryplus(self,other):
+    if isinstance(other,Entity):
+      for index in range(0,len(other.fragments)):
+        print(str(self))
+        self._unaryplus(other.fragments[index])
+        print(str(self))
+    else :
+      if len(self.fragments) > 0 and self.fragments[-1].issparse() == other.issparse() and (other.issparse() or (self.fragments[-1].getoffset() + self.fragments[-1].getsize()) == other.getoffset()):
+        self.fragments[-1].grow(other.getsize())
+      else:
+        self.fragments.append(other)
+      self.totalsize += other.getsize()
   def __add__(self,other):
-    print other
-    fragments=self.fragments
-    if (len(self.fragments) > 0) and (self.fragments[-1].getoffset() + self.fragments[-1].getsize() == other.getoffset()):
-      fragments = self.fragments[:-1]
-      print(len(self.fragments))
-      fragments.append(Fragment(self.fragments[-1].getoffset(),self.fragments[-1].getsize()+other.getsize()))
-    else:
-      fragments=self.fragments[:]
-      fragments.append(other)
-    return Entity(fragments)
+    rval=Entity()
+    rval._unaryplus(other)
+    return rval
   def subchunk(self,offset,size):
     if (offset+size) > self.totalsize:
       raise IndexError('Not within parent range')
@@ -162,7 +187,7 @@ class Entity:
           chunksize=startsize
         else:
           chunksize=maxchunk
-        if parentfrag.issparse():
+        if parentfrag.issparse() or chunksize == 0:
           yield Sparse(chunksize)
         else:
           yield Fragment(parentfrag.getoffset()+startoffset-start,chunksize)
@@ -181,58 +206,71 @@ class Entity:
         for subfrag in self.subchunk(childfrag.offset,childfrag.size):
           subfrags.append(subfrag)
     return Entity(subfrags) 
-  def stripsortsparse(self):
-    newfragments=Entity()
-    sortedfragments=sorted(self.fragments)
-    for i in range(len(sortedfragments)):
-      if sortedfragments[i].issparse() == False:
-        newfragments += sortedfragments[i]
-    self.fragments=newfragments.fragments
-  def mergefragment(self,fragment):
-    moffset=fragment.getoffset()
-    msize=fragment.getsize()
-    unmerged=[]
-    merged=[]
-    for frag in self.fragments:
-      if msize > 0 and moffset+msize > frag.getoffset() and frag.getoffset()+frag.getsize() > moffset:
-        if moffset < frag.getoffset():
-          merged.append(Fragment(moffset,frag.getoffset()-moffset))
-          msize -= frag.getoffset()-moffset
-          moffset=frag.getoffset()
-        nextsize=0
-        nextoffset=frag.getoffset() + frag.getsize()
-        if moffset+msize > frag.getoffset() + frag.getsize():
-          nextsize=moffset+msize-frag.getoffset()-frag.getsize()
-          msize -= nextsize
-        unmerged.append(Fragment(moffset,msize))
-        msize=nextsize
-        moffset=nextoffset
-    if msize > 0:
-      merged.append(Fragment(moffset,msize))
-    return [unmerged,merged]
-  def flatten(self):
-    flattened=[self.fragments[0]]
-    for index in range(1,len(self.fragments)):
-      if (self.fragments[index].getoffset() == self.fragments[index-1].getoffset()+self.fragments[index-1].getsize()):
-        flattened[-1].size += self.fragments[index-1].getsize()
-      else:
-        flattened.append(self.fragments[index])
-    self.fragments=flattened
-  def merge(self,entity):
-    newfragments=[]
-    merged=Entity()
-    unmerged=Entity()
-    for i in range(len(entity.fragments)):
-      print(entity.fragments)
-      if entity.fragments[i].issparse() == False:
-        res=self.mergefragment(entity.fragments[i])
-        unmerged.fragments.append(res[0])
-        merged.fragments.append(res[1])
-    longlist=self.fragments
-    longlist.append(merged)
-    self.fragments=sorted(longlist)
-    self.flatten()
-    return [unmerged,merged]
+  def stripsparse(self):
+    newfragent=Entity()
+    fragments=sorted(self.fragments)
+    for i in range(len(fragments)):
+      if fragments[i].issparse() == False:
+        newfragent._unaryplus(fragments[i])
+    self.fragments=newfragent.fragments
+    self.totalsize=newfragent.totalsize
+  def merge(self,entity): #Merge two sorted sparse free entities.
+    mergedfragments = []
+    discardedfragments = []
+    startfragmentno=0
+    for index in range(0,len(entity.fragments)):
+      mergeable=entity.fragments[index]
+      chunkoffset=mergeable.getoffset()
+      chunksize=mergeable.getsize()
+      chunkend = chunkoffset+chunksize
+      #First look at the easy stuff that exists fully before the start of or behind the end of our own fragments.
+      if len(self.fragments) == 0 or chunkend < self.fragments[0].getoffset() or chunkoffset > self.fragments[0].getoffset() + self.fragments[0].getsize():
+        mergedfragments.append(Fragment(chunkoffset,chunksize))
+        continue
+      #Now look at everything that might partially overlap
+      for index2 in range(startfragmentno,len(self.fragments)):
+        #As soon as our current chunksize reaches zero, we are done with the inner loop.
+        if chunksize == 0:
+          break
+        mergewith = self.fragments[index2]
+        matchoffset=self.fragments[index2].getoffset()
+        matchsize=self.fragments.getsize()
+        matchend=matchoffset+matchsize
+        #If this match doesn't overlap for the reason that its starts after chunk end, further matches won't either
+        if chunkend < matchoffset:
+          mergedfragments.append(Fragment(chunkoffset,chunksize))
+          break
+        startfragmentno=index2
+        #If this chunk doesn't for the reason that its starts after match further matches still might match.
+        if matchend < chunkoffset:
+          continue;
+        #Ok, we established there is at least 'some' overlap.
+        #First process any preceding non overlapping part
+        if chunkoffset < matchoffset:
+          prefragmentsize=matchoffset-chunkoffset
+          mergedfragments.append(Fragment(chunkoffset,prefragmentsize))
+          #addjust remaining part of our chunk
+          chunkoffset += prefragmentsize
+          chunksize -= prefragmentsize
+        #Now look at the overlapping part
+        overlapend=chunkend
+        overlapsize = chunksize
+        if overlapend < matchend:
+          overlapend= matchend
+          overlapsize = matchend - chunkoffset
+          discardedfragments.append(Fragment(chunkoffset,overlapsize))
+          chunkoffset += overlapsize
+          chunksize -= overlapsize
+    if chunksize > 0:
+      mergedfragments.append(Fragment(chunkoffset,chunksize))
+    newfragset=sorted(self.fragments + mergedfragments)
+    asentity=Entity()
+    for index in range(0,len(newfragset)):
+      asentity._unaryplus(newfragset[index])
+    self.fragments=asentity.fragments
+    self.totalsize=asentity.totalsize
+    print(str(self))
+    return [mergedfragments,discardedfragments]
 
 class Box:
   def __init__(self,top):
@@ -417,19 +455,61 @@ def parse(path):
   return level 
 
 class _Test:
+  def testadd(self,pin1,pin2,pout):
+    a=parse(pin1)
+    b=parse(pin2)
+    c=parse(pout)
+    a._unaryplus(b)
+    if (a!=c):
+      print("FAIL: '" + pin1 + " + " + pin2 + " = " + str(a) +  "' expected='" + pout + "'")
+    else:
+     print("OK: '" + pin1 + " + " + pin2 + " = " + str(a) +  "'")
+  def teststripsparse(self,pin,pout):
+    a=parse(pin)
+    b=parse(pout)
+    a.stripsparse()
+    if a != b:
+      print("FAIL: in='" + pin + "' expected='" + pout + "' result='" + str(a) + "'")
+    else:
+      print("OK: in='" + pin + "' expected='" + pout + "' result='" + str(a) + "'")
+  def testflatten2(self,pin,pout):
+    a=parse(pin)
+    b=parse(pout)
+    if a != b:
+      print("FAIL: in='" + pin + "' expected='" + pout + "' result='" + str(a) + "'")
+    else:
+      print("OK: in='" + pin + "' expected='" + pout + "' result='" + str(a) + "'")
   def testflatten(self,pin,pout):
     a=parse(pin)
     if str(a) != pout:
       print("FAIL: in='" + pin + "' expected='" + pout + "' result='" + str(a) + "'")
     else:
       print("OK: in='" + pin + "' expected='" + pout + "' result='" + str(a) + "'")
+    self.testflatten2(pin,pout)
   def testrange(self,topsize,carvpath,expected):
     top=Top(topsize)
     entity=parse(carvpath)
     if top.test(entity) != expected:
-      print("FAIL: topsize=",topsize,"path=",carvpath,"result=",(not expected))
+      print("FAIL: topsize="+str(topsize)+"path="+carvpath+"result="+str(not expected))
     else:
-      print("OK: topsize=",topsize,"path=",carvpath,"result=",expected)
+      print("OK: topsize="+str(topsize)+"path="+carvpath+"result="+str(expected))
+  def testsize(self,pin,sz):
+    a=parse(pin)
+    if a.getsize() != sz:
+      print("FAIL: in='" + pin + "' expected='" + str(sz) + "' result='" + str(a.getsize()) + "'")
+    else:
+      print("OK: in='" + pin + "' expected='" + str(sz) + "' result='" + str(a.getsize()) + "'")
+  def testmerge(self,p1,p2,pout):
+    a=parse(p1)
+    a.stripsparse()
+    b=parse(p2)
+    b.stripsparse()
+    c=parse(pout)
+    d=a.merge(b)
+    if a!=c:
+      print("FAIL")
+    else:
+      print("OK")
   def testbox(self):
     top=Top(1000000)
     box=Box(top)
@@ -468,8 +548,19 @@ if __name__ == "__main__":
   t.testflatten("0+100_101+100_202+100_303+100_404+100_505+100_606+100_707+100_808+100_909+100_1010+100_1111+100_1212+100_1313+100_1414+100_1515+100_1616+100_1717+100_1818+100_1919+100_2020+100_2121+100_2222+100_2323+100_2424+100/1+2488","D0e2ded6b35aa15baabd679f7d8b0a7f0ad393948988b6b2f28db7c283240e3b6");
   t.testflatten("D901141262aa24eaaddbce2f470615b6a47639f7a62b3bc7c65335251fe3fa480/1+2488","D0e2ded6b35aa15baabd679f7d8b0a7f0ad393948988b6b2f28db7c283240e3b6");
   t.testflatten("D901141262aa24eaaddbce2f470615b6a47639f7a62b3bc7c65335251fe3fa480/350+100","353+50_404+50");
+  t.testflatten("S200000/1000+9000","S9000")
 
   t.testrange(200000000000,"0+100000000000/0+50000000",True)
   t.testrange(20000,"0+100000000000/0+50000000",False)
+  t.testsize("20000+0_89765+0",0)
+  t.testsize("0+20000_40000+20000/10000+20000/5000+10000",10000)
+  t.testsize("D901141262aa24eaaddbce2f470615b6a47639f7a62b3bc7c65335251fe3fa480/350+100",100)
+  t.teststripsparse("0+1000_S2000_1000+2000","0+3000")
+  t.teststripsparse("1000+2000_S2000_0+1000","0+3000")
+  t.teststripsparse("0+1000_S2000_4000+2000","0+1000_4000+2000")
+  t.teststripsparse("4000+2000_S2000_0+1000","0+1000_4000+2000")
+  t.testadd("0+1000_S2000_1000+2000","3000+1000_6000+1000","0+1000_S2000_1000+3000_6000+1000")
+  t.testadd("0+1000_S2000","S1000_3000+1000","0+1000_S3000_3000+1000")
+  #t.testmerge("0+1000_2000+1000","500+2000","0+3000")
   #t.testbox()
    
