@@ -161,9 +161,7 @@ class Entity:
   def _unaryplus(self,other):
     if isinstance(other,Entity):
       for index in range(0,len(other.fragments)):
-        print(str(self))
         self._unaryplus(other.fragments[index])
-        print(str(self))
     else :
       if len(self.fragments) > 0 and self.fragments[-1].issparse() == other.issparse() and (other.issparse() or (self.fragments[-1].getoffset() + self.fragments[-1].getsize()) == other.getoffset()):
         self.fragments[-1].grow(other.getsize())
@@ -226,6 +224,8 @@ class Entity:
       #First look at the easy stuff that exists fully before the start of or behind the end of our own fragments.
       if len(self.fragments) == 0 or chunkend < self.fragments[0].getoffset() or chunkoffset > self.fragments[0].getoffset() + self.fragments[0].getsize():
         mergedfragments.append(Fragment(chunkoffset,chunksize))
+        chunkoffset+=chunksize
+        chunksize=0
         continue
       #Now look at everything that might partially overlap
       for index2 in range(startfragmentno,len(self.fragments)):
@@ -234,11 +234,13 @@ class Entity:
           break
         mergewith = self.fragments[index2]
         matchoffset=self.fragments[index2].getoffset()
-        matchsize=self.fragments.getsize()
+        matchsize=self.fragments[index2].getsize()
         matchend=matchoffset+matchsize
         #If this match doesn't overlap for the reason that its starts after chunk end, further matches won't either
         if chunkend < matchoffset:
           mergedfragments.append(Fragment(chunkoffset,chunksize))
+          chunkoffset+=chunksize
+          chunksize=0
           break
         startfragmentno=index2
         #If this chunk doesn't for the reason that its starts after match further matches still might match.
@@ -255,12 +257,12 @@ class Entity:
         #Now look at the overlapping part
         overlapend=chunkend
         overlapsize = chunksize
-        if overlapend < matchend:
+        if overlapend > matchend:
           overlapend= matchend
           overlapsize = matchend - chunkoffset
-          discardedfragments.append(Fragment(chunkoffset,overlapsize))
-          chunkoffset += overlapsize
-          chunksize -= overlapsize
+        discardedfragments.append(Fragment(chunkoffset,overlapsize))
+        chunkoffset += overlapsize
+        chunksize -= overlapsize
     if chunksize > 0:
       mergedfragments.append(Fragment(chunkoffset,chunksize))
     newfragset=sorted(self.fragments + mergedfragments)
@@ -269,7 +271,6 @@ class Entity:
       asentity._unaryplus(newfragset[index])
     self.fragments=asentity.fragments
     self.totalsize=asentity.totalsize
-    print(str(self))
     return [mergedfragments,discardedfragments]
 
 class Box:
@@ -507,9 +508,9 @@ class _Test:
     c=parse(pout)
     d=a.merge(b)
     if a!=c:
-      print("FAIL")
+      print("FAIL : "+str(a))
     else:
-      print("OK")
+      print("OK : "+str(a))
   def testbox(self):
     top=Top(1000000)
     box=Box(top)
@@ -561,6 +562,10 @@ if __name__ == "__main__":
   t.teststripsparse("4000+2000_S2000_0+1000","0+1000_4000+2000")
   t.testadd("0+1000_S2000_1000+2000","3000+1000_6000+1000","0+1000_S2000_1000+3000_6000+1000")
   t.testadd("0+1000_S2000","S1000_3000+1000","0+1000_S3000_3000+1000")
-  #t.testmerge("0+1000_2000+1000","500+2000","0+3000")
+  t.testmerge("0+1000_2000+1000","500+2000","0+3000")
+  t.testmerge("2000+1000_5000+100","100+500_800+800_4000+200_6000+100_7000+100","100+500_800+800_2000+1000_4000+200_5000+100_6000+100_7000+100")
+  t.testmerge("2000+1000_5000+1000","2500+500","2000+1000_5000+1000")
+  t.testmerge("500+2000","0+1000_2000+1000","0+3000")
+  t.testmerge("0+1000_2000+1000","500+1000","0+1500_2000+1000")
   #t.testbox()
    
