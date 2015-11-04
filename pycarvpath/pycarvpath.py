@@ -33,6 +33,7 @@
 #facilities or other processes where designation of of potentially fragmented and sparse 
 #sub-entities is esential.
 #
+import copy
 try:
     from pyblake2 import blake2b
 except ImportError:
@@ -272,7 +273,19 @@ class Entity:
     self.fragments=asentity.fragments
     self.totalsize=asentity.totalsize
     return [mergedfragments,discardedfragments]
-
+  def unmerge(self,entity):
+    #FIXME: Express unmerge in terms of merge if possible
+    entitycopy=copy.deepcopy(entity)
+    res=entitycopy.merge(self)
+    mergedfragments=res[0]
+    discardedfragments=res[1]
+    tsize=0
+    for index in range(0,len(mergedfragments)):
+      tsize += mergedfragments[index].getsize()
+    self.totalsize=tsize
+    self.fragments=mergedfragments
+    return [[],[]] 
+    
 class Box:
   def __init__(self,top):
     self.top=top #Top entity used for all entities in the box
@@ -280,6 +293,13 @@ class Box:
     self.entityrefcount=dict() #Entity refcount for handling multiple instances of the exact same entity.
     self.fragmentrefstack=[] #A stack of fragments with different refcounts for keeping reference counts on fragments.
     self.fragmentrefstack.append(Entity()) #At least one empty entity on the stack
+  def __str__(self):
+    rval=""
+    for index in range(0,len(self.fragmentrefstack)):
+      rval += "   + " +str(index) + " : " + str(self.fragmentrefstack[index]) + "\n"
+    for carvpath in self.content:
+      rval += "   * " +carvpath + " : " + str(self.entityrefcount[carvpath]) + "\n"
+    return rval
   #Add a new entity to the box. Returns two entities: 
   # 1) An entity with all fragments that went from zero to one reference count.(can be used for fadvice purposes)
   # 2) An entity with all fragments already in the box before add was invoked (can be used for opportunistic hashing purposes).
@@ -290,7 +310,7 @@ class Box:
       return [Entity(),ent]
     else:
       ent=Entity(carvpath)
-      ent.stripsortsparse()
+      ent.stripsparse()
       ent=self.top.topentity.subentity(ent)
       self.content[carvpath]=ent
       self.entityrefcount[carvpath] = 1
@@ -301,11 +321,13 @@ class Box:
   def remove(self,carvpath):
     if carvpath in self.entityrefcount:
       self.entityrefcount[carvpath] -= 1
-      ent=self.content[carvpath]
-      return [Entity(),ent]
+      if self.entityrefcount[carvpath] == 0:
+        ent=self.content.pop(carvpath)
+        del self.entityrefcount[carvpath]
+        return self._stackdiminish(len(self.fragmentrefstack)-1,ent)
+      return [Entity(),self.content[carvpath]]
     else:
-      ent=self.content.pop(carvpath)
-      return self._stackdiminish(len(self.fragmentrefstack),ent)
+      print("OOPS")
   #Request a list of entities that overlap from the box that overlap (for opportunistic hashing purposes).
   def overlaps(self,offset,size):
     rval=[]
@@ -405,12 +427,13 @@ class Box:
       self.fragmentrefstack.append(Entity())
     ent=self.fragmentrefstack[level]
     res=ent.merge(entity)
-    unmerged=res[0]
-    merged=res[1]
-    if (len(unmerged.fragments)!=0) :
-      self._stackextend(level+1,unmerged)  
+    merged=res[0]
+    unmerged=res[1]
+    if (len(unmerged)!=0) :
+      self._stackextend(level+1,Entity(unmerged))  
     return [merged,unmerged]
   def _stackdiminish(self,level,entity):
+    print("_stackdiminish level " + str(level) + " " + str(entity))
     res=self.fragmentrefstack[level].unmerge(entity)
     unmerged=res[0]
     remaining=res[1]
@@ -512,17 +535,25 @@ class _Test:
     else:
       print("OK : "+str(a))
   def testbox(self):
+    print "BOXTEST:"
     top=Top(1000000)
     box=Box(top)
-    print "Box test not yet implemented."
     box.add("0+20000_40000+20000")
+    print(str(box))
     box.add("10000+40000")
+    print(str(box))
     box.add("15000+30000")
+    print(str(box))
     box.add("16000+28000")
+    print(str(box))
     box.add("0+100000")
+    print(str(box))
     box.add("0+500000")
+    print(str(box))
     box.add("1000+998000")
-    box.remove("15000+30000")    
+    print(str(box))
+    box.remove("15000+30000") 
+    print(str(box))
 
 if __name__ == "__main__":
   moduleinit({},160)
@@ -567,5 +598,5 @@ if __name__ == "__main__":
   t.testmerge("2000+1000_5000+1000","2500+500","2000+1000_5000+1000")
   t.testmerge("500+2000","0+1000_2000+1000","0+3000")
   t.testmerge("0+1000_2000+1000","500+1000","0+1500_2000+1000")
-  #t.testbox()
+  t.testbox()
    
