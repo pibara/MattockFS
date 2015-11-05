@@ -213,78 +213,142 @@ class Entity:
         newfragent._unaryplus(fragments[i])
     self.fragments=newfragent.fragments
     self.totalsize=newfragent.totalsize
-  def merge(self,entity): #Merge two sorted sparse free entities.
-    mergedfragments = []
-    discardedfragments = []
-    startfragmentno=0
-    for index in range(0,len(entity.fragments)):
-      mergeable=entity.fragments[index]
-      chunkoffset=mergeable.getoffset()
-      chunksize=mergeable.getsize()
-      chunkend = chunkoffset+chunksize
-      #First look at the easy stuff that exists fully before the start of or behind the end of our own fragments.
-      if len(self.fragments) == 0 or chunkend < self.fragments[0].getoffset() or chunkoffset > self.fragments[0].getoffset() + self.fragments[0].getsize():
-        mergedfragments.append(Fragment(chunkoffset,chunksize))
-        chunkoffset+=chunksize
-        chunksize=0
-        continue
-      #Now look at everything that might partially overlap
-      for index2 in range(startfragmentno,len(self.fragments)):
-        #As soon as our current chunksize reaches zero, we are done with the inner loop.
-        if chunksize == 0:
-          break
-        mergewith = self.fragments[index2]
-        matchoffset=self.fragments[index2].getoffset()
-        matchsize=self.fragments[index2].getsize()
-        matchend=matchoffset+matchsize
-        #If this match doesn't overlap for the reason that its starts after chunk end, further matches won't either
-        if chunkend < matchoffset:
-          mergedfragments.append(Fragment(chunkoffset,chunksize))
-          chunkoffset+=chunksize
-          chunksize=0
-          break
-        startfragmentno=index2
-        #If this chunk doesn't for the reason that its starts after match further matches still might match.
-        if matchend < chunkoffset:
-          continue;
-        #Ok, we established there is at least 'some' overlap.
-        #First process any preceding non overlapping part
-        if chunkoffset < matchoffset:
-          prefragmentsize=matchoffset-chunkoffset
-          mergedfragments.append(Fragment(chunkoffset,prefragmentsize))
-          #addjust remaining part of our chunk
-          chunkoffset += prefragmentsize
-          chunksize -= prefragmentsize
-        #Now look at the overlapping part
-        overlapend=chunkend
-        overlapsize = chunksize
-        if overlapend > matchend:
-          overlapend= matchend
-          overlapsize = matchend - chunkoffset
-        discardedfragments.append(Fragment(chunkoffset,overlapsize))
-        chunkoffset += overlapsize
-        chunksize -= overlapsize
-    if chunksize > 0:
-      mergedfragments.append(Fragment(chunkoffset,chunksize))
-    newfragset=sorted(self.fragments + mergedfragments)
-    asentity=Entity()
-    for index in range(0,len(newfragset)):
-      asentity._unaryplus(newfragset[index])
-    self.fragments=asentity.fragments
-    self.totalsize=asentity.totalsize
-    return [mergedfragments,discardedfragments]
+#  def merge(self,entity): #Merge two sorted sparse free entities.
+#    mergedfragments = []
+#    discardedfragments = []
+#    startfragmentno=0
+#    for index in range(0,len(entity.fragments)):
+#      mergeable=entity.fragments[index]
+#      chunkoffset=mergeable.getoffset()
+#      chunksize=mergeable.getsize()
+#      chunkend = chunkoffset+chunksize
+#      #First look at the easy stuff that exists fully before the start of or behind the end of our own fragments.
+#      if len(self.fragments) == 0 or chunkend < self.fragments[0].getoffset() or chunkoffset > self.fragments[0].getoffset() + self.fragments[0].getsize():
+#        mergedfragments.append(Fragment(chunkoffset,chunksize))
+#        chunkoffset+=chunksize
+#        chunksize=0
+#        continue
+#      #Now look at everything that might partially overlap
+#      for index2 in range(startfragmentno,len(self.fragments)):
+#        #As soon as our current chunksize reaches zero, we are done with the inner loop.
+#        if chunksize == 0:
+#          break
+#        mergewith = self.fragments[index2]
+#        matchoffset=self.fragments[index2].getoffset()
+#        matchsize=self.fragments[index2].getsize()
+#        matchend=matchoffset+matchsize
+#        #If this match doesn't overlap for the reason that its starts after chunk end, further matches won't either
+#        if chunkend < matchoffset:
+#          mergedfragments.append(Fragment(chunkoffset,chunksize))
+#          chunkoffset+=chunksize
+#          chunksize=0
+#          break
+#        startfragmentno=index2
+#        #If this chunk doesn't for the reason that its starts after match further matches still might match.
+#        if matchend < chunkoffset:
+#          continue;
+#        #Ok, we established there is at least 'some' overlap.
+#        #First process any preceding non overlapping part
+#        if chunkoffset < matchoffset:
+#          prefragmentsize=matchoffset-chunkoffset
+#          mergedfragments.append(Fragment(chunkoffset,prefragmentsize))
+#          #addjust remaining part of our chunk
+#          chunkoffset += prefragmentsize
+#          chunksize -= prefragmentsize
+#        #Now look at the overlapping part
+#        overlapend=chunkend
+#        overlapsize = chunksize
+#        if overlapend > matchend:
+#          overlapend= matchend
+#          overlapsize = matchend - chunkoffset
+#        discardedfragments.append(Fragment(chunkoffset,overlapsize))
+#        chunkoffset += overlapsize
+#        chunksize -= overlapsize
+#    if chunksize > 0:
+#      mergedfragments.append(Fragment(chunkoffset,chunksize))
+#    newfragset=sorted(self.fragments + mergedfragments)
+#    asentity=Entity()
+#    for index in range(0,len(newfragset)):
+#      asentity._unaryplus(newfragset[index])
+#    self.fragments=asentity.fragments
+#    self.totalsize=asentity.totalsize
+#    return [mergedfragments,discardedfragments]
+  def _chopped(self,entity,bf1,bf2):
+    chunks=[]
+    foreignfragcount = len(entity.fragments)
+    foreignfragindex = 0
+    ownfragcount = len(self.fragments)
+    ownfragindex 0
+    masteroffset=0
+    ownoffset=0
+    ownsize=0
+    ownend=0
+    foreignoffset=0
+    foreignsize=0
+    foreignend=0
+    discontinue = foreignfragcount == ownfragcount
+    while not discontinue:
+      if ownsize == 0 and ownfragindex!= ownfragcount:
+        ownoffset=self.fragments[ownfragindex].getoffset()
+        ownsize=self.fragments[ownfragindex].getsize()
+        ownend=ownoffset+ownsize
+        ownfragindex += 1
+      if foreignsize == 0 and foreignfragindex!= foreignfragcount:
+        foreignoffset=entity.fragments[foreignfragindex].getoffset()
+        foreignsize=entity.fragments[foreignfragindex].getsize()
+        foreignend=foreignoffset+foreignsize
+        foreignfragindex += 1
+      firstoffset=ownoffset
+      if firstoffset > foreignoffset or ownsize == 0:
+        firstoffset = foreignoffset
+      if firstoffset > masteroffset:
+        chunks.append([masteroffset,firstoffset-masteroffset,False,False])
+        masteroffset=firstoffset
+      if ownsize == 0 or ownoffset > foreignend:
+        chunks.append([foreignoffset,foreignsize,False,True])
+        foreignsize=0
+        masteroffset=foreignend
+      else :
+        if foreignsize=0 or foreignoffset > ownend:
+          chunks.append([ownoffset,ownsize,True,False])
+          ownsize=0
+          masteroffset=ownend
+        else: 
+          if ownoffset < foreignoffset:
+            chunks.append([ownoffset,foreignoffset-ownoffset,True,False])
+            ownsize -= foreignoffset-ownoffset
+            masteroffset=foreignoffset
+          else:
+            if foreignoffset > ownoffset:
+              chunks.append([foreignoffset,ownoffset-foreignoffset,False,True])
+              foreignsize -= ownoffset-foreignoffset
+              masteroffset=ownoffset
+           else:
+              smallest = ownsize
+              if foreignsize < smallest:
+                smallest = foreignsize
+              chunks.append([ownoffset,smallest,True,True])
+              ownsize -= smallest
+              foreignsize -= smallest
+              masteroffset=ownoffset+smallest
+      if foreignfragindex == foreignfragcount and ownfragcount == ownfragindex and ownsize == 0 and foreignsize==0:
+        discontinue=True
+    for index in range(0,len(chunks)):
+      off=chunks[index][0]
+      size=chunks[index][1]
+      oldown=chunks[index][2]
+      oldforeign=chunks[index][3]
+      newown=bf1(hasorig,hasforeign)
+      newremaining=bf2(hasorig,hasforeign)
+      #FIXME: Actually process this stuff.
+  def merge(self,entity):
+    selfbf = lambda a, b : a or b
+    remfb = lambda a,b : a and b
+    return self._chopped(entity,selfbf,remfb)
   def unmerge(self,entity):
-    #FIXME: Express unmerge in terms of merge if possible
-    entitycopy=copy.deepcopy(entity)
-    res=entitycopy.merge(self)
-    mergedfragments=res[0]
-    discardedfragments=res[1]
-    tsize=0
-    for index in range(0,len(mergedfragments)):
-      tsize += mergedfragments[index].getsize()
-    self.totalsize=tsize
-    self.fragments=mergedfragments
-    return [[],[]] 
+    selfbf = lambda a, b : a and (not b)
+    remfb = lambda a,b : (not a) and b
+    return self._chopped(entity,selfbf,remfb)
     
 class Box:
   def __init__(self,top):
