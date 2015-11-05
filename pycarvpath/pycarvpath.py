@@ -137,7 +137,7 @@ class Entity:
           raise TypeError('Entity constructor needs a string or list of fragments')
     self.totalsize=0
     for frag in fragments:
-      self._unaryplus(frag)
+      self.unaryplus(frag)
   def __str__(self):
     global _maxfstoken
     if len(self.fragments) == 0:
@@ -159,10 +159,10 @@ class Entity:
       return False
   def __ne__(self,other):
     return not (self==other)
-  def _unaryplus(self,other):
+  def unaryplus(self,other):
     if isinstance(other,Entity):
       for index in range(0,len(other.fragments)):
-        self._unaryplus(other.fragments[index])
+        self.unaryplus(other.fragments[index])
     else :
       if len(self.fragments) > 0 and self.fragments[-1].issparse() == other.issparse() and (other.issparse() or (self.fragments[-1].getoffset() + self.fragments[-1].getsize()) == other.getoffset()):
         self.fragments[-1].grow(other.getsize())
@@ -171,7 +171,7 @@ class Entity:
       self.totalsize += other.getsize()
   def __add__(self,other):
     rval=Entity()
-    rval._unaryplus(other)
+    rval.unaryplus(other)
     return rval
   def subchunk(self,offset,size):
     if (offset+size) > self.totalsize:
@@ -210,75 +210,32 @@ class Entity:
     fragments=sorted(self.fragments)
     for i in range(len(fragments)):
       if fragments[i].issparse() == False:
-        newfragent._unaryplus(fragments[i])
+        newfragent.unaryplus(fragments[i])
     self.fragments=newfragent.fragments
     self.totalsize=newfragent.totalsize
-#  def merge(self,entity): #Merge two sorted sparse free entities.
-#    mergedfragments = []
-#    discardedfragments = []
-#    startfragmentno=0
-#    for index in range(0,len(entity.fragments)):
-#      mergeable=entity.fragments[index]
-#      chunkoffset=mergeable.getoffset()
-#      chunksize=mergeable.getsize()
-#      chunkend = chunkoffset+chunksize
-#      #First look at the easy stuff that exists fully before the start of or behind the end of our own fragments.
-#      if len(self.fragments) == 0 or chunkend < self.fragments[0].getoffset() or chunkoffset > self.fragments[0].getoffset() + self.fragments[0].getsize():
-#        mergedfragments.append(Fragment(chunkoffset,chunksize))
-#        chunkoffset+=chunksize
-#        chunksize=0
-#        continue
-#      #Now look at everything that might partially overlap
-#      for index2 in range(startfragmentno,len(self.fragments)):
-#        #As soon as our current chunksize reaches zero, we are done with the inner loop.
-#        if chunksize == 0:
-#          break
-#        mergewith = self.fragments[index2]
-#        matchoffset=self.fragments[index2].getoffset()
-#        matchsize=self.fragments[index2].getsize()
-#        matchend=matchoffset+matchsize
-#        #If this match doesn't overlap for the reason that its starts after chunk end, further matches won't either
-#        if chunkend < matchoffset:
-#          mergedfragments.append(Fragment(chunkoffset,chunksize))
-#          chunkoffset+=chunksize
-#          chunksize=0
-#          break
-#        startfragmentno=index2
-#        #If this chunk doesn't for the reason that its starts after match further matches still might match.
-#        if matchend < chunkoffset:
-#          continue;
-#        #Ok, we established there is at least 'some' overlap.
-#        #First process any preceding non overlapping part
-#        if chunkoffset < matchoffset:
-#          prefragmentsize=matchoffset-chunkoffset
-#          mergedfragments.append(Fragment(chunkoffset,prefragmentsize))
-#          #addjust remaining part of our chunk
-#          chunkoffset += prefragmentsize
-#          chunksize -= prefragmentsize
-#        #Now look at the overlapping part
-#        overlapend=chunkend
-#        overlapsize = chunksize
-#        if overlapend > matchend:
-#          overlapend= matchend
-#          overlapsize = matchend - chunkoffset
-#        discardedfragments.append(Fragment(chunkoffset,overlapsize))
-#        chunkoffset += overlapsize
-#        chunksize -= overlapsize
-#    if chunksize > 0:
-#      mergedfragments.append(Fragment(chunkoffset,chunksize))
-#    newfragset=sorted(self.fragments + mergedfragments)
-#    asentity=Entity()
-#    for index in range(0,len(newfragset)):
-#      asentity._unaryplus(newfragset[index])
-#    self.fragments=asentity.fragments
-#    self.totalsize=asentity.totalsize
-#    return [mergedfragments,discardedfragments]
-  def _chopped(self,entity,bf1,bf2):
+  def merge(self,entity):
+    selfbf = lambda a, b : a or b
+    remfb = lambda a,b : a and b
+    insfb = lambda a,b : (not a) and b
+    rval=fragapply(self,entity,[selfbf,remfb,insfb])
+    self.fragments=rval[0].fragments
+    self.totalsize=rval[0].totalsize
+    return rval[1:]
+  def unmerge(self,entity):
+    selfbf = lambda a, b : a and (not b)
+    remfb = lambda a,b : (not a) and b
+    drpfb = lambda a,b : a and b
+    rval=fragapply(self,entity,[selfbf,remfb,drpfb])
+    self.fragments=rval[0].fragments
+    self.totalsize=rval[0].totalsize
+    return rval[1:]
+   
+def fragapply(ent1,ent2,bflist):
     chunks=[]
-    foreignfragcount = len(entity.fragments)
+    foreignfragcount = len(ent2.fragments)
     foreignfragindex = 0
-    ownfragcount = len(self.fragments)
-    ownfragindex 0
+    ownfragcount = len(ent1.fragments)
+    ownfragindex=0
     masteroffset=0
     ownoffset=0
     ownsize=0
@@ -289,67 +246,60 @@ class Entity:
     discontinue = foreignfragcount == ownfragcount
     while not discontinue:
       if ownsize == 0 and ownfragindex!= ownfragcount:
-        ownoffset=self.fragments[ownfragindex].getoffset()
-        ownsize=self.fragments[ownfragindex].getsize()
+        ownoffset=ent1.fragments[ownfragindex].getoffset()
+        ownsize=ent1.fragments[ownfragindex].getsize()
         ownend=ownoffset+ownsize
         ownfragindex += 1
       if foreignsize == 0 and foreignfragindex!= foreignfragcount:
-        foreignoffset=entity.fragments[foreignfragindex].getoffset()
-        foreignsize=entity.fragments[foreignfragindex].getsize()
+        foreignoffset=ent2.fragments[foreignfragindex].getoffset()
+        foreignsize=ent2.fragments[foreignfragindex].getsize()
         foreignend=foreignoffset+foreignsize
         foreignfragindex += 1
-      firstoffset=ownoffset
-      if firstoffset > foreignoffset or ownsize == 0:
-        firstoffset = foreignoffset
+      offsets=[]
+      if ownsize >0:
+        offsets.append(ownoffset)
+        offsets.append(ownend)
+      if foreignsize > 0:
+        offsets.append(foreignoffset)
+        offsets.append(foreignend)
+      offsets=sorted(offsets)
+      firstoffset = offsets[0]
+      secondoffset = offsets[1]
+      if secondoffset == firstoffset:
+        secondoffset = offsets[2]
+      hasone=False
+      hastwo=False
+      if ownsize >0 and ownoffset==firstoffset:
+        hasone=True
+      if foreignsize>0 and foreignoffset==firstoffset:
+        hastwo= True
+      fragsize = secondoffset - firstoffset
       if firstoffset > masteroffset:
         chunks.append([masteroffset,firstoffset-masteroffset,False,False])
         masteroffset=firstoffset
-      if ownsize == 0 or ownoffset > foreignend:
-        chunks.append([foreignoffset,foreignsize,False,True])
-        foreignsize=0
-        masteroffset=foreignend
-      else :
-        if foreignsize=0 or foreignoffset > ownend:
-          chunks.append([ownoffset,ownsize,True,False])
-          ownsize=0
-          masteroffset=ownend
-        else: 
-          if ownoffset < foreignoffset:
-            chunks.append([ownoffset,foreignoffset-ownoffset,True,False])
-            ownsize -= foreignoffset-ownoffset
-            masteroffset=foreignoffset
-          else:
-            if foreignoffset > ownoffset:
-              chunks.append([foreignoffset,ownoffset-foreignoffset,False,True])
-              foreignsize -= ownoffset-foreignoffset
-              masteroffset=ownoffset
-           else:
-              smallest = ownsize
-              if foreignsize < smallest:
-                smallest = foreignsize
-              chunks.append([ownoffset,smallest,True,True])
-              ownsize -= smallest
-              foreignsize -= smallest
-              masteroffset=ownoffset+smallest
+      chunks.append([firstoffset,fragsize,hasone,hastwo])
+      masteroffset=secondoffset
+      if hasone:
+        ownoffset=masteroffset
+        ownsize-=fragsize
+      if hastwo:
+        foreignoffset=masteroffset
+        foreignsize-=fragsize
       if foreignfragindex == foreignfragcount and ownfragcount == ownfragindex and ownsize == 0 and foreignsize==0:
         discontinue=True
+    rval=[]
+    for index in range(0,len(bflist)):
+      rval.append(Entity())
     for index in range(0,len(chunks)):
       off=chunks[index][0]
       size=chunks[index][1]
       oldown=chunks[index][2]
       oldforeign=chunks[index][3]
-      newown=bf1(hasorig,hasforeign)
-      newremaining=bf2(hasorig,hasforeign)
-      #FIXME: Actually process this stuff.
-  def merge(self,entity):
-    selfbf = lambda a, b : a or b
-    remfb = lambda a,b : a and b
-    return self._chopped(entity,selfbf,remfb)
-  def unmerge(self,entity):
-    selfbf = lambda a, b : a and (not b)
-    remfb = lambda a,b : (not a) and b
-    return self._chopped(entity,selfbf,remfb)
-    
+      for index2 in range(0,len(bflist)):
+        if bflist[index2](oldown,oldforeign):
+          rval[index2].unaryplus(Fragment(off,size))
+    return rval
+ 
 class Box:
   def __init__(self,top):
     self.top=top #Top entity used for all entities in the box
@@ -360,7 +310,7 @@ class Box:
   def __str__(self):
     rval=""
     for index in range(0,len(self.fragmentrefstack)):
-      rval += "   + " +str(index) + " : " + str(self.fragmentrefstack[index]) + "\n"
+      rval += "   + L" +str(index) + " : " + str(self.fragmentrefstack[index]) + "\n"
     for carvpath in self.content:
       rval += "   * " +carvpath + " : " + str(self.entityrefcount[carvpath]) + "\n"
     return rval
@@ -368,6 +318,7 @@ class Box:
   # 1) An entity with all fragments that went from zero to one reference count.(can be used for fadvice purposes)
   # 2) An entity with all fragments already in the box before add was invoked (can be used for opportunistic hashing purposes).
   def add(self,carvpath):
+    print("Adding "+carvpath+ " to the box.")
     if carvpath in self.entityrefcount:
       self.entityrefcount[carvpath] += 1
       ent=self.content[carvpath]
@@ -491,20 +442,21 @@ class Box:
       self.fragmentrefstack.append(Entity())
     ent=self.fragmentrefstack[level]
     res=ent.merge(entity)
-    merged=res[0]
-    unmerged=res[1]
-    if (len(unmerged)!=0) :
-      self._stackextend(level+1,Entity(unmerged))  
+    merged=res[1]
+    unmerged=res[0]
+    print(str(level),str(ent),str(merged),str(unmerged))
+    if (len(unmerged.fragments)!=0) :
+      self._stackextend(level+1,unmerged)  
     return [merged,unmerged]
   def _stackdiminish(self,level,entity):
     print("_stackdiminish level " + str(level) + " " + str(entity))
     res=self.fragmentrefstack[level].unmerge(entity)
-    unmerged=res[0]
-    remaining=res[1]
+    unmerged=res[1]
+    remaining=res[0]
     if remaining:
       if level == 0:
-        raise RuntimeError    
-      res2=self.stackdiminish(level-1,remaining)
+        raise RuntimeError("Data remaining after _stackdiminish at level 0")    
+      res2=self._stackdiminish(level-1,remaining)
       unmerged.merge(res2[1])
       return [res2[1],unmerged]
     else:
@@ -547,7 +499,7 @@ class _Test:
     a=parse(pin1)
     b=parse(pin2)
     c=parse(pout)
-    a._unaryplus(b)
+    a.unaryplus(b)
     if (a!=c):
       print("FAIL: '" + pin1 + " + " + pin2 + " = " + str(a) +  "' expected='" + pout + "'")
     else:
@@ -616,8 +568,9 @@ class _Test:
     print(str(box))
     box.add("1000+998000")
     print(str(box))
-    box.remove("15000+30000") 
-    print(str(box))
+#FIXME
+#    box.remove("15000+30000") 
+#    print(str(box))
 
 if __name__ == "__main__":
   moduleinit({},160)
@@ -662,5 +615,6 @@ if __name__ == "__main__":
   t.testmerge("2000+1000_5000+1000","2500+500","2000+1000_5000+1000")
   t.testmerge("500+2000","0+1000_2000+1000","0+3000")
   t.testmerge("0+1000_2000+1000","500+1000","0+1500_2000+1000")
+  t.testmerge("S0","0+1000_2000+1000","0+1000_2000+1000")
   t.testbox()
    
