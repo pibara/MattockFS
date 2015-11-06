@@ -150,10 +150,21 @@ class Entity:
           #We are creating an empty zero fragment entity here
           fragments=[]
         else:
-          raise TypeError('Entity constructor needs a string or list of fragments')
+          raise TypeError('Entity constructor needs a string or list of fragments'+str(a1))
     self.totalsize=0
     for frag in fragments:
       self.unaryplus(frag)
+  def __cal__(self):
+    for index in range(0,len(self.fragments)):
+      yield self.fragments[index]
+  def __getitem__(self,index):
+    return self.fragments[index]
+  def grow(chunksize):
+    if len(self.fragments) == 0:
+      self.fragments.append(Fragment(0,chunksize))
+    else:
+      self.fragments[-1].grow(chunksize)
+    self.totalsize+=chunksize
   #Casting to a carvpath string
   def __str__(self):
     global _maxfstoken
@@ -290,7 +301,6 @@ class Entity:
     t=lambda a,b: a and b
     r=_fragapply(self,entity,[t])
     rval= float(r[0].totalsize)/float(self.totalsize)
-    print("Density of "+str(self)+" within " + str(entity) + " is " + str(rval))
     return rval
   
 #Helper functions for mapping merge and unmerge to the higher order _fragapply function.
@@ -450,50 +460,81 @@ class Box:
       return self._stackdiminish(len(self.fragmentrefstack)-1,ent)
   #Request a list of entities that overlap from the box that overlap (for opportunistic hashing purposes).
   def overlaps(self,offset,size):
+    ent=Entity()
+    ent.unaryplus(Fragment(offset,size))
     rval=[]
     for carvpath in self.content:
-      if self.content[carvpath].overlaps(offset,size):
+      if self.content[carvpath].overlaps(ent):
         rval.append(carvpath)
     return rval
   #From the entities pick one according to a strategy string.
-  #  R: select/filter on highest refcount fragment containing entities
-  #  O: select/filter on lowest offset of first fragment in entity.
-  #  D: select/filter on highest density of highest refcount fragments in entity.
-  #  S: select/filter on largest entity size.
-  #  s: select/filter on smallest entity size. 
   def pickspecial(self,strategy):
-    print("Coverage 02")
     if len(self.fragmentrefstack) == 0:
       return None
     myset=None
     for letter in strategy:
-      if letter == "R":
-        myset=self._filterhighestrefcount(myset)
-      if letter == "O":
-        myset=self._filterlowestoffset(myset)
-      if letter == "D":
-        myset=self._filterrefcountdensity(myset)
-      if letter == "S":
-        myset=self._filtersize(True,myset)
-      if letter == "s":
-        myset=self._filtersize(False,myset)
-    for carvpath in myset:
-      return carvpath
-    return None
-  def _filterhighestrefcount(self,inset=None):
+      findlargest=letter.isupper()
+      uletter=letter.upper()
+      if uletter == "R":
+        myset=self._filterhighestrefcount(findlargest,myset)
+      else :
+        if uletter == "O":
+          myset=self._filterlowestoffset(findlargest,myset)
+        else:
+          if uletter == "D":
+            myset=self._filterrefcountdensity(findlargest,myset)
+          else:
+            if uletter == "S":
+              myset=self._filtersize(findlargest,myset)
+            else:
+              if uletter == "W":
+                myset=self._filterweighedrefcount(findlargest,myset)
+              else:
+                raise RuntimeError("Invalid letter for pickspecial policy")
+      if len(myset) == 1:
+        break 
+    if myset == None:
+      return set()
+    return myset
+  #Comand handler for R/r values for pickspecial.
+  #select/filter on highest (R) or lowest (r) refcount fragment containing entities
+  def _filterhighestrefcount(self,findlargest,inset=None):
     if inset == None:
       inset=set()
       for e in self.content.keys():
         inset.add(e)
     stacksize=len(self.fragmentrefstack)
-    looklevel=stacksize-1
-    for index in range(looklevel,0,-1):
-      lnentities=self._highrefcountfragmentities(index)
-      intersection = inset.intersection(lnentities)
-      if len(intersection) > 0:
-        return intersection
+    rset=set()
+    if findlargest:
+      looklevel=stacksize-1
+      for index in range(looklevel,0,-1):
+        hrentity=self.fragmentrefstack[index]
+        for carvpath in inset:
+          if hrentity.overlaps(self.content[carvpath]):
+            rset.add(carvpath)
+        if len(rset)!=0 :
+          return rset
+    else:
+      if stacksize == 1:
+        hrentity=self.fragmentrefstack[0]
+        for carvpath in inset:
+          if hrentity.overlaps(self.content[carvpath]):
+            rset.add(carvpath)
+        if len(rset)!=0 :
+          return rset
+      for index in range(1,stacksize):
+        f=lambda a,b: a and not b
+        r=_fragapply(self.fragmentrefstack[index-1],self.fragmentrefstack[index],[f])
+        hrentity=r[0]
+        for carvpath in inset:
+          if hrentity.overlaps(self.content[carvpath]):
+            rset.add(carvpath)
+        if len(rset)!=0 :
+          return rset
     return set()
-  def _filterlowestoffset(self,inset=None):
+  #Comand handler for O/o
+  #select/filter on lowest (o) or highest (O) offset of first fragment in entity.
+  def _filterlowestoffset(self,findlargest,inset=None):
     if inset == None:
       inset=set()
       for e in self.content.keys():
@@ -502,13 +543,15 @@ class Box:
     bestoffset=None
     for carvpath in inset:
       offset=self.content[carvpath].fragments[0].offset
-      if bestoffset == None or offset < bestoffset:
+      if bestoffset == None or ((not findlargest) and offset < bestoffset) or (findlargest and offset > bestoffset):
         best=set()
         bestoffset=offset
       if  offset == bestoffset:
         best.add(carvpath)
     return best
-  def _filterrefcountdensity(self,inset=None):
+  #Comand handler for D/d
+  #select/filter on highest(D) or lowest (d) density of highest refcount fragments in entity.
+  def _filterrefcountdensity(self,findlargest,inset=None):
     if inset == None:
       inset=set()
       for e in self.content.keys():
@@ -517,21 +560,46 @@ class Box:
     bestdensity=None
     looklevel=len(self.fragmentrefstack)-1
     for index in range(looklevel,0,-1):
-      lnentities=self._highrefcountfragmentities(index)
-      intersection = inset.intersection(lnentities)
-      if len(intersection) > 0:
-        highcountentity=frag=self.fragmentrefstack[index]
-        best = set()
-        bestdensity=None
-        for carvpath in inset:
-          density=self.content[carvpath].density(highcountentity)
-          if bestdensity == None or density > bestdensity:
-            best=set()
-            bestdensity=density
-          if bestdensity == density:
+      best = set()
+      bestdensity=None
+      hrentity=self.fragmentrefstack[index]
+      for carvpath in inset:
+        if hrentity.overlaps(self.content[carvpath]):
+          density=self.content[carvpath].density(hrentity)
+          if bestdensity == None or findlargest and density>bestdensity or (not findlargest) and density<bestdensity:
+            best = set()
             best.add(carvpath)
+            bestdensity=density
+          else:
+            if bestdensity== density:
+              best.add(carvpath)
+      if len(best) > 0:
         return best
     return set()
+  #Comand handler for W/w
+  #select/filter on highest(W) or lowest(w) weigheded reference counts for all fragments in an entity. 
+  def _filterweighedrefcount(self,findlargest,inset=None):
+    if inset == None:
+      inset=set()
+      for e in self.content.keys():
+        inset.add(e)
+    bestdensity=100000000
+    if findlargest:
+       bestdensity=0
+    bestset=set()
+    for carvpath in inset:
+      accumdensity=0
+      for index in range(0,len(self.fragmentrefstack)):
+        accumdensity+=self.content[carvpath].density(self.fragmentrefstack[index])
+      if bestset==None or (findlargest and accumdensity > bestdensity) or ((not findlargest) and accumdensity < bestdensity):
+        bestdensity = accumdensity
+        bestset=set()
+        bestset.add(carvpath)
+      else:
+        if accumdensity == bestdensity:
+          bestset.add(carvpath)
+    return bestset
+  #select/filter on largest (S) or smallest (s) entity size.
   def _filtersize(self,biggest=True,inset=None):
     if inset == None:
       inset=set()
@@ -547,13 +615,6 @@ class Box:
       if bestsize == cpsize:
         best.add(carvpath)
     return best
-  def _highrefcountfragmentities(self,level=-1):
-    withhighrefcount = set()
-    hrentity=self.fragmentrefstack[level]
-    for carvpath in self.content:
-      if hrentity.overlaps(self.content[carvpath]):
-        withhighrefcount.add(carvpath)
-    return withhighrefcount    
   def _stackextend(self,level,entity):
     if not (level < len(self.fragmentrefstack)):
       self.fragmentrefstack.append(Entity())
@@ -679,15 +740,31 @@ class _Test:
     box.add("0+500000")
     box.add("1000+998000")         #
     cp=box.pickspecial("R")
-    print("Special R: "+cp)
+    print("Special R: "+str(cp))
+    cp=box.pickspecial("r")
+    print("Special r: "+str(cp))
     cp=box.pickspecial("O")
-    print("Special O: "+cp)
+    print("Special O: "+str(cp))
+    cp=box.pickspecial("o")
+    print("Special o: "+str(cp))
     cp=box.pickspecial("S")
-    print("Special S: "+cp)
+    print("Special S: "+str(cp))
     cp=box.pickspecial("s")
-    print("Special s: "+cp)
+    print("Special s: "+str(cp))
     cp=box.pickspecial("D")
-    print("Special S: "+cp)
+    print("Special D: "+str(cp))
+    cp=box.pickspecial("d")
+    print("Special d: "+str(cp))
+    cp=box.pickspecial("W")
+    print("Special W: "+str(cp))
+    cp=box.pickspecial("w")
+    print("Special w: "+str(cp))
+    cp=box.pickspecial("ORs")
+    print("Special ORs: "+str(cp))
+    cp=box.pickspecial("dWS")
+    print("Special dWS: "+str(cp))
+    ol=box.overlaps(1550,600)
+    print("Overlaps: "+str(ol))
     box.remove("15000+30000")
     box.remove("0+20000_40000+20000")
     box.remove("1000+998000")
