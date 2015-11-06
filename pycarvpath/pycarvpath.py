@@ -243,7 +243,7 @@ def fragapply(ent1,ent2,bflist):
     foreignoffset=0
     foreignsize=0
     foreignend=0
-    discontinue = foreignfragcount == ownfragcount
+    discontinue = foreignfragcount == 0 and ownfragcount == 0
     while not discontinue:
       if ownsize == 0 and ownfragindex!= ownfragcount:
         ownoffset=ent1.fragments[ownfragindex].getoffset()
@@ -318,7 +318,6 @@ class Box:
   # 1) An entity with all fragments that went from zero to one reference count.(can be used for fadvice purposes)
   # 2) An entity with all fragments already in the box before add was invoked (can be used for opportunistic hashing purposes).
   def add(self,carvpath):
-    print("Adding "+carvpath+ " to the box.")
     if carvpath in self.entityrefcount:
       self.entityrefcount[carvpath] += 1
       ent=self.content[carvpath]
@@ -334,15 +333,13 @@ class Box:
   # 1) An entity with all fragments that went from one to zero refcount (can be used for fadvice purposes).
   # 2) An entity with all fragments still remaining in the box. 
   def remove(self,carvpath):
-    if carvpath in self.entityrefcount:
-      self.entityrefcount[carvpath] -= 1
-      if self.entityrefcount[carvpath] == 0:
-        ent=self.content.pop(carvpath)
-        del self.entityrefcount[carvpath]
-        return self._stackdiminish(len(self.fragmentrefstack)-1,ent)
-      return [Entity(),self.content[carvpath]]
-    else:
-      print("OOPS")
+    if not carvpath in self.entityrefcount:
+      raise IndexError("Carvpath "+carvpath+" not found in box.")    
+    self.entityrefcount[carvpath] -= 1
+    if self.entityrefcount[carvpath] == 0:
+      ent=self.content.pop(carvpath)
+      del self.entityrefcount[carvpath]
+      return self._stackdiminish(len(self.fragmentrefstack)-1,ent)
   #Request a list of entities that overlap from the box that overlap (for opportunistic hashing purposes).
   def overlaps(self,offset,size):
     rval=[]
@@ -444,16 +441,17 @@ class Box:
     res=ent.merge(entity)
     merged=res[1]
     unmerged=res[0]
-    print(str(level),str(ent),str(merged),str(unmerged))
     if (len(unmerged.fragments)!=0) :
       self._stackextend(level+1,unmerged)  
     return [merged,unmerged]
   def _stackdiminish(self,level,entity):
-    print("_stackdiminish level " + str(level) + " " + str(entity))
-    res=self.fragmentrefstack[level].unmerge(entity)
+    ent=self.fragmentrefstack[level]
+    res=ent.unmerge(entity)
     unmerged=res[1]
     remaining=res[0]
-    if remaining:
+    if len(self.fragmentrefstack[level].fragments) == 0:
+      self.fragmentrefstack.pop(level)
+    if len(remaining.fragments) > 0:
       if level == 0:
         raise RuntimeError("Data remaining after _stackdiminish at level 0")    
       res2=self._stackdiminish(level-1,remaining)
@@ -547,30 +545,35 @@ class _Test:
     c=parse(pout)
     d=a.merge(b)
     if a!=c:
-      print("FAIL : "+str(a))
+      print("FAIL : "+str(a)+"  "+str(d[0]) + " ;  "+str(d[1]))
     else:
       print("OK : "+str(a))
   def testbox(self):
-    print "BOXTEST:"
     top=Top(1000000)
     box=Box(top)
-    box.add("0+20000_40000+20000")
-    print(str(box))
-    box.add("10000+40000")
-    print(str(box))
-    box.add("15000+30000")
-    print(str(box))
+    box.add("0+20000_40000+20000") #
+    box.add("10000+40000")         #
+    box.add("15000+30000")         #
     box.add("16000+28000")
-    print(str(box))
-    box.add("0+100000")
-    print(str(box))
+    box.add("0+100000")            #
     box.add("0+500000")
-    print(str(box))
-    box.add("1000+998000")
-    print(str(box))
-#FIXME
-#    box.remove("15000+30000") 
-#    print(str(box))
+    box.add("1000+998000")         #
+    box.remove("15000+30000")
+    box.remove("0+20000_40000+20000")
+    box.remove("1000+998000")
+    box.remove("0+100000")
+    box.remove("10000+40000")
+    box.remove("0+500000")
+    #Now only 16000+28000 should remain
+    if len(box.fragmentrefstack) != 1:
+      print("BOXTEST FAIL: not exactly one entities remaining")
+      print(str(box))
+      return
+    if str(box.fragmentrefstack[0]) != "16000+28000":
+      print("BOXTEST FAIL: not expexted value of only box entry")
+      print(str(box))
+      return
+    print("OK (Boxtest)")
 
 if __name__ == "__main__":
   moduleinit({},160)
@@ -616,5 +619,6 @@ if __name__ == "__main__":
   t.testmerge("500+2000","0+1000_2000+1000","0+3000")
   t.testmerge("0+1000_2000+1000","500+1000","0+1500_2000+1000")
   t.testmerge("S0","0+1000_2000+1000","0+1000_2000+1000")
+  t.testmerge("0+60000","15000+30000","0+60000")
   t.testbox()
    
