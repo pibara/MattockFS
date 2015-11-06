@@ -47,190 +47,275 @@ except ImportError:
 
 
 class Fragment:
+  #Constructor can either be called with a fragment carvpath token string or with an offset and size
   def __init__(self,a1,a2=None):
     if isinstance(a1,str):
       (self.offset,self.size) = map(int,a1.split('+'))
     else:
       self.offset=a1
       self.size=a2
+  #Casting to a carvpath string
   def __str__(self):
     return str(self.offset) + "+" + str(self.size)
+  #Comparing two fragments or a fragment and a sparse entity
+  def __cmp__(self,other):
+    if other.issparse() == True:
+      return 1
+    if self.offset < other.offset:
+      return -1
+    if self.offset > other.offset:
+      return 1
+    if self.size < other.size:
+      return -1
+    if self.size > other.size:
+      return 1
+    return 0
+  #we need a getter for this for ducktyping purposes
   def getoffset(self):
     return self.offset
-  def getsize(self):
-    return self.size
-  def __eq__(self,other):
-    return (other.issparse() == False and self.offset == other.offset and self.size == other.size) or other.size==0
-  def __ne__(self,other):
-    return not (self==other)
-  def __lt__(self,other):
-    if other.issparse() == True:
-      return False
-    if self.offset < other.offset:
-      return True
-    if self.offset > other.offset:
-      return False
-    return self.size < other.size
+  #This is how we distinguis a fragment from a sparse description
   def issparse(self):
+    #A zero size fragment will act as a sparse description!
     return self.size == 0
+  #If needed we can grow a fragment; only do this with the last fragment in an entity
   def grow(self,sz):
     self.size+=sz
 
 class Sparse:
+  #Constructor can either be called with a sparse carvpath token string or with a size.
   def __init__(self,a1):
     if isinstance(a1,str):
       self.size = int(a1[1:])
     else:
       self.size = a1
+  #Casting to a carvpath string
   def __str__(self):
     return "S" + str(self.size)
-  def getoffset(self):
-    return -1
-  def getsize(self):
-    return self.size
-  def __eq__(self,other):
-    return other.issparse() == True and self.size == other.size
-  def __ne__(self,other):
-    return not (self==other)
-  def __lt__(self,other):
+  #Comparing two sparse entities or a sparse entity and a fragment
+  def __cmp__(self,other):
     if other.issparse() == False:
-      return True
-    return self.size < other.size
+      return -1
+    if self.size < other.size:
+      return -1
+    if self.size > other.size:
+      return 1
+    return 0
+  #we need a getter for this for ducktyping purposes and to get usefull exceptions on logic errors.
+  def getoffset(self):
+    raise RuntimeError("Sparse doesn't have an offset")
+  #This is how we distinguis a fragment from a sparse description
   def issparse(self):
     return True
+  #If needed we can grow a sparse region; only do this with the last fragment in an entity
   def grow(self,sz):
     self.size+=sz
 
-def asfrag(fragstring):
+#Helper function for creating either a sparse region or a fragment from a carvpath fragment/sparse token.
+def _asfrag(fragstring):
   if fragstring[0] == 'S':
     return Sparse(fragstring)
   else:
     rval = Fragment(fragstring)
-    if rval.getsize() == 0:
+    if rval.size == 0:
       return Sparse("S0")
     return rval
 
-def asdigest(path):
+#Helper function for creating a hex blake2b token as replacement for a very long carvpath. 
+def _asdigest(path):
   global _longpathtmap
   rval = "D" + blake2b(path,digest_size=32).hexdigest()
   _longpathmap[rval] = path
   return rval
 
 class Entity:
+  #An Entity constructor takes either a carvpath, a list of pre-made fragments or no constructor argument at all for a new empty Entity
   def __init__(self,a1=None):
     global _longpathmap
     fragments=[]
     self.fragments=[]
     if isinstance(a1,str):
+      #Any carvpath starting with a capital D must be looked up in our longtoken database
       if a1[0] == 'D':
         carvpath=_longpathmap[a1]
       else:
         carvpath=a1
-      fragments=map(asfrag,carvpath.split("_"))
+      #Apply the _asfrag helper function to each fragment in the carvpath and use it to initialize our fragments list
+      fragments=map(_asfrag,carvpath.split("_"))
     else:
       if isinstance(a1,list):
+        #Take the list of fragments as handed in the constructor
         fragments = a1
       else:
         if a1 == None: 
+          #We are creating an empty zero fragment entity here
           fragments=[]
         else:
           raise TypeError('Entity constructor needs a string or list of fragments')
     self.totalsize=0
     for frag in fragments:
       self.unaryplus(frag)
+  #Casting to a carvpath string
   def __str__(self):
     global _maxfstoken
+    #Anything of zero size is represented as zero size sparse region.
     if len(self.fragments) == 0:
       return "S0"
+    #Apply a cast to string on each of the fragment and concattenate the result using '_' as join character.
     rval = "_".join(map(str,self.fragments))
+    #If needed, store long carvpath in database and replace the long carvpath with its digest.
     if len(rval) > _maxfstoken:
-      return asdigest(rval)
+      return _asdigest(rval)
     else:
       return rval
-  def getsize(self):
-    return self.totalsize
-  def __eq__(self,other):
-    if other != None and (self.totalsize == other.totalsize) and len(self.fragments) == len(other.fragments):
-      for index in range(0,len(self.fragments)):
-        if not self.fragments[index] == other.fragments[index]:
-          return False
-      return True
+  #Compare two entities in the default way
+  def __cmp__(self,other):
+    if isinstance(other,Entity):
+      #First compare the fragments for all shared indexes untill one is unequal or we have processed them all.
+      ownfragcount=len(self.fragments)
+      otherfragcount=len(other.fragments)
+      sharedfragcount=ownfragcount
+      if otherfragcount < sharedfragcount:
+        sharedfragcount=otherfragcount
+      for index in range(0,sharedfragcount):
+        if self.fragments[index] < other.fragments[index]:
+          return -1
+        if self.fragments[index] > other.fragments[index]:
+          return 1
+      #If all earlier fragments are equal, the entity with fragments remaining is he biggest.
+      if ownfragcount < otherfragcount:
+        return -1
+      if ownfragcount > otherfragcount:
+        return 1
+      #All fragments are equal
+      return 0
     else:
-      return False
-  def __ne__(self,other):
-    return not (self==other)
+      #We define that entities are greater than all other types when compared.
+      return 1
+  #Python does not allow overloading of any operator+= ; this method pretends it does.
   def unaryplus(self,other):
     if isinstance(other,Entity):
+      #We can either append a whole Entity
       for index in range(0,len(other.fragments)):
         self.unaryplus(other.fragments[index])
     else :
-      if len(self.fragments) > 0 and self.fragments[-1].issparse() == other.issparse() and (other.issparse() or (self.fragments[-1].getoffset() + self.fragments[-1].getsize()) == other.getoffset()):
-        self.fragments[-1].grow(other.getsize())
+      #Or a single fragment.
+      #If the new fragment is directly adjacent and of the same type, we don't add it but instead we grow the last existing fragment. 
+      if len(self.fragments) > 0 and self.fragments[-1].issparse() == other.issparse() and (other.issparse() or (self.fragments[-1].getoffset() + self.fragments[-1].size) == other.getoffset()):
+        self.fragments[-1]=copy.deepcopy(self.fragments[-1])
+        self.fragments[-1].grow(other.size)
       else:
+        #Otherwise we append the new fragment.
         self.fragments.append(other)
-      self.totalsize += other.getsize()
+      #Meanwhile we adjust the totalsize member for the entity.
+      self.totalsize += other.size
   def __add__(self,other):
+    #Express a+b in terms of operator+= 
     rval=Entity()
+    rval.unaryplus(this)
     rval.unaryplus(other)
     return rval
-  def subchunk(self,offset,size):
+  #Helper generator function for getting the per-fragment chunks for a subentity.
+  #The function yields the parent chunks that fit within the offset/size indicated relative to the parent entity.
+  def _subchunk(self,offset,size):
+    #We can't find chunks beyond the parent total size
     if (offset+size) > self.totalsize:
       raise IndexError('Not within parent range')
+    #We start of at offset 0 of the parent entity whth our initial offset and size. 
     start=0
     startoffset = offset
     startsize = size
+    #Process each parent fragment
     for parentfrag in self.fragments:
-      if (start + parentfrag.getsize()) > startoffset:
-        maxchunk = parentfrag.getsize() + start - startoffset
+      #Skip the fragments that fully exist before the ofset/size region we are looking for.
+      if (start + parentfrag.size) > startoffset:
+        #Determine the size of the chunk we need to process
+        maxchunk = parentfrag.size + start - startoffset
         if maxchunk > startsize:
           chunksize=startsize
         else:
           chunksize=maxchunk
-        if parentfrag.issparse() or chunksize == 0:
-          yield Sparse(chunksize)
-        else:
-          yield Fragment(parentfrag.getoffset()+startoffset-start,chunksize)
-        startsize -= chunksize
+        #Yield the proper type of fragment
+        if chunksize > 0:
+          if parentfrag.issparse():
+            yield Sparse(chunksize)
+          else:
+            yield Fragment(parentfrag.getoffset()+startoffset-start,chunksize)
+          #Update startsize for the rest of our data
+          startsize -= chunksize
+        #Update the startoffset for the rest of our data
         if startsize > 0:
           startoffset += chunksize
         else:
+          #Once the size is null, update the offset as to skip the rest of the loops
           startoffset=self.totalsize + 1
-      start += parentfrag.getsize() 
+      start += parentfrag.size 
+  #Get the projection of an entity as sub entity of an other entity.
   def subentity(self,childent):
-    subfrags=[]
+    subentity=Entity()
     for childfrag in childent.fragments:
       if childfrag.issparse():
-        subfrags.append(childfrag)
+        subentity.unaryplus(childfrag)
       else:
-        for subfrag in self.subchunk(childfrag.offset,childfrag.size):
-          subfrags.append(subfrag)
-    return Entity(subfrags) 
-  def stripsparse(self):
-    newfragent=Entity()
+        for subfrag in self._subchunk(childfrag.offset,childfrag.size):
+          subentity.unaryplus(subfrag)
+    return subentity
+  #Python has no operator=, so we use assigtoself
+  def assigtoself(self,other):
+    self.fragments=other.fragments
+    self.totalsize=other.totalsize
+  #Strip the entity of its sparse fragments and sort itsd non sparse fragments.
+  #This is meant to be used for reference counting purposes inside of the Box.
+  def _stripsparse(self):
+    newfragment=Entity()
     fragments=sorted(self.fragments)
     for i in range(len(fragments)):
       if fragments[i].issparse() == False:
-        newfragent.unaryplus(fragments[i])
-    self.fragments=newfragent.fragments
-    self.totalsize=newfragent.totalsize
+        newfragment.unaryplus(fragments[i])
+    self.assigtoself(newfragment)
+  #Merge an other sorted/striped entity and return two entities: One with all fragments left unused and one with the fragments used
+  #for merging into self.
   def merge(self,entity):
-    selfbf = lambda a, b : a or b
-    remfb = lambda a,b : a and b
-    insfb = lambda a,b : (not a) and b
-    rval=fragapply(self,entity,[selfbf,remfb,insfb])
-    self.fragments=rval[0].fragments
-    self.totalsize=rval[0].totalsize
+    rval=_merge_entities(self,entity)
+    self.assigtoself(rval[0])
     return rval[1:]
+  #Opposit of the merge function. 
   def unmerge(self,entity):
-    selfbf = lambda a, b : a and (not b)
-    remfb = lambda a,b : (not a) and b
-    drpfb = lambda a,b : a and b
-    rval=fragapply(self,entity,[selfbf,remfb,drpfb])
-    self.fragments=rval[0].fragments
-    self.totalsize=rval[0].totalsize
+    rval=_unmerge_entities(self,entity)
+    self.assigtoself(rval[0])
     return rval[1:]
-   
-def fragapply(ent1,ent2,bflist):
+  def overlaps(self,entity):
+    test=lambda a,b: a and b
+    return _fragapply(self,entity,test)
+  def density(self,entity):
+    t=lambda a,b: a and b
+    r=_fragapply(self,entity,[t])
+    rval= float(r[0].totalsize)/float(self.totalsize)
+    print("Density of "+str(self)+" within " + str(entity) + " is " + str(rval))
+    return rval
+  
+#Helper functions for mapping merge and unmerge to the higher order _fragapply function.
+def _merge_entities(ent1,ent2):
+  selfbf = lambda a, b : a or b
+  remfb = lambda a,b : a and b
+  insfb = lambda a,b : (not a) and b
+  return _fragapply(ent1,ent2,[selfbf,remfb,insfb])
+
+def _unmerge_entities(ent1,ent2):
+  selfbf = lambda a, b : a and (not b)
+  remfb = lambda a,b : (not a) and b
+  drpfb = lambda a,b : a and b
+  return _fragapply(ent1,ent2,[selfbf,remfb,drpfb]) 
+
+#Helper function for applying boolean lambda's to each ent1/ent2 overlapping or non-overlapping fragment
+#and returning an Entity with all fragments that resolved to true for tha coresponding lambda.
+def _fragapply(ent1,ent2,bflist):
+    #If our third argument is a lambda, use it as test instead.
+    if callable(bflist):
+      test=bflist
+      testmode=True
+    else:
+      test= lambda a,b: False
+      testmode=False
     chunks=[]
     foreignfragcount = len(ent2.fragments)
     foreignfragindex = 0
@@ -244,17 +329,21 @@ def fragapply(ent1,ent2,bflist):
     foreignsize=0
     foreignend=0
     discontinue = foreignfragcount == 0 and ownfragcount == 0
+    #Walk through both entities at the same time untill we are done with all fragments and have no remaining size left.
     while not discontinue:
+      #Get a new fragment from the first entity if needed and possible
       if ownsize == 0 and ownfragindex!= ownfragcount:
         ownoffset=ent1.fragments[ownfragindex].getoffset()
-        ownsize=ent1.fragments[ownfragindex].getsize()
+        ownsize=ent1.fragments[ownfragindex].size
         ownend=ownoffset+ownsize
         ownfragindex += 1
+      #Get a new fragment from the second entity if needed and possible
       if foreignsize == 0 and foreignfragindex!= foreignfragcount:
         foreignoffset=ent2.fragments[foreignfragindex].getoffset()
-        foreignsize=ent2.fragments[foreignfragindex].getsize()
+        foreignsize=ent2.fragments[foreignfragindex].size
         foreignend=foreignoffset+foreignsize
         foreignfragindex += 1
+      #Create an array of start and end offsets and sort them
       offsets=[]
       if ownsize >0:
         offsets.append(ownoffset)
@@ -263,21 +352,35 @@ def fragapply(ent1,ent2,bflist):
         offsets.append(foreignoffset)
         offsets.append(foreignend)
       offsets=sorted(offsets)
+      #Find the part we need to look at this time around the while loop
       firstoffset = offsets[0]
       secondoffset = offsets[1]
       if secondoffset == firstoffset:
         secondoffset = offsets[2]
+      #Initialize boolens
       hasone=False
       hastwo=False
+      #See if this chunk overlaps with either or both of the two entities.
       if ownsize >0 and ownoffset==firstoffset:
         hasone=True
       if foreignsize>0 and foreignoffset==firstoffset:
         hastwo= True
       fragsize = secondoffset - firstoffset
+      #If needed, insert an extra entry indicating the false/false state.
       if firstoffset > masteroffset:
-        chunks.append([masteroffset,firstoffset-masteroffset,False,False])
+        if testmode:
+          if test(False,False):
+            return True
+        else:
+          chunks.append([masteroffset,firstoffset-masteroffset,False,False])
         masteroffset=firstoffset
-      chunks.append([firstoffset,fragsize,hasone,hastwo])
+      if testmode:
+        if test(hasone,hastwo):
+          return True
+      else:
+        #Than append the info of our (non)overlapping fragment
+        chunks.append([firstoffset,fragsize,hasone,hastwo])
+      #Prepare for the next time around the loop
       masteroffset=secondoffset
       if hasone:
         ownoffset=masteroffset
@@ -285,11 +388,16 @@ def fragapply(ent1,ent2,bflist):
       if hastwo:
         foreignoffset=masteroffset
         foreignsize-=fragsize
+      #Break out of the loop as soon as everything is done.
       if foreignfragindex == foreignfragcount and ownfragcount == ownfragindex and ownsize == 0 and foreignsize==0:
         discontinue=True
+    if testmode:
+      return False
+    #Create an array with Entity objects, one per lambda.
     rval=[]
     for index in range(0,len(bflist)):
       rval.append(Entity())
+    #Fill each entity with fragments depending on the appropriate lambda invocation result.
     for index in range(0,len(chunks)):
       off=chunks[index][0]
       size=chunks[index][1]
@@ -324,7 +432,7 @@ class Box:
       return [Entity(),ent]
     else:
       ent=Entity(carvpath)
-      ent.stripsparse()
+      ent._stripsparse()
       ent=self.top.topentity.subentity(ent)
       self.content[carvpath]=ent
       self.entityrefcount[carvpath] = 1
@@ -344,51 +452,56 @@ class Box:
   def overlaps(self,offset,size):
     rval=[]
     for carvpath in self.content:
-      if self.content.overlaps(offset,size):
+      if self.content[carvpath].overlaps(offset,size):
         rval.append(carvpath)
     return rval
   #From the entities pick one according to a strategy string.
-  #  R: selecht/filter on highest refcount fragment containing entities
+  #  R: select/filter on highest refcount fragment containing entities
   #  O: select/filter on lowest offset of first fragment in entity.
   #  D: select/filter on highest density of highest refcount fragments in entity.
   #  S: select/filter on largest entity size.
   #  s: select/filter on smallest entity size. 
   def pickspecial(self,strategy):
+    print("Coverage 02")
     if len(self.fragmentrefstack) == 0:
       return None
     myset=None
     for letter in strategy:
       if letter == "R":
-        myset=_filterhighestrefcount(myset)
+        myset=self._filterhighestrefcount(myset)
       if letter == "O":
-        myset=_filterlowestoffset(myset)
+        myset=self._filterlowestoffset(myset)
       if letter == "D":
-        myset=_filterrefcountdensity(myset)
+        myset=self._filterrefcountdensity(myset)
       if letter == "S":
-        myset=_filtersize(true,myset)
+        myset=self._filtersize(True,myset)
       if letter == "s":
-        myset=_filtersize(false,myset)
+        myset=self._filtersize(False,myset)
     for carvpath in myset:
       return carvpath
     return None
   def _filterhighestrefcount(self,inset=None):
     if inset == None:
-      inset=self.content.keys()
+      inset=set()
+      for e in self.content.keys():
+        inset.add(e)
     stacksize=len(self.fragmentrefstack)
     looklevel=stacksize-1
     for index in range(looklevel,0,-1):
-      lnentities=_highrefcountfragmentities(index)
+      lnentities=self._highrefcountfragmentities(index)
       intersection = inset.intersection(lnentities)
       if len(intersection) > 0:
         return intersection
     return set()
   def _filterlowestoffset(self,inset=None):
     if inset == None:
-      inset=self.content.keys()
+      inset=set()
+      for e in self.content.keys():
+        inset.add(e)
     best = set()
     bestoffset=None
     for carvpath in inset:
-      offset=self.content[carvpath].getoffset()
+      offset=self.content[carvpath].fragments[0].offset
       if bestoffset == None or offset < bestoffset:
         best=set()
         bestoffset=offset
@@ -397,11 +510,14 @@ class Box:
     return best
   def _filterrefcountdensity(self,inset=None):
     if inset == None:
-      inset=self.content.keys()
+      inset=set()
+      for e in self.content.keys():
+        inset.add(e)
     best = set()
     bestdensity=None
+    looklevel=len(self.fragmentrefstack)-1
     for index in range(looklevel,0,-1):
-      lnentities=_highrefcountfragmentities(index)
+      lnentities=self._highrefcountfragmentities(index)
       intersection = inset.intersection(lnentities)
       if len(intersection) > 0:
         highcountentity=frag=self.fragmentrefstack[index]
@@ -418,11 +534,13 @@ class Box:
     return set()
   def _filtersize(self,biggest=True,inset=None):
     if inset == None:
-      inset=self.content.keys()
+      inset=set()
+      for e in self.content.keys():
+        inset.add(e)
     best = set()
     bestsize=None
     for carvpath in inset:
-      cpsize = self.content[carvpath].getsize()
+      cpsize = self.content[carvpath].totalsize
       if bestsize == None or (biggest and cpsize > bestsize) or ((not biggest) and cpsize < bestsize):
         best=set()
         bestsize=cpsize
@@ -431,9 +549,11 @@ class Box:
     return best
   def _highrefcountfragmentities(self,level=-1):
     withhighrefcount = set()
-    for index in self.fragmentrefstack[level]:
-      frag=self.fragmentrefstack[index]
-      withhighrefcount  |= self.overlaps(frag.getoffset(),frag.getsize()) 
+    hrentity=self.fragmentrefstack[level]
+    for carvpath in self.content:
+      if hrentity.overlaps(self.content[carvpath]):
+        withhighrefcount.add(carvpath)
+    return withhighrefcount    
   def _stackextend(self,level,entity):
     if not (level < len(self.fragmentrefstack)):
       self.fragmentrefstack.append(Entity())
@@ -505,7 +625,7 @@ class _Test:
   def teststripsparse(self,pin,pout):
     a=parse(pin)
     b=parse(pout)
-    a.stripsparse()
+    a._stripsparse()
     if a != b:
       print("FAIL: in='" + pin + "' expected='" + pout + "' result='" + str(a) + "'")
     else:
@@ -533,15 +653,15 @@ class _Test:
       print("OK: topsize="+str(topsize)+"path="+carvpath+"result="+str(expected))
   def testsize(self,pin,sz):
     a=parse(pin)
-    if a.getsize() != sz:
-      print("FAIL: in='" + pin + "' expected='" + str(sz) + "' result='" + str(a.getsize()) + "'")
+    if a.totalsize != sz:
+      print("FAIL: in='" + pin + "' expected='" + str(sz) + "' result='" + str(a.totalsize) + "'")
     else:
-      print("OK: in='" + pin + "' expected='" + str(sz) + "' result='" + str(a.getsize()) + "'")
+      print("OK: in='" + pin + "' expected='" + str(sz) + "' result='" + str(a.totalsize) + "'")
   def testmerge(self,p1,p2,pout):
     a=parse(p1)
-    a.stripsparse()
+    a._stripsparse()
     b=parse(p2)
-    b.stripsparse()
+    b._stripsparse()
     c=parse(pout)
     d=a.merge(b)
     if a!=c:
@@ -558,6 +678,16 @@ class _Test:
     box.add("0+100000")            #
     box.add("0+500000")
     box.add("1000+998000")         #
+    cp=box.pickspecial("R")
+    print("Special R: "+cp)
+    cp=box.pickspecial("O")
+    print("Special O: "+cp)
+    cp=box.pickspecial("S")
+    print("Special S: "+cp)
+    cp=box.pickspecial("s")
+    print("Special s: "+cp)
+    cp=box.pickspecial("D")
+    print("Special S: "+cp)
     box.remove("15000+30000")
     box.remove("0+20000_40000+20000")
     box.remove("1000+998000")
