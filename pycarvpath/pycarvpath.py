@@ -416,9 +416,10 @@ def _fragapply(ent1,ent2,bflist):
     return rval
  
 class Box:
-  def __init__(self,lpmap,maxfstoken,top):
+  def __init__(self,lpmap,maxfstoken,fadvice,top):
     self.longpathmap=lpmap
     self.maxfstoken=maxfstoken
+    self.fadvice=fadvice
     self.top=top #Top entity used for all entities in the box
     self.content=dict() #Dictionary with all entities in the box.
     self.entityrefcount=dict() #Entity refcount for handling multiple instances of the exact same entity.
@@ -729,8 +730,9 @@ class _Test:
     else:
       print("OK : "+str(a))
   def testbox(self):
+    fadvice = lambda o,s,b: False
     top=Top(self.context.longpathmap,self.context.maxfstoken,1000000)
-    box=Box(self.context.longpathmap,self.context.maxfstoken,top)
+    box=Box(self.context.longpathmap,self.context.maxfstoken,fadvice,top)
     box.add("0+20000_40000+20000") #
     box.add("10000+40000")         #
     box.add("15000+30000")         #
