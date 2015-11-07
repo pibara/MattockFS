@@ -120,23 +120,17 @@ def _asfrag(fragstring):
       return Sparse("S0")
     return rval
 
-#Helper function for creating a hex blake2b token as replacement for a very long carvpath. 
-def _asdigest(path):
-  global _longpathtmap
-  rval = "D" + blake2b(path,digest_size=32).hexdigest()
-  _longpathmap[rval] = path
-  return rval
-
 class Entity:
   #An Entity constructor takes either a carvpath, a list of pre-made fragments or no constructor argument at all for a new empty Entity
-  def __init__(self,a1=None):
-    global _longpathmap
+  def __init__(self,lpmap,maxfstoken,a1=None):
+    self.longpathmap=lpmap
+    self.maxfstoken=maxfstoken
     fragments=[]
     self.fragments=[]
     if isinstance(a1,str):
       #Any carvpath starting with a capital D must be looked up in our longtoken database
       if a1[0] == 'D':
-        carvpath=_longpathmap[a1]
+        carvpath=self.longpathmap[a1]
       else:
         carvpath=a1
       #Apply the _asfrag helper function to each fragment in the carvpath and use it to initialize our fragments list
@@ -154,6 +148,10 @@ class Entity:
     self.totalsize=0
     for frag in fragments:
       self.unaryplus(frag)
+  def _asdigest(self,path):
+    rval = "D" + blake2b(path,digest_size=32).hexdigest()
+    self.longpathmap[rval] = path
+    return rval
   def __cal__(self):
     for index in range(0,len(self.fragments)):
       yield self.fragments[index]
@@ -167,15 +165,14 @@ class Entity:
     self.totalsize+=chunksize
   #Casting to a carvpath string
   def __str__(self):
-    global _maxfstoken
     #Anything of zero size is represented as zero size sparse region.
     if len(self.fragments) == 0:
       return "S0"
     #Apply a cast to string on each of the fragment and concattenate the result using '_' as join character.
     rval = "_".join(map(str,self.fragments))
     #If needed, store long carvpath in database and replace the long carvpath with its digest.
-    if len(rval) > _maxfstoken:
-      return _asdigest(rval)
+    if len(rval) > self.maxfstoken:
+      return self._asdigest(rval)
     else:
       return rval
   #Compare two entities in the default way
@@ -221,7 +218,7 @@ class Entity:
       self.totalsize += other.size
   def __add__(self,other):
     #Express a+b in terms of operator+= 
-    rval=Entity()
+    rval=Entity(self.longpathmap,self.maxfstoken)
     rval.unaryplus(this)
     rval.unaryplus(other)
     return rval
@@ -262,7 +259,7 @@ class Entity:
       start += parentfrag.size 
   #Get the projection of an entity as sub entity of an other entity.
   def subentity(self,childent):
-    subentity=Entity()
+    subentity=Entity(self.longpathmap,self.maxfstoken)
     for childfrag in childent.fragments:
       if childfrag.issparse():
         subentity.unaryplus(childfrag)
@@ -277,7 +274,7 @@ class Entity:
   #Strip the entity of its sparse fragments and sort itsd non sparse fragments.
   #This is meant to be used for reference counting purposes inside of the Box.
   def _stripsparse(self):
-    newfragment=Entity()
+    newfragment=Entity(self.longpathmap,self.maxfstoken)
     fragments=sorted(self.fragments)
     for i in range(len(fragments)):
       if fragments[i].issparse() == False:
@@ -406,7 +403,7 @@ def _fragapply(ent1,ent2,bflist):
     #Create an array with Entity objects, one per lambda.
     rval=[]
     for index in range(0,len(bflist)):
-      rval.append(Entity())
+      rval.append(Entity(ent1.longpathmap,ent1.maxfstoken))
     #Fill each entity with fragments depending on the appropriate lambda invocation result.
     for index in range(0,len(chunks)):
       off=chunks[index][0]
@@ -419,12 +416,14 @@ def _fragapply(ent1,ent2,bflist):
     return rval
  
 class Box:
-  def __init__(self,top):
+  def __init__(self,lpmap,maxfstoken,top):
+    self.longpathmap=lpmap
+    self.maxfstoken=maxfstoken
     self.top=top #Top entity used for all entities in the box
     self.content=dict() #Dictionary with all entities in the box.
     self.entityrefcount=dict() #Entity refcount for handling multiple instances of the exact same entity.
     self.fragmentrefstack=[] #A stack of fragments with different refcounts for keeping reference counts on fragments.
-    self.fragmentrefstack.append(Entity()) #At least one empty entity on the stack
+    self.fragmentrefstack.append(Entity(self.longpathmap,self.maxfstoken)) #At least one empty entity on the stack
   def __str__(self):
     rval=""
     for index in range(0,len(self.fragmentrefstack)):
@@ -439,9 +438,9 @@ class Box:
     if carvpath in self.entityrefcount:
       self.entityrefcount[carvpath] += 1
       ent=self.content[carvpath]
-      return [Entity(),ent]
+      return [Entity(self.longpathmap,self.maxfstoken),ent]
     else:
-      ent=Entity(carvpath)
+      ent=Entity(self.longpathmap,self.maxfstoken,carvpath)
       ent._stripsparse()
       ent=self.top.topentity.subentity(ent)
       self.content[carvpath]=ent
@@ -460,7 +459,7 @@ class Box:
       return self._stackdiminish(len(self.fragmentrefstack)-1,ent)
   #Request a list of entities that overlap from the box that overlap (for opportunistic hashing purposes).
   def overlaps(self,offset,size):
-    ent=Entity()
+    ent=Entity(self.longpathmap,self.maxfstoken)
     ent.unaryplus(Fragment(offset,size))
     rval=[]
     for carvpath in self.content:
@@ -617,7 +616,7 @@ class Box:
     return best
   def _stackextend(self,level,entity):
     if not (level < len(self.fragmentrefstack)):
-      self.fragmentrefstack.append(Entity())
+      self.fragmentrefstack.append(Entity(self.longpathmap,self.maxfstoken))
     ent=self.fragmentrefstack[level]
     res=ent.merge(entity)
     merged=res[1]
@@ -645,12 +644,12 @@ class Box:
         return [remaining,unmerged];
 
 class Top:
-  def __init__(self,size=0):
+  def __init__(self,lpmap,maxfstoken,size=0):
     self.size=size
-    self.topentity=Entity([Fragment(0,size)])
+    self.topentity=Entity(lpmap,maxfstoken,[Fragment(0,size)])
   def grow(self,chunk):
     self.size +=chunk
-    self.topentity=Entity([Fragment(0,size)])
+    self.topentity.grow(chunk)
   def test(self,child):
     try:
       b=self.topentity.subentity(child)
@@ -658,80 +657,80 @@ class Top:
       return False
     return True
 
-def moduleinit(ltmap,maxfstokenlen):
-  global _longpathmap
-  global _maxfstoken
-  _longpathmap = ltmap
-  _maxfstoken = maxfstokenlen
-
-def parse(path):
-  levelmin=None
-  for level in path.split("/"):
-    level=Entity(level)
-    if not levelmin == None:
-      level = levelmin.subentity(level)
-    levelmin = level
-  return level 
+class Context:
+  def __init__(self,lpmap,maxtokenlen):
+    self.longpathmap=lpmap
+    self.maxfstoken=maxtokenlen
+  def parse(self,path):
+    levelmin=None
+    for level in path.split("/"):
+      level=Entity(self.longpathmap,self.maxfstoken,level)
+      if not levelmin == None:
+        level = levelmin.subentity(level)
+      levelmin = level
+    return level
 
 class _Test:
+  def __init__(self,lpmap,maxtokenlen):
+    self.context=Context(lpmap,maxtokenlen)
   def testadd(self,pin1,pin2,pout):
-    a=parse(pin1)
-    b=parse(pin2)
-    c=parse(pout)
+    a=self.context.parse(pin1)
+    b=self.context.parse(pin2)
+    c=self.context.parse(pout)
     a.unaryplus(b)
     if (a!=c):
       print("FAIL: '" + pin1 + " + " + pin2 + " = " + str(a) +  "' expected='" + pout + "'")
     else:
      print("OK: '" + pin1 + " + " + pin2 + " = " + str(a) +  "'")
   def teststripsparse(self,pin,pout):
-    a=parse(pin)
-    b=parse(pout)
+    a=self.context.parse(pin)
+    b=self.context.parse(pout)
     a._stripsparse()
     if a != b:
       print("FAIL: in='" + pin + "' expected='" + pout + "' result='" + str(a) + "'")
     else:
       print("OK: in='" + pin + "' expected='" + pout + "' result='" + str(a) + "'")
   def testflatten2(self,pin,pout):
-    a=parse(pin)
-    b=parse(pout)
+    a=self.context.parse(pin)
+    b=self.context.parse(pout)
     if a != b:
       print("FAIL: in='" + pin + "' expected='" + pout + "' result='" + str(a) + "'")
     else:
       print("OK: in='" + pin + "' expected='" + pout + "' result='" + str(a) + "'")
   def testflatten(self,pin,pout):
-    a=parse(pin)
+    a=self.context.parse(pin)
     if str(a) != pout:
       print("FAIL: in='" + pin + "' expected='" + pout + "' result='" + str(a) + "'")
     else:
       print("OK: in='" + pin + "' expected='" + pout + "' result='" + str(a) + "'")
     self.testflatten2(pin,pout)
   def testrange(self,topsize,carvpath,expected):
-    top=Top(topsize)
-    entity=parse(carvpath)
+    top=Top(self.context.longpathmap,self.context.maxfstoken,topsize)
+    entity=self.context.parse(carvpath)
     if top.test(entity) != expected:
       print("FAIL: topsize="+str(topsize)+"path="+carvpath+"result="+str(not expected))
     else:
       print("OK: topsize="+str(topsize)+"path="+carvpath+"result="+str(expected))
   def testsize(self,pin,sz):
-    a=parse(pin)
+    a=self.context.parse(pin)
     if a.totalsize != sz:
       print("FAIL: in='" + pin + "' expected='" + str(sz) + "' result='" + str(a.totalsize) + "'")
     else:
       print("OK: in='" + pin + "' expected='" + str(sz) + "' result='" + str(a.totalsize) + "'")
   def testmerge(self,p1,p2,pout):
-    a=parse(p1)
+    a=self.context.parse(p1)
     a._stripsparse()
-    b=parse(p2)
+    b=self.context.parse(p2)
     b._stripsparse()
-    c=parse(pout)
+    c=self.context.parse(pout)
     d=a.merge(b)
     if a!=c:
       print("FAIL : "+str(a)+"  "+str(d[0]) + " ;  "+str(d[1]))
     else:
       print("OK : "+str(a))
   def testbox(self):
-    top=Top(1000000)
-    box=Box(top)
+    top=Top(self.context.longpathmap,self.context.maxfstoken,1000000)
+    box=Box(self.context.longpathmap,self.context.maxfstoken,top)
     box.add("0+20000_40000+20000") #
     box.add("10000+40000")         #
     box.add("15000+30000")         #
@@ -783,8 +782,7 @@ class _Test:
     print("OK (Boxtest)")
 
 if __name__ == "__main__":
-  moduleinit({},160)
-  t=_Test()
+  t=_Test({},160)
   t.testflatten("0+0","S0");
   t.testflatten("S0","S0");
   t.testflatten("0+0/0+0","S0");

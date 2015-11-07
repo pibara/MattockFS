@@ -142,7 +142,7 @@ namespace carvpath {
          return *this;
       }
       //Copy constructor
-      Entity(Entity<M,Maxtokenlen> const &ent):mTotalsize(ent.mTotalsize),mFragments(ent.mFragments),mLongPathMap(ent.mLongPathMap),mFragments(){}
+      Entity(Entity<M,Maxtokenlen> const &ent):mTotalsize(ent.mTotalsize),mFragments(ent.mFragments),mLongPathMap(ent.mLongPathMap){}
       //Copy assignment
       Entity & operator=(Entity<M,Maxtokenlen> &ent) {
         mTotalsize = ent.mTotalsize;

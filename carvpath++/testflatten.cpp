@@ -27,9 +27,11 @@ int main(int argc, char **argv) {
   ok &= t.testflatten(std::cerr,"0+100_101+100_202+100_303+100_404+100_505+100_606+100_707+100_808+100_909+100_1010+100_1111+100_1212+100_1313+100_1414+100_1515+100_1616+100_1717+100_1818+100_1919+100_2020+100_2121+100_2222+100_2323+100_2424+100/1+2488","D0e2ded6b35aa15baabd679f7d8b0a7f0ad393948988b6b2f28db7c283240e3b6");  
   ok &= t.testflatten(std::cerr,"D901141262aa24eaaddbce2f470615b6a47639f7a62b3bc7c65335251fe3fa480/1+2488","D0e2ded6b35aa15baabd679f7d8b0a7f0ad393948988b6b2f28db7c283240e3b6");
   ok &= t.testflatten(std::cerr,"D901141262aa24eaaddbce2f470615b6a47639f7a62b3bc7c65335251fe3fa480/350+100","353+50_404+50");
+  ok &= t.testflatten(std::cerr,"S200000/1000+9000","S9000");
   if (ok == false) {
     return -1;
   }
   std::cerr << "OK" << std::endl;
   return 0;
 }
+
