@@ -414,7 +414,25 @@ def _fragapply(ent1,ent2,bflist):
         if bflist[index2](oldown,oldforeign):
           rval[index2].unaryplus(Fragment(off,size))
     return rval
+
+def _defaultlt(al1,al2):
+  for index in range(0,len(al1)):
+    if al1[index] < al2[index]:
+      return True
+    if al1[index] > al2[index]:
+      return False
+  return False
  
+class CustomSortable:
+  def __init__(self,carvpath,ltfunction,arglist):
+    self.carvpath=carvpath
+    self.ltfunction=ltfunction
+    self.arglist=[]
+    for somemap in arglist:
+      self.arglist.append(somemap[carvpath])
+  def __lt__(self,other):
+    return self.ltfunction(self.arglist,other.arglist)
+
 class Box:
   def __init__(self,lpmap,maxfstoken,fadvice,top):
     self.longpathmap=lpmap
@@ -475,154 +493,102 @@ class Box:
       if self.content[carvpath].overlaps(ent):
         rval.append(carvpath)
     return rval
-  #From the entities pick one according to a strategy string.
-  def pickspecial(self,strategy):
-    if len(self.fragmentrefstack) == 0:
-      return None
-    myset=None
-    for letter in strategy:
-      findlargest=letter.isupper()
-      uletter=letter.upper()
-      if uletter == "R":
-        myset=self._filterhighestrefcount(findlargest,myset)
-      else :
-        if uletter == "O":
-          myset=self._filterlowestoffset(findlargest,myset)
-        else:
-          if uletter == "D":
-            myset=self._filterrefcountdensity(findlargest,myset)
-          else:
-            if uletter == "S":
-              myset=self._filtersize(findlargest,myset)
-            else:
-              if uletter == "W":
-                myset=self._filterweighedrefcount(findlargest,myset)
-              else:
-                raise RuntimeError("Invalid letter for pickspecial policy")
-      if len(myset) == 1:
-        break 
-    if myset == None:
-      return set()
-    return myset
-  #Comand handler for R/r values for pickspecial.
-  #select/filter on highest (R) or lowest (r) refcount fragment containing entities
-  def _filterhighestrefcount(self,findlargest,inset=None):
-    if inset == None:
-      inset=set()
-      for e in self.content.keys():
-        inset.add(e)
+  def customsort(self,params,ltfunction=_defaultlt,intransit=None,reverse=False):
+    Rmap={}
+    rmap={}
+    omap={}
+    dmap={}
+    smap={}
+    wmap={}
+    arglist=[]
+    startset=intransit
+    if startset == None:
+      startset=set(self.content.keys()) 
     stacksize=len(self.fragmentrefstack)
-    rset=set()
-    if findlargest:
-      looklevel=stacksize-1
-      for index in range(looklevel,0,-1):
-        hrentity=self.fragmentrefstack[index]
-        for carvpath in inset:
-          if hrentity.overlaps(self.content[carvpath]):
-            rset.add(carvpath)
-        if len(rset)!=0 :
-          return rset
-    else:
-      if stacksize == 1:
-        hrentity=self.fragmentrefstack[0]
-        for carvpath in inset:
-          if hrentity.overlaps(self.content[carvpath]):
-            rset.add(carvpath)
-        if len(rset)!=0 :
-          return rset
-      for index in range(1,stacksize):
-        f=lambda a,b: a and not b
-        r=_fragapply(self.fragmentrefstack[index-1],self.fragmentrefstack[index],[f])
-        hrentity=r[0]
-        for carvpath in inset:
-          if hrentity.overlaps(self.content[carvpath]):
-            rset.add(carvpath)
-        if len(rset)!=0 :
-          return rset
-    return set()
-  #Comand handler for O/o
-  #select/filter on lowest (o) or highest (O) offset of first fragment in entity.
-  def _filterlowestoffset(self,findlargest,inset=None):
-    if inset == None:
-      inset=set()
-      for e in self.content.keys():
-        inset.add(e)
-    best = set()
-    bestoffset=None
-    for carvpath in inset:
-      offset=self.content[carvpath].fragments[0].offset
-      if bestoffset == None or ((not findlargest) and offset < bestoffset) or (findlargest and offset > bestoffset):
-        best=set()
-        bestoffset=offset
-      if  offset == bestoffset:
-        best.add(carvpath)
-    return best
-  #Comand handler for D/d
-  #select/filter on highest(D) or lowest (d) density of highest refcount fragments in entity.
-  def _filterrefcountdensity(self,findlargest,inset=None):
-    if inset == None:
-      inset=set()
-      for e in self.content.keys():
-        inset.add(e)
-    best = set()
-    bestdensity=None
-    looklevel=len(self.fragmentrefstack)-1
-    for index in range(looklevel,0,-1):
-      best = set()
-      bestdensity=None
-      hrentity=self.fragmentrefstack[index]
-      for carvpath in inset:
-        if hrentity.overlaps(self.content[carvpath]):
-          density=self.content[carvpath].density(hrentity)
-          if bestdensity == None or findlargest and density>bestdensity or (not findlargest) and density<bestdensity:
-            best = set()
-            best.add(carvpath)
-            bestdensity=density
-          else:
-            if bestdensity== density:
-              best.add(carvpath)
-      if len(best) > 0:
-        return best
-    return set()
-  #Comand handler for W/w
-  #select/filter on highest(W) or lowest(w) weigheded reference counts for all fragments in an entity. 
-  def _filterweighedrefcount(self,findlargest,inset=None):
-    if inset == None:
-      inset=set()
-      for e in self.content.keys():
-        inset.add(e)
-    bestdensity=100000000
-    if findlargest:
-       bestdensity=0
-    bestset=set()
-    for carvpath in inset:
-      accumdensity=0
-      for index in range(0,len(self.fragmentrefstack)):
-        accumdensity+=self.content[carvpath].density(self.fragmentrefstack[index])
-      if bestset==None or (findlargest and accumdensity > bestdensity) or ((not findlargest) and accumdensity < bestdensity):
-        bestdensity = accumdensity
-        bestset=set()
-        bestset.add(carvpath)
+    for letter in params:
+      if letter == "R":
+        looklevel=stacksize-1
+        for index in range(looklevel,0,-1):
+          hrentity=self.fragmentrefstack[index]
+          for carvpath in startset:
+            if hrentity.overlaps(self.content[carvpath]):
+              Rmap[carvpath]=True 
+            else:
+              Rmap[carvpath]=False
+          if len(Rmap)!=0 :
+              break
+        arglist.append(Rmap) 
       else:
-        if accumdensity == bestdensity:
-          bestset.add(carvpath)
-    return bestset
-  #select/filter on largest (S) or smallest (s) entity size.
-  def _filtersize(self,biggest=True,inset=None):
-    if inset == None:
-      inset=set()
-      for e in self.content.keys():
-        inset.add(e)
-    best = set()
-    bestsize=None
-    for carvpath in inset:
-      cpsize = self.content[carvpath].totalsize
-      if bestsize == None or (biggest and cpsize > bestsize) or ((not biggest) and cpsize < bestsize):
-        best=set()
-        bestsize=cpsize
-      if bestsize == cpsize:
-        best.add(carvpath)
-    return best
+        if letter == "r":
+          if stacksize == 1:
+            hrentity=self.fragmentrefstack[0]
+            for carvpath in startset:
+              if hrentity.overlaps(self.content[carvpath]):
+                rmap[carvpath]=True
+              else:
+                rmap[carvpath]=False
+            if len(rmap)!=0 :
+              break
+          else:
+            for index in range(1,stacksize):
+              f=lambda a,b: a and not b
+              r=_fragapply(self.fragmentrefstack[index-1],self.fragmentrefstack[index],[f])
+              hrentity=r[0]
+              for carvpath in startset:
+                if hrentity.overlaps(self.content[carvpath]):
+                  rmap[carvpath]=True
+                else:
+                  rmap[carvpath]=False 
+              if len(rmap)!=0 :
+                break
+          arglist.append(rmap)        
+        else :
+          if letter == "O":
+            for carvpath in startset:
+              offset=None
+              for frag in self.content[carvpath].fragments:
+                if offset==None or frag.issparse == False and frag.offset < offset:
+                  offset=frag.offset
+              omap[carvpath]=offset
+            arglist.append(omap)
+          else:
+            if letter == "D":
+              looklevel=stacksize-1
+              for index in range(looklevel,0,-1):
+                hrentity=self.fragmentrefstack[index]
+                for carvpath in startset:
+                  if hrentity.overlaps(self.content[carvpath]):
+                    dmap[carvpath]=self.content[carvpath].density(hrentity)
+              arglist.append(dmap)
+            else:
+              if letter == "S":
+                for carvpath in startset:
+                  smap[carvpath]=self.content[carvpath].totalsize
+                arglist.append(smap)
+              else:
+                if letter == "W":
+                  for carvpath in startset:
+                    accumdensity=0
+                    for index in range(0,len(self.fragmentrefstack)):
+                       accumdensity+=self.content[carvpath].density(self.fragmentrefstack[index])
+                    wmap[carvpath]=accumdensity
+                  arglist.append(wmap)
+                else:
+                  raise RuntimeError("Invalid letter for pickspecial policy")
+    sortable=[]
+    for carvpath in startset:
+      sortable.append(CustomSortable(carvpath,ltfunction,arglist))
+    sortable.sort(reverse=reverse)
+    for wrapper in sortable:
+      yield wrapper.carvpath
+  def customsorted(self,params,ltfunction=_defaultlt,intransit=None,reverse=False):
+    customsrt=[]
+    for entity in self.customsort(params,ltfunction,intransit,reverse):
+      customsrt.append(entity)
+    return customsrt
+  def custompick(self,params,ltfunction=_defaultlt,intransit=None,reverse=False):
+    for entity in self.customsort(self,params,ltfunction,intransit,reverse):
+      return entity #A bit nasty but safes needles itterations.
   def _stackextend(self,level,entity):
     if not (level < len(self.fragmentrefstack)):
       self.fragmentrefstack.append(Entity(self.longpathmap,self.maxfstoken))
@@ -750,30 +716,22 @@ class _Test:
     box.add("0+100000")            #
     box.add("0+500000")
     box.add("1000+998000")         #
-    cp=box.pickspecial("R")
-    print("Special R: "+str(cp))
-    cp=box.pickspecial("r")
-    print("Special r: "+str(cp))
-    cp=box.pickspecial("O")
-    print("Special O: "+str(cp))
-    cp=box.pickspecial("o")
-    print("Special o: "+str(cp))
-    cp=box.pickspecial("S")
-    print("Special S: "+str(cp))
-    cp=box.pickspecial("s")
-    print("Special s: "+str(cp))
-    cp=box.pickspecial("D")
-    print("Special D: "+str(cp))
-    cp=box.pickspecial("d")
-    print("Special d: "+str(cp))
-    cp=box.pickspecial("W")
-    print("Special W: "+str(cp))
-    cp=box.pickspecial("w")
-    print("Special w: "+str(cp))
-    cp=box.pickspecial("ORs")
-    print("Special ORs: "+str(cp))
-    cp=box.pickspecial("dWS")
-    print("Special dWS: "+str(cp))
+    cp=box.customsorted("R",reverse=True)
+    print("Sorted R: "+str(cp))
+    cp=box.customsorted("r",reverse=True)
+    print("Sorted r: "+str(cp))
+    cp=box.customsorted("O")
+    print("Sorted O: "+str(cp))
+    cp=box.customsorted("S")
+    print("Sorted S: "+str(cp))
+    cp=box.customsorted("D")
+    print("Sorted D: "+str(cp))
+    cp=box.customsorted("W")
+    print("Sorted W: "+str(cp))
+    cp=box.customsorted("ORS")
+    print("Sorted ORS: "+str(cp))
+    cp=box.customsorted("DWS")
+    print("Sorted DWS: "+str(cp))
     ol=box.overlaps(1550,600)
     print("Overlaps: "+str(ol))
     box.remove("15000+30000")
