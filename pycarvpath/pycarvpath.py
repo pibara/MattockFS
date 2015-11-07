@@ -698,17 +698,25 @@ class _Box:
     #FIXME
     pass
 
+#This object allows an Entity to be validated against an underlying data source with a given size.
 class _Top:
+  #Don instantiate a _Top, Instantiate a Context and use Context::make_top instead.
   def __init__(self,lpmap,maxfstoken,size=0):
     self.size=size
     self.topentity=_Entity(lpmap,maxfstoken,[Fragment(0,size)])
+  #Get this Top object as an Entity.
   def entity():
     return self.topentity
+  #Make a Box object. Most likely you don't need one if you are implementing a forensic tool, as Box is 
+  #meant primary to be used by the Repository implementation.
   def make_box(fadvice):
     return _Box(self.topentity.longpathmap,self.topentity.maxfstoken,fadvice,self.topentity)
+  #If the underlying data source changes its size by data being added, grow allows you to notify the Top object of this
+  #and allow future entities to exist within the extended bounds.
   def grow(self,chunk):
     self.size +=chunk
     self.topentity.grow(chunk)
+  #Test if a given Entity is valid within the bounds of the Top data size.
   def test(self,child):
     try:
       b=self.topentity.subentity(child)
@@ -716,10 +724,24 @@ class _Top:
       return False
     return True
 
+#FIXME: This class needs to be implemented.
+class _Repository:
+  def __init__(self,reppath,lpmap,maxfstoken):
+    pass 
+
+#You need one of these per application in order to use pycarvpath.
 class Context:
-  def __init__(self,lpmap,maxtokenlen):
+  #A Context needs a dict like object that implements persistent (and possibly distributed) storage of
+  #long path entities and their shorter representation. This pseudo dict is passed as lpmap argument.
+  #By default all carvpath strings larger than 160 bytes are represented by a 65 byte long token
+  #stored in this pseudo dict. You may specify a different maximum carvpath lengt if you wish for a longer or
+  #shorter treshold.
+  def __init__(self,lpmap,maxtokenlen=160):
     self.longpathmap=lpmap
     self.maxfstoken=maxtokenlen
+  #Parse a (possibly nested) carvpath and return an Entity object. This method will throw if a carvpath
+  #string is invalid. It will however NOT set any upper limits to valid carvpaths within a larger image.
+  #If you wish to do so, create a Top object and invoke Top::test(ent) with the Entity you got back from parse.
   def parse(self,path):
     levelmin=None
     for level in path.split("/"):
@@ -728,8 +750,13 @@ class Context:
         level = levelmin.subentity(level)
       levelmin = level
     return level
+  #Cheate a Top object to validate parsed entities against.
   def make_top(self,size=0):
-    return _Top(self.longpathmap,self.topentity,size)
+    return _Top(self.longpathmap,self.maxfstoken,size)
+  #NOTE: This method should only be used in forensic filesystem or forensic framework implementations.
+  #Open a raw repository file and make it accessible through a _Repository interface.
+  def open_repository(self,rawdatapath):
+    return _Repository(self.longpathmap,self.maxfstoken)
 
 def _test_fadvice_print(offset,size,advice):
   print("Here fadvice should be called on chunk (offset="+str(offset)+",size="+str(size)+" : "+str(advice))
