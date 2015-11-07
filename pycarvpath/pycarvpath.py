@@ -36,6 +36,7 @@
 import copy
 try:
     from pyblake2 import blake2b
+    ohash_algo=blake2b
 except ImportError:
     import sys
     print("")
@@ -44,20 +45,74 @@ except ImportError:
     print("    sudo pip install pyblake2")
     print("")
     sys.exit()
+try:
+    #When this was written, pyblake2 didn't implement blake2bp yet. Hopefully it does in the future so the
+    #Python implementation can be close to as fast as, and compatible with, the C++ implementation.
+    from pyblake2 import blake2bp
+    ohash_algo=blake2bp
+except:
+    pass
 
+class _Opportunistic_Hash:
+  def __init__(self,a1=True):
+    self._h= ohash_algo(digest_size=32)
+    self.offset=0
+    self.isdone=False
+    self.result="INCOMPLETE-OPPORTUNISTIC_HASHING"
+    if isinstance(a1,bool):
+      self.initialsize=0
+      self.issparse=a1
+    else:
+      self.initialsize=a1
+      self.issparse=False  
+  def sparse(self,length):
+    _h.update(bytearray(length).decode())
+  def written_chunk(self,data,offset):
+    self.initialsize =0; #No more guessing when we are ready, things are getting written so they get messy now.
+    if offset < self.offset or self.isdone:
+      self._h=ohash_algo(digest_size=32) #restart, we are no longer done, things are getting written.
+      self.offset=0
+      self.isdone=false
+      self.result="INCOMPLETE-OPPORTUNISTIC_HASHING"
+    if (offset > self.offset):
+      #There is a gap!
+      if self.issparse:
+        difference = offset - self.offset
+        times = difference / 1024
+        for i in range(0,times):
+          self.sparse(1024)
+          self.sparse(difference % 1024)
+        if offset == self.offset:
+          self._h.update(data)
+          self.offset += len(data)  
+  def read_chunk(self,data,offset):
+    if (not self.isdone) and offset <= self.offset and offser+len(data) > self.offset:
+      #Fragment overlaps our offset; find the part that we didn't process yet.
+      start=self.offset - offset
+      datasegment = data[start:]
+      self._h.update(datasegment)
+      self.offset += len(datasegment)
+      if self.offset > 0 and self.offset == self.initialsize:
+        self.done()
+  def done(self):
+    if not isdone:
+      self.result=self._h.hexdigest()
 
+#A fragent represents a contiguous section of a higher level data entity.
 class Fragment:
-  #Constructor can either be called with a fragment carvpath token string or with an offset and size
+  #Constructor can either be called with a fragment carvpath token string or with an offset and size.
+  #A fragment carvpath token string is formatted like '<offset>+<size>', for example : '2048+512'
   def __init__(self,a1,a2=None):
     if isinstance(a1,str):
       (self.offset,self.size) = map(int,a1.split('+'))
     else:
       self.offset=a1
       self.size=a2
-  #Casting to a carvpath string
+  #Casting Fragment to a carvpath string
   def __str__(self):
     return str(self.offset) + "+" + str(self.size)
-  #Comparing two fragments or a fragment and a sparse entity
+  #Comparing two fragments or a fragment and a sparse section. Please note that all fragments
+  #are considered larger than any sparse section, regardless of sizes.
   def __cmp__(self,other):
     if other.issparse() == True:
       return 1
@@ -70,7 +125,6 @@ class Fragment:
     if self.size > other.size:
       return 1
     return 0
-  #we need a getter for this for ducktyping purposes
   def getoffset(self):
     return self.offset
   #This is how we distinguis a fragment from a sparse description
@@ -81,8 +135,11 @@ class Fragment:
   def grow(self,sz):
     self.size+=sz
 
+#A Sparse object represents a higher level sparse definition that can be thought of as
+#empty space that has no immage on any lower level data.
 class Sparse:
   #Constructor can either be called with a sparse carvpath token string or with a size.
+  #A sparse carvpath token string has the form 'S<size>', for example: 'S8192'
   def __init__(self,a1):
     if isinstance(a1,str):
       self.size = int(a1[1:])
@@ -91,7 +148,9 @@ class Sparse:
   #Casting to a carvpath string
   def __str__(self):
     return "S" + str(self.size)
-  #Comparing two sparse entities or a sparse entity and a fragment
+  #Comparing two sparse entities or a sparse entity and a fragment.
+  #Please note that all fragments are considered larger than any sparse 
+  #section, regardless of sizes.
   def __cmp__(self,other):
     if other.issparse() == False:
       return -1
@@ -100,7 +159,7 @@ class Sparse:
     if self.size > other.size:
       return 1
     return 0
-  #we need a getter for this for ducktyping purposes and to get usefull exceptions on logic errors.
+  #Calling this method on a Sparse will throw an runtime exception.
   def getoffset(self):
     raise RuntimeError("Sparse doesn't have an offset")
   #This is how we distinguis a fragment from a sparse description
@@ -120,8 +179,13 @@ def _asfrag(fragstring):
       return Sparse("S0")
     return rval
 
-class Entity:
-  #An Entity constructor takes either a carvpath, a list of pre-made fragments or no constructor argument at all for a new empty Entity
+#An entity is an ordered  collection of Fragment and/or Sparse objects. Entities are the core concept within pycarvpath.
+class _Entity:
+  #An Entity constructor takes either a carvpath, a list of pre-made fragments or no constructor argument at all
+  #if you wish to create a new empty Entity. You should probably not be instantiating your own _Entity objects.
+  #Instead, create entities using the 'parse' method of a Contect object.
+  #An _Entity carvpath consists of one or more Fragment and/or Sparse carvpath tokens seperated by a '_' character.
+  #for example: '0+4096_S8192_4096+4096'
   def __init__(self,lpmap,maxfstoken,a1=None):
     self.longpathmap=lpmap
     self.maxfstoken=maxfstoken
@@ -152,11 +216,14 @@ class Entity:
     rval = "D" + blake2b(path,digest_size=32).hexdigest()
     self.longpathmap[rval] = path
     return rval
+  #If desired, invoke the _Entity as a function to get the fragments it is composed of.
   def __cal__(self):
     for index in range(0,len(self.fragments)):
       yield self.fragments[index]
+  #You may use square brackets to acces specific fragments.
   def __getitem__(self,index):
     return self.fragments[index]
+  #Grow the entity by extending on its final fragment or, if there are non, by creating a first fragment with offset zero.
   def grow(chunksize):
     if len(self.fragments) == 0:
       self.fragments.append(Fragment(0,chunksize))
@@ -177,7 +244,7 @@ class Entity:
       return rval
   #Compare two entities in the default way
   def __cmp__(self,other):
-    if isinstance(other,Entity):
+    if isinstance(other,_Entity):
       #First compare the fragments for all shared indexes untill one is unequal or we have processed them all.
       ownfragcount=len(self.fragments)
       otherfragcount=len(other.fragments)
@@ -201,7 +268,7 @@ class Entity:
       return 1
   #Python does not allow overloading of any operator+= ; this method pretends it does.
   def unaryplus(self,other):
-    if isinstance(other,Entity):
+    if isinstance(other,_Entity):
       #We can either append a whole Entity
       for index in range(0,len(other.fragments)):
         self.unaryplus(other.fragments[index])
@@ -216,9 +283,10 @@ class Entity:
         self.fragments.append(other)
       #Meanwhile we adjust the totalsize member for the entity.
       self.totalsize += other.size
+  #Appending two entities together, merging the tails if possible.
   def __add__(self,other):
     #Express a+b in terms of operator+= 
-    rval=Entity(self.longpathmap,self.maxfstoken)
+    rval=_Entity(self.longpathmap,self.maxfstoken)
     rval.unaryplus(this)
     rval.unaryplus(other)
     return rval
@@ -259,7 +327,7 @@ class Entity:
       start += parentfrag.size 
   #Get the projection of an entity as sub entity of an other entity.
   def subentity(self,childent):
-    subentity=Entity(self.longpathmap,self.maxfstoken)
+    subentity=_Entity(self.longpathmap,self.maxfstoken)
     for childfrag in childent.fragments:
       if childfrag.issparse():
         subentity.unaryplus(childfrag)
@@ -274,7 +342,7 @@ class Entity:
   #Strip the entity of its sparse fragments and sort itsd non sparse fragments.
   #This is meant to be used for reference counting purposes inside of the Box.
   def _stripsparse(self):
-    newfragment=Entity(self.longpathmap,self.maxfstoken)
+    newfragment=_Entity(self.longpathmap,self.maxfstoken)
     fragments=sorted(self.fragments)
     for i in range(len(fragments)):
       if fragments[i].issparse() == False:
@@ -403,7 +471,7 @@ def _fragapply(ent1,ent2,bflist):
     #Create an array with Entity objects, one per lambda.
     rval=[]
     for index in range(0,len(bflist)):
-      rval.append(Entity(ent1.longpathmap,ent1.maxfstoken))
+      rval.append(_Entity(ent1.longpathmap,ent1.maxfstoken))
     #Fill each entity with fragments depending on the appropriate lambda invocation result.
     for index in range(0,len(chunks)):
       off=chunks[index][0]
@@ -422,8 +490,8 @@ def _defaultlt(al1,al2):
     if al1[index] > al2[index]:
       return False
   return False
- 
-class CustomSortable:
+
+class _CustomSortable:
   def __init__(self,carvpath,ltfunction,arglist):
     self.carvpath=carvpath
     self.ltfunction=ltfunction
@@ -433,7 +501,7 @@ class CustomSortable:
   def __lt__(self,other):
     return self.ltfunction(self.arglist,other.arglist)
 
-class Box:
+class _Box:
   def __init__(self,lpmap,maxfstoken,fadvice,top):
     self.longpathmap=lpmap
     self.maxfstoken=maxfstoken
@@ -442,7 +510,7 @@ class Box:
     self.content=dict() #Dictionary with all entities in the box.
     self.entityrefcount=dict() #Entity refcount for handling multiple instances of the exact same entity.
     self.fragmentrefstack=[] #A stack of fragments with different refcounts for keeping reference counts on fragments.
-    self.fragmentrefstack.append(Entity(self.longpathmap,self.maxfstoken)) #At least one empty entity on the stack
+    self.fragmentrefstack.append(_Entity(self.longpathmap,self.maxfstoken)) #At least one empty entity on the stack
   def __str__(self):
     rval=""
     for index in range(0,len(self.fragmentrefstack)):
@@ -453,13 +521,13 @@ class Box:
   #Add a new entity to the box. Returns two entities: 
   # 1) An entity with all fragments that went from zero to one reference count.(can be used for fadvice purposes)
   # 2) An entity with all fragments already in the box before add was invoked (can be used for opportunistic hashing purposes).
-  def add(self,carvpath):
+  def add_batch(self,carvpath):
     if carvpath in self.entityrefcount:
       self.entityrefcount[carvpath] += 1
       ent=self.content[carvpath]
-      return [Entity(self.longpathmap,self.maxfstoken),ent]
+      return [_Entity(self.longpathmap,self.maxfstoken),ent]
     else:
-      ent=Entity(self.longpathmap,self.maxfstoken,carvpath)
+      ent=_Entity(self.longpathmap,self.maxfstoken,carvpath)
       ent._stripsparse()
       ent=self.top.topentity.subentity(ent)
       self.content[carvpath]=ent
@@ -472,7 +540,7 @@ class Box:
   #Remove an existing entity from the box. Returns two entities:
   # 1) An entity with all fragments that went from one to zero refcount (can be used for fadvice purposes).
   # 2) An entity with all fragments still remaining in the box. 
-  def remove(self,carvpath):
+  def remove_batch(self,carvpath):
     if not carvpath in self.entityrefcount:
       raise IndexError("Carvpath "+carvpath+" not found in box.")    
     self.entityrefcount[carvpath] -= 1
@@ -485,15 +553,15 @@ class Box:
         self.fadvice(fragment.offset,fragment.size,False) 
       return
   #Request a list of entities that overlap from the box that overlap (for opportunistic hashing purposes).
-  def overlaps(self,offset,size):
-    ent=Entity(self.longpathmap,self.maxfstoken)
+  def _overlaps(self,offset,size):
+    ent=_Entity(self.longpathmap,self.maxfstoken)
     ent.unaryplus(Fragment(offset,size))
     rval=[]
     for carvpath in self.content:
       if self.content[carvpath].overlaps(ent):
         rval.append(carvpath)
     return rval
-  def customsort(self,params,ltfunction=_defaultlt,intransit=None,reverse=False):
+  def priority_customsort(self,params,ltfunction=_defaultlt,intransit=None,reverse=False):
     Rmap={}
     rmap={}
     omap={}
@@ -577,21 +645,21 @@ class Box:
                   raise RuntimeError("Invalid letter for pickspecial policy")
     sortable=[]
     for carvpath in startset:
-      sortable.append(CustomSortable(carvpath,ltfunction,arglist))
+      sortable.append(_CustomSortable(carvpath,ltfunction,arglist))
     sortable.sort(reverse=reverse)
     for wrapper in sortable:
       yield wrapper.carvpath
-  def customsorted(self,params,ltfunction=_defaultlt,intransit=None,reverse=False):
+  def priority_customsorted(self,params,ltfunction=_defaultlt,intransit=None,reverse=False):
     customsrt=[]
-    for entity in self.customsort(params,ltfunction,intransit,reverse):
+    for entity in self.priority_customsort(params,ltfunction,intransit,reverse):
       customsrt.append(entity)
     return customsrt
-  def custompick(self,params,ltfunction=_defaultlt,intransit=None,reverse=False):
-    for entity in self.customsort(self,params,ltfunction,intransit,reverse):
+  def priority_custompick(self,params,ltfunction=_defaultlt,intransit=None,reverse=False):
+    for entity in self.priority_customsort(self,params,ltfunction,intransit,reverse):
       return entity #A bit nasty but safes needles itterations.
   def _stackextend(self,level,entity):
     if not (level < len(self.fragmentrefstack)):
-      self.fragmentrefstack.append(Entity(self.longpathmap,self.maxfstoken))
+      self.fragmentrefstack.append(_Entity(self.longpathmap,self.maxfstoken))
     ent=self.fragmentrefstack[level]
     res=ent.merge(entity)
     merged=res[1]
@@ -617,11 +685,27 @@ class Box:
         return [unmerged,remaining]
       else:
         return [remaining,unmerged];
+  def lowlevel_writen_data(self,offset,data):
+    #FIXME
+    pass
+  def lowlevel_read_data(self,offset,data):
+    #FIXME
+    pass
+  def batch_hashing_done(self,carvpath):
+    #FIXME
+    pass
+  def batch_hashing_value(self,carvpath):
+    #FIXME
+    pass
 
-class Top:
+class _Top:
   def __init__(self,lpmap,maxfstoken,size=0):
     self.size=size
-    self.topentity=Entity(lpmap,maxfstoken,[Fragment(0,size)])
+    self.topentity=_Entity(lpmap,maxfstoken,[Fragment(0,size)])
+  def entity():
+    return self.topentity
+  def make_box(fadvice):
+    return _Box(self.topentity.longpathmap,self.topentity.maxfstoken,fadvice,self.topentity)
   def grow(self,chunk):
     self.size +=chunk
     self.topentity.grow(chunk)
@@ -639,11 +723,13 @@ class Context:
   def parse(self,path):
     levelmin=None
     for level in path.split("/"):
-      level=Entity(self.longpathmap,self.maxfstoken,level)
+      level=_Entity(self.longpathmap,self.maxfstoken,level)
       if not levelmin == None:
         level = levelmin.subentity(level)
       levelmin = level
     return level
+  def make_top(self,size=0):
+    return _Top(self.longpathmap,self.topentity,size)
 
 def _test_fadvice_print(offset,size,advice):
   print("Here fadvice should be called on chunk (offset="+str(offset)+",size="+str(size)+" : "+str(advice))
@@ -683,7 +769,7 @@ class _Test:
       print("OK: in='" + pin + "' expected='" + pout + "' result='" + str(a) + "'")
     self.testflatten2(pin,pout)
   def testrange(self,topsize,carvpath,expected):
-    top=Top(self.context.longpathmap,self.context.maxfstoken,topsize)
+    top=_Top(self.context.longpathmap,self.context.maxfstoken,topsize)
     entity=self.context.parse(carvpath)
     if top.test(entity) != expected:
       print("FAIL: topsize="+str(topsize)+"path="+carvpath+"result="+str(not expected))
@@ -707,39 +793,39 @@ class _Test:
     else:
       print("OK : "+str(a))
   def testbox(self):
-    top=Top(self.context.longpathmap,self.context.maxfstoken,1000000)
-    box=Box(self.context.longpathmap,self.context.maxfstoken,_test_fadvice_print,top)
-    box.add("0+20000_40000+20000") #
-    box.add("10000+40000")         #
-    box.add("15000+30000")         #
-    box.add("16000+28000")
-    box.add("0+100000")            #
-    box.add("0+500000")
-    box.add("1000+998000")         #
-    cp=box.customsorted("R",reverse=True)
+    top=_Top(self.context.longpathmap,self.context.maxfstoken,1000000)
+    box=_Box(self.context.longpathmap,self.context.maxfstoken,_test_fadvice_print,top)
+    box.add_batch("0+20000_40000+20000") #
+    box.add_batch("10000+40000")         #
+    box.add_batch("15000+30000")         #
+    box.add_batch("16000+28000")
+    box.add_batch("0+100000")            #
+    box.add_batch("0+500000")
+    box.add_batch("1000+998000")         #
+    cp=box.priority_customsorted("R",reverse=True)
     print("Sorted R: "+str(cp))
-    cp=box.customsorted("r",reverse=True)
+    cp=box.priority_customsorted("r",reverse=True)
     print("Sorted r: "+str(cp))
-    cp=box.customsorted("O")
+    cp=box.priority_customsorted("O")
     print("Sorted O: "+str(cp))
-    cp=box.customsorted("S")
+    cp=box.priority_customsorted("S")
     print("Sorted S: "+str(cp))
-    cp=box.customsorted("D")
+    cp=box.priority_customsorted("D")
     print("Sorted D: "+str(cp))
-    cp=box.customsorted("W")
+    cp=box.priority_customsorted("W")
     print("Sorted W: "+str(cp))
-    cp=box.customsorted("ORS")
+    cp=box.priority_customsorted("ORS")
     print("Sorted ORS: "+str(cp))
-    cp=box.customsorted("DWS")
+    cp=box.priority_customsorted("DWS")
     print("Sorted DWS: "+str(cp))
-    ol=box.overlaps(1550,600)
+    ol=box._overlaps(1550,600)
     print("Overlaps: "+str(ol))
-    box.remove("15000+30000")
-    box.remove("0+20000_40000+20000")
-    box.remove("1000+998000")
-    box.remove("0+100000")
-    box.remove("10000+40000")
-    box.remove("0+500000")
+    box.remove_batch("15000+30000")
+    box.remove_batch("0+20000_40000+20000")
+    box.remove_batch("1000+998000")
+    box.remove_batch("0+100000")
+    box.remove_batch("10000+40000")
+    box.remove_batch("0+500000")
     #Now only 16000+28000 should remain
     if len(box.fragmentrefstack) != 1:
       print("BOXTEST FAIL: not exactly one entities remaining")
