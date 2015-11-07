@@ -446,7 +446,11 @@ class Box:
       ent=self.top.topentity.subentity(ent)
       self.content[carvpath]=ent
       self.entityrefcount[carvpath] = 1
-      return self._stackextend(0,ent)
+      r= self._stackextend(0,ent)
+      merged=r[0]
+      for fragment in merged:
+        self.fadvice(fragment.offset,fragment.size,True)
+      return
   #Remove an existing entity from the box. Returns two entities:
   # 1) An entity with all fragments that went from one to zero refcount (can be used for fadvice purposes).
   # 2) An entity with all fragments still remaining in the box. 
@@ -457,7 +461,11 @@ class Box:
     if self.entityrefcount[carvpath] == 0:
       ent=self.content.pop(carvpath)
       del self.entityrefcount[carvpath]
-      return self._stackdiminish(len(self.fragmentrefstack)-1,ent)
+      r= self._stackdiminish(len(self.fragmentrefstack)-1,ent)
+      unmerged=r[0]
+      for fragment in unmerged:
+        self.fadvice(fragment.offset,fragment.size,False) 
+      return
   #Request a list of entities that overlap from the box that overlap (for opportunistic hashing purposes).
   def overlaps(self,offset,size):
     ent=Entity(self.longpathmap,self.maxfstoken)
@@ -671,6 +679,9 @@ class Context:
       levelmin = level
     return level
 
+def _test_fadvice_print(offset,size,advice):
+  print("Here fadvice should be called on chunk (offset="+str(offset)+",size="+str(size)+" : "+str(advice))
+
 class _Test:
   def __init__(self,lpmap,maxtokenlen):
     self.context=Context(lpmap,maxtokenlen)
@@ -730,9 +741,8 @@ class _Test:
     else:
       print("OK : "+str(a))
   def testbox(self):
-    fadvice = lambda o,s,b: False
     top=Top(self.context.longpathmap,self.context.maxfstoken,1000000)
-    box=Box(self.context.longpathmap,self.context.maxfstoken,fadvice,top)
+    box=Box(self.context.longpathmap,self.context.maxfstoken,_test_fadvice_print,top)
     box.add("0+20000_40000+20000") #
     box.add("10000+40000")         #
     box.add("15000+30000")         #
