@@ -54,21 +54,15 @@ except:
     pass
 
 class _Opportunistic_Hash:
-  def __init__(self,a1=True):
+  def __init__(self,size):
     self._h= ohash_algo(digest_size=32)
     self.offset=0
     self.isdone=False
     self.result="INCOMPLETE-OPPORTUNISTIC_HASHING"
-    if isinstance(a1,bool):
-      self.initialsize=0
-      self.issparse=a1
-    else:
-      self.initialsize=a1
-      self.issparse=False  
+    self.fullsize=size
   def sparse(self,length):
     _h.update(bytearray(length).decode())
   def written_chunk(self,data,offset):
-    self.initialsize =0; #No more guessing when we are ready, things are getting written so they get messy now.
     if offset < self.offset or self.isdone:
       self._h=ohash_algo(digest_size=32) #restart, we are no longer done, things are getting written.
       self.offset=0
@@ -76,15 +70,14 @@ class _Opportunistic_Hash:
       self.result="INCOMPLETE-OPPORTUNISTIC_HASHING"
     if (offset > self.offset):
       #There is a gap!
-      if self.issparse:
-        difference = offset - self.offset
-        times = difference / 1024
-        for i in range(0,times):
-          self.sparse(1024)
-          self.sparse(difference % 1024)
-        if offset == self.offset:
-          self._h.update(data)
-          self.offset += len(data)  
+      difference = offset - self.offset
+      times = difference / 1024
+      for i in range(0,times):
+        self.sparse(1024)
+        self.sparse(difference % 1024)
+      if offset == self.offset:
+        self._h.update(data)
+        self.offset += len(data)  
   def read_chunk(self,data,offset):
     if (not self.isdone) and offset <= self.offset and offser+len(data) > self.offset:
       #Fragment overlaps our offset; find the part that we didn't process yet.
@@ -92,11 +85,85 @@ class _Opportunistic_Hash:
       datasegment = data[start:]
       self._h.update(datasegment)
       self.offset += len(datasegment)
-      if self.offset > 0 and self.offset == self.initialsize:
+      if self.offset > 0 and self.offset == self.fullsize:
         self.done()
   def done(self):
     if not isdone:
       self.result=self._h.hexdigest()
+
+class _OH_Entity:
+  def __init__(self,ent):
+    self.ent=copy.deepcopy(ent)
+    self.ohash=_Opportunistic_Hash(self.ent.totalsize)
+    self.roi=ent._getroi(0)
+  def  written_parent_chunk(self,data,parentoffset):
+    parentfragsize=len(data)
+    #Quick range of interest check.
+    if parentoffset < self.roi[1] and (parentoffset+parentfragsize) > self.roi[0]:
+      childoffset=0
+      working=False
+      updated=False
+      for fragment in self.ent.fragments:
+        if (not fragment.issparse()) and parentoffset >= fragment.offset and parentoffset < fragment.offset + fragment.size:
+          working=True
+          realstart = fragment.offset 
+          realend = fragment.offset+fragment.size
+          if parentoffset > realstart:
+            realstart = parentoffset
+          if (parentoffset + parentfragsize) < realend:
+            realend=parentoffset + parentfragsize
+          if realend > realstart:
+           relrealstart = realstart-parentoffset
+           relrealend = realend-parentoffset
+           self.ohash.written_chunk(data[relrealstart:relrealend],childoffset+realstart-fragment.offset)  
+          updated=True
+        else:
+          if working and fragment.issparse():
+            self.ohash.sparse(fragment.size)
+          else:
+            working=False
+        childoffset+=fragment.size
+      if updated:
+        #Update our range of interest.
+        self.roi=self.ent._getroi(self.ohash.offset)
+  def  read_parent_chunk(self,data,parentoffset):
+    parentfragsize=len(data)
+    #Quick range of interest check.
+    if (not self.ohash.isdone) and parentoffset < self.roi[1] and (parentoffset+parentfragsize) > self.roi[0]:
+      childoffset=0
+      working=False
+      updated=False
+      for fragment in self.ent.fragments:
+        if (not fragment.issparse()) and parentoffset >= fragment.offset and parentoffset < fragment.offset + fragment.size:
+          working=True
+          realstart = fragment.offset
+          realend = fragment.offset+fragment.size
+          if parentoffset > realstart:
+            realstart = parentoffset
+          if (parentoffset + parentfragsize) < realend:
+            realend=parentoffset + parentfragsize
+          if realend > realstart:
+           relrealstart = realstart-parentoffset
+           relrealend = realend-parentoffset
+           self.ohash.read_chunk(data[relrealstart:relrealend],childoffset+realstart-fragment.offset)
+          updated=True
+        else:
+          if working and fragment.issparse():
+            self.ohash.sparse(fragment.size)
+          else:
+            working=False
+        childoffset+=fragment.size
+      if updated:
+        #Update our range of interest.
+        self.roi=self.ent_getroi(self.ohash.offset)
+  def hashing_offset(self):
+    return self.ohash.offset
+  def hashing_result(self):
+    return self.ohash.result
+  def hashing_isdone(self):
+    return self.ohash.isdone
+      
+    
 
 #A fragent represents a contiguous section of a higher level data entity.
 class Fragment:
@@ -125,6 +192,12 @@ class Fragment:
     if self.size > other.size:
       return 1
     return 0
+  def __lt__(self,other):
+    if self.offset < other.offset:
+      return True
+    if self.offset > other.offset:
+      return False
+    return self.size < other.size
   def getoffset(self):
     return self.offset
   #This is how we distinguis a fragment from a sparse description
@@ -213,7 +286,7 @@ class _Entity:
     for frag in fragments:
       self.unaryplus(frag)
   def _asdigest(self,path):
-    rval = "D" + blake2b(path,digest_size=32).hexdigest()
+    rval = "D" + blake2b(path.encode(),digest_size=32).hexdigest()
     self.longpathmap[rval] = path
     return rval
   #If desired, invoke the _Entity as a function to get the fragments it is composed of.
@@ -343,10 +416,13 @@ class _Entity:
   #This is meant to be used for reference counting purposes inside of the Box.
   def _stripsparse(self):
     newfragment=_Entity(self.longpathmap,self.maxfstoken)
-    fragments=sorted(self.fragments)
+    nosparse=[]
+    for i in range(len(self.fragments)):
+      if self.fragments[i].issparse() == False:
+        nosparse.append(self.fragments[i])
+    fragments=sorted(nosparse)
     for i in range(len(fragments)):
-      if fragments[i].issparse() == False:
-        newfragment.unaryplus(fragments[i])
+      newfragment.unaryplus(fragments[i])
     self.assigtoself(newfragment)
   #Merge an other sorted/striped entity and return two entities: One with all fragments left unused and one with the fragments used
   #for merging into self.
@@ -367,6 +443,22 @@ class _Entity:
     r=_fragapply(self,entity,[t])
     rval= float(r[0].totalsize)/float(self.totalsize)
     return rval
+  def _getroi(self,fromoffset):
+    coffset=0
+    start=None
+    end=None
+    for fragment in self.fragments:
+      if (not fragment.issparse()) and fromoffset <= coffset+fragment.size:
+        if coffset <= fromoffset:
+          start=fragment.offset + fromoffset - coffset
+          end=fragment.offset+fragment.size
+        else:
+          if start > fragment.offset:
+            start=fragment.offset
+          if end < fragment.offset+fragment.size:
+            end=fragment.offset+fragment.size
+      coffset+=fragment.size
+    return [start,end]
   
 #Helper functions for mapping merge and unmerge to the higher order _fragapply function.
 def _merge_entities(ent1,ent2):
@@ -511,6 +603,7 @@ class _Box:
     self.entityrefcount=dict() #Entity refcount for handling multiple instances of the exact same entity.
     self.fragmentrefstack=[] #A stack of fragments with different refcounts for keeping reference counts on fragments.
     self.fragmentrefstack.append(_Entity(self.longpathmap,self.maxfstoken)) #At least one empty entity on the stack
+    self.ohash=dict()
   def __str__(self):
     rval=""
     for index in range(0,len(self.fragmentrefstack)):
@@ -528,6 +621,7 @@ class _Box:
       return [_Entity(self.longpathmap,self.maxfstoken),ent]
     else:
       ent=_Entity(self.longpathmap,self.maxfstoken,carvpath)
+      self.ohash[carvpath]=_OH_Entity(ent)
       ent._stripsparse()
       ent=self.top.topentity.subentity(ent)
       self.content[carvpath]=ent
@@ -547,6 +641,7 @@ class _Box:
     if self.entityrefcount[carvpath] == 0:
       ent=self.content.pop(carvpath)
       del self.entityrefcount[carvpath]
+      del self.ohash[carvpath]
       r= self._stackdiminish(len(self.fragmentrefstack)-1,ent)
       unmerged=r[0]
       for fragment in unmerged:
@@ -686,17 +781,18 @@ class _Box:
       else:
         return [remaining,unmerged];
   def lowlevel_writen_data(self,offset,data):
-    #FIXME
-    pass
+    for carvpath in keys(self.ohash):
+      self.ohash[carvpath].written_parent_chunk(data,offset)
   def lowlevel_read_data(self,offset,data):
-    #FIXME
-    pass
-  def batch_hashing_done(self,carvpath):
-    #FIXME
-    pass
+    for carvpath in keys(self.ohash):
+      self.ohash[carvpath].read_parent_chunk(data,offset)
+  def batch_hashing_isdone(self,carvpath):
+    return self.ohash[carvpath].hashing_isdone()
   def batch_hashing_value(self,carvpath):
-    #FIXME
-    pass
+    return self.ohash[carvpath].hashing_result()
+  def batch_hashing_offset(self,carvpath):
+    return self.ohash[carvpath].hashing_offset()
+
 
 #This object allows an Entity to be validated against an underlying data source with a given size.
 class _Top:
@@ -726,7 +822,7 @@ class _Top:
 
 #FIXME: This class needs to be implemented.
 class _Repository:
-  def __init__(self,reppath,lpmap,maxfstoken):
+  def __init__(self,reppath,lpmap,maxfstoken=160):
     pass 
 
 #You need one of these per application in order to use pycarvpath.
