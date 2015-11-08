@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 #Copyright (c) 2015, Rob J Meijer.
 #Copyright (c) 2015, University College Dublin
 #All rights reserved.
@@ -178,26 +178,20 @@ class Fragment:
   #Casting Fragment to a carvpath string
   def __str__(self):
     return str(self.offset) + "+" + str(self.size)
-  #Comparing two fragments or a fragment and a sparse section. Please note that all fragments
-  #are considered larger than any sparse section, regardless of sizes.
-  def __cmp__(self,other):
-    if other.issparse() == True:
-      return 1
-    if self.offset < other.offset:
-      return -1
-    if self.offset > other.offset:
-      return 1
-    if self.size < other.size:
-      return -1
-    if self.size > other.size:
-      return 1
-    return 0
   def __lt__(self,other):
-    if self.offset < other.offset:
-      return True
-    if self.offset > other.offset:
-      return False
+    if self.offset != other.offset:
+      return self.offset < other.offset
     return self.size < other.size
+  def __gt__(self,other):
+    return other < self
+  def __eq__(self,other):
+    return self.offset == other.offset and self.size == other.size
+  def __ne__(self,other):
+    return self.offset != other.offset or self.size != other.size
+  def __le__(self,other):
+    return not (self > other)
+  def __ge__(self,other):
+    return not (self < other)
   def getoffset(self):
     return self.offset
   #This is how we distinguis a fragment from a sparse description
@@ -221,17 +215,18 @@ class Sparse:
   #Casting to a carvpath string
   def __str__(self):
     return "S" + str(self.size)
-  #Comparing two sparse entities or a sparse entity and a fragment.
-  #Please note that all fragments are considered larger than any sparse 
-  #section, regardless of sizes.
-  def __cmp__(self,other):
-    if other.issparse() == False:
-      return -1
-    if self.size < other.size:
-      return -1
-    if self.size > other.size:
-      return 1
-    return 0
+  def __lt__(self,other):
+    return self.size < other.size
+  def __gt__(self,other):
+    return self.size > other.size
+  def __eq__(self,other):
+    return self.size == other.size
+  def __ne__(self,other):
+    return self.size != other.size
+  def __le__(self,other):
+    return self.size <= other.size
+  def __ge__(self,other):
+    return not (self.size >= other.size)
   #Calling this method on a Sparse will throw an runtime exception.
   def getoffset(self):
     raise RuntimeError("Sparse doesn't have an offset")
@@ -315,30 +310,46 @@ class _Entity:
       return self._asdigest(rval)
     else:
       return rval
-  #Compare two entities in the default way
-  def __cmp__(self,other):
-    if isinstance(other,_Entity):
-      #First compare the fragments for all shared indexes untill one is unequal or we have processed them all.
-      ownfragcount=len(self.fragments)
-      otherfragcount=len(other.fragments)
-      sharedfragcount=ownfragcount
-      if otherfragcount < sharedfragcount:
-        sharedfragcount=otherfragcount
-      for index in range(0,sharedfragcount):
-        if self.fragments[index] < other.fragments[index]:
-          return -1
-        if self.fragments[index] > other.fragments[index]:
-          return 1
-      #If all earlier fragments are equal, the entity with fragments remaining is he biggest.
-      if ownfragcount < otherfragcount:
-        return -1
-      if ownfragcount > otherfragcount:
-        return 1
-      #All fragments are equal
-      return 0
-    else:
-      #We define that entities are greater than all other types when compared.
-      return 1
+  def __lt__(self,other):
+    if self.totalsize == 0 and other.totalsize > 0:
+      return True
+    if other.totalsize == 0:
+      return False
+    ownfragcount=len(self.fragments)
+    otherfragcount=len(other.fragments)
+    sharedfragcount=ownfragcount
+    for index in range(0,sharedfragcount):
+      if self.fragments[index].issparse() != other.fragments[index].issparse():
+        return self.fragments[index].issparse()
+      if (not self.issparse()):
+        if self.fragments[index].offset != other.fragments[index].offset:
+          return self.fragments[index].offset < other.fragments[index].offset
+      if self.fragments[index].size != other.fragments[index].size:
+        return self.fragments[index].size < other.fragments[index].size
+    return False
+  def __gt__(self,other):
+    return other < self
+  def __le__(self,other):
+    return not (self > other)
+  def __ge__(self,other):
+    return not (self < other)
+  def __eq__(self,other):
+    if not isinstance(other,_Entity):
+      return False
+    if self.totalsize != other.totalsize:
+      return False
+    if len(self.fragments) != len(other.fragments):
+      return False
+    for index in range(0,len(self.fragments)):
+      if self.fragments[index].issparse() != other.fragments[index].issparse():
+        return False
+      if (not self.fragments[index].issparse()) and self.fragments[index].offset != other.fragments[index].offset:
+        return False
+      if self.fragments[index].size != other.fragments[index].size:
+        return False
+    return True
+  def __ne__(self,other):
+    return not self == other
   #Python does not allow overloading of any operator+= ; this method pretends it does.
   def unaryplus(self,other):
     if isinstance(other,_Entity):
@@ -881,7 +892,7 @@ class _Test:
     a=self.context.parse(pin)
     b=self.context.parse(pout)
     if a != b:
-      print("FAIL: in='" + pin + "' expected='" + pout + "' result='" + str(a) + "'")
+      print("FAIL: in='" + pin + "' expected='" + pout + "  (" +str(b) +  ") ' result='" + str(a) + "'")
     else:
       print("OK: in='" + pin + "' expected='" + pout + "' result='" + str(a) + "'")
   def testflatten(self,pin,pout):
