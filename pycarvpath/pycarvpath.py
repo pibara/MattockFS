@@ -53,6 +53,8 @@ try:
 except:
     pass
 
+import os
+
 class _Opportunistic_Hash:
   def __init__(self,size):
     self._h= ohash_algo(digest_size=32)
@@ -178,6 +180,8 @@ class Fragment:
   #Casting Fragment to a carvpath string
   def __str__(self):
     return str(self.offset) + "+" + str(self.size)
+  def __hash__(self):
+    return hash(str(self))
   def __lt__(self,other):
     if self.offset != other.offset:
       return self.offset < other.offset
@@ -215,6 +219,8 @@ class Sparse:
   #Casting to a carvpath string
   def __str__(self):
     return "S" + str(self.size)
+  def __hash__(self):
+    return hash(str(self))
   def __lt__(self,other):
     return self.size < other.size
   def __gt__(self,other):
@@ -276,7 +282,7 @@ class _Entity:
           #We are creating an empty zero fragment entity here
           fragments=[]
         else:
-          raise TypeError('Entity constructor needs a string or list of fragments'+str(a1))
+          raise TypeError('Entity constructor needs a string or list of fragments '+str(a1))
     self.totalsize=0
     for frag in fragments:
       self.unaryplus(frag)
@@ -292,7 +298,7 @@ class _Entity:
   def __getitem__(self,index):
     return self.fragments[index]
   #Grow the entity by extending on its final fragment or, if there are non, by creating a first fragment with offset zero.
-  def grow(chunksize):
+  def grow(self,chunksize):
     if len(self.fragments) == 0:
       self.fragments.append(Fragment(0,chunksize))
     else:
@@ -310,6 +316,8 @@ class _Entity:
       return self._asdigest(rval)
     else:
       return rval
+  def __hash__(self):
+    return hash(str(self))
   def __lt__(self,other):
     if self.totalsize == 0 and other.totalsize > 0:
       return True
@@ -425,7 +433,7 @@ class _Entity:
     self.totalsize=other.totalsize
   #Strip the entity of its sparse fragments and sort itsd non sparse fragments.
   #This is meant to be used for reference counting purposes inside of the Box.
-  def _stripsparse(self):
+  def stripsparse(self):
     newfragment=_Entity(self.longpathmap,self.maxfstoken)
     nosparse=[]
     for i in range(len(self.fragments)):
@@ -605,10 +613,10 @@ class _CustomSortable:
     return self.ltfunction(self.arglist,other.arglist)
 
 class _Box:
-  def __init__(self,lpmap,maxfstoken,fadvice,top):
+  def __init__(self,lpmap,maxfstoken,fadvise,top):
     self.longpathmap=lpmap
     self.maxfstoken=maxfstoken
-    self.fadvice=fadvice
+    self.fadvise=fadvise
     self.top=top #Top entity used for all entities in the box
     self.content=dict() #Dictionary with all entities in the box.
     self.entityrefcount=dict() #Entity refcount for handling multiple instances of the exact same entity.
@@ -622,31 +630,33 @@ class _Box:
     for carvpath in self.content:
       rval += "   * " +carvpath + " : " + str(self.entityrefcount[carvpath]) + "\n"
     return rval
+  def __hash__(self):
+    return hash(str(self))
   #Add a new entity to the box. Returns two entities: 
-  # 1) An entity with all fragments that went from zero to one reference count.(can be used for fadvice purposes)
+  # 1) An entity with all fragments that went from zero to one reference count.(can be used for fadvise purposes)
   # 2) An entity with all fragments already in the box before add was invoked (can be used for opportunistic hashing purposes).
   def add_batch(self,carvpath):
-    if carvpath in self.entityrefcount:
+    if carvpath in self.entityrefcount.keys():
       self.entityrefcount[carvpath] += 1
       ent=self.content[carvpath]
       return [_Entity(self.longpathmap,self.maxfstoken),ent]
     else:
       ent=_Entity(self.longpathmap,self.maxfstoken,carvpath)
       self.ohash[carvpath]=_OH_Entity(ent)
-      ent._stripsparse()
+      ent.stripsparse()
       ent=self.top.topentity.subentity(ent)
       self.content[carvpath]=ent
       self.entityrefcount[carvpath] = 1
       r= self._stackextend(0,ent)
       merged=r[0]
       for fragment in merged:
-        self.fadvice(fragment.offset,fragment.size,True)
+        self.fadvise(fragment.offset,fragment.size,True)
       return
   #Remove an existing entity from the box. Returns two entities:
-  # 1) An entity with all fragments that went from one to zero refcount (can be used for fadvice purposes).
+  # 1) An entity with all fragments that went from one to zero refcount (can be used for fadvise purposes).
   # 2) An entity with all fragments still remaining in the box. 
   def remove_batch(self,carvpath):
-    if not carvpath in self.entityrefcount:
+    if not carvpath in self.entityrefcount.keys():
       raise IndexError("Carvpath "+carvpath+" not found in box.")    
     self.entityrefcount[carvpath] -= 1
     if self.entityrefcount[carvpath] == 0:
@@ -656,7 +666,7 @@ class _Box:
       r= self._stackdiminish(len(self.fragmentrefstack)-1,ent)
       unmerged=r[0]
       for fragment in unmerged:
-        self.fadvice(fragment.offset,fragment.size,False) 
+        self.fadvise(fragment.offset,fragment.size,False) 
       return
   #Request a list of entities that overlap from the box that overlap (for opportunistic hashing purposes).
   def _overlaps(self,offset,size):
@@ -816,8 +826,8 @@ class _Top:
     return self.topentity
   #Make a Box object. Most likely you don't need one if you are implementing a forensic tool, as Box is 
   #meant primary to be used by the Repository implementation.
-  def make_box(fadvice):
-    return _Box(self.topentity.longpathmap,self.topentity.maxfstoken,fadvice,self.topentity)
+  def make_box(fadvise):
+    return _Box(self.topentity.longpathmap,self.topentity.maxfstoken,fadvise,self.topentity)
   #If the underlying data source changes its size by data being added, grow allows you to notify the Top object of this
   #and allow future entities to exist within the extended bounds.
   def grow(self,chunk):
@@ -831,10 +841,36 @@ class _Top:
       return False
     return True
 
-#FIXME: This class needs to be implemented.
+class _FadviseFunctor:
+  def __init__(self,fd):
+    self.fd=fd
+  def __call__(self,offset,size,willneed):
+    if willneed:
+      os.posix_fadvise(self.fd,offset,size,os.POSIX_FADV_WILLNEED)
+    else:
+      os.posix_fadvise(self.fd,offset,size,os.POSIX_FADV_DONTNEED)
+
 class _Repository:
   def __init__(self,reppath,lpmap,maxfstoken=160):
-    pass 
+    self.lpmap=lpmap
+    self.maxfstoken=maxfstoken
+    self.fd=os.open(reppath,(os.O_RDWR | os.O_LARGEFILE | os.O_NOATIME | os.O_CREAT))
+    cursize=os.lseek(self.fd,0,os.SEEK_END) 
+    os.posix_fadvise(self.fd,0,cursize,os.POSIX_FADV_DONTNEED)
+    self.top=_Top(lpmap,maxfstoken,cursize)
+    fadvise=_FadviseFunctor(self.fd)
+    self.box=_Box(lpmap,maxfstoken,fadvise,self.top)
+  def __del__(self):
+    os.close(self.fd)
+  def newmutable(self,chunksize):
+    chunkoffset=self.top.size
+    os.ftruncate(self.fd,chunkoffset+chunksize) 
+    self.top.grow(chunksize)
+    cp=str(_Entity(self.lpmap,self.maxfstoken,[Fragment(chunkoffset,chunksize)])) 
+    self.box.add_batch(cp)
+    return cp
+    
+  
 
 #You need one of these per application in order to use pycarvpath.
 class Context:
@@ -863,10 +899,7 @@ class Context:
   #NOTE: This method should only be used in forensic filesystem or forensic framework implementations.
   #Open a raw repository file and make it accessible through a _Repository interface.
   def open_repository(self,rawdatapath):
-    return _Repository(self.longpathmap,self.maxfstoken)
-
-def _test_fadvice_print(offset,size,advice):
-  print("Here fadvice should be called on chunk (offset="+str(offset)+",size="+str(size)+" : "+str(advice))
+    return _Repository(rawdatapath,self.longpathmap,self.maxfstoken)
 
 class _Test:
   def __init__(self,lpmap,maxtokenlen):
@@ -883,125 +916,107 @@ class _Test:
   def teststripsparse(self,pin,pout):
     a=self.context.parse(pin)
     b=self.context.parse(pout)
-    a._stripsparse()
+    a.stripsparse()
     if a != b:
       print("FAIL: in='" + pin + "' expected='" + pout + "' result='" + str(a) + "'")
     else:
       print("OK: in='" + pin + "' expected='" + pout + "' result='" + str(a) + "'")
-  def testflatten2(self,pin,pout):
-    a=self.context.parse(pin)
-    b=self.context.parse(pout)
+  def testflatten2(self,context,pin,pout):
+    a=context.parse(pin)
+    b=context.parse(pout)
     if a != b:
       print("FAIL: in='" + pin + "' expected='" + pout + "  (" +str(b) +  ") ' result='" + str(a) + "'")
     else:
       print("OK: in='" + pin + "' expected='" + pout + "' result='" + str(a) + "'")
-  def testflatten(self,pin,pout):
-    a=self.context.parse(pin)
+  def testflatten(self,context,pin,pout):
+    a=context.parse(pin)
     if str(a) != pout:
       print("FAIL: in='" + pin + "' expected='" + pout + "' result='" + str(a) + "'")
     else:
       print("OK: in='" + pin + "' expected='" + pout + "' result='" + str(a) + "'")
-    self.testflatten2(pin,pout)
+    self.testflatten2(context,pin,pout)
   def testrange(self,topsize,carvpath,expected):
-    top=_Top(self.context.longpathmap,self.context.maxfstoken,topsize)
-    entity=self.context.parse(carvpath)
+    context=Context({})
+    top=context.make_top(topsize)
+    entity=context.parse(carvpath)
     if top.test(entity) != expected:
       print("FAIL: topsize="+str(topsize)+"path="+carvpath+"result="+str(not expected))
     else:
       print("OK: topsize="+str(topsize)+"path="+carvpath+"result="+str(expected))
-  def testsize(self,pin,sz):
-    a=self.context.parse(pin)
+  def testsize(self,context,pin,sz):
+    print("TESTSIZE:")
+    a=context.parse(pin)
     if a.totalsize != sz:
       print("FAIL: in='" + pin + "' expected='" + str(sz) + "' result='" + str(a.totalsize) + "'")
     else:
       print("OK: in='" + pin + "' expected='" + str(sz) + "' result='" + str(a.totalsize) + "'")
   def testmerge(self,p1,p2,pout):
-    a=self.context.parse(p1)
-    a._stripsparse()
-    b=self.context.parse(p2)
-    b._stripsparse()
-    c=self.context.parse(pout)
+    print("TESTMERGE:")
+    context=Context({})
+    a=context.parse(p1)
+    a.stripsparse()
+    b=context.parse(p2)
+    b.stripsparse()
+    c=context.parse(pout)
     d=a.merge(b)
     if a!=c:
       print("FAIL : "+str(a)+"  "+str(d[0]) + " ;  "+str(d[1]))
     else:
       print("OK : "+str(a))
-  def testbox(self):
-    top=_Top(self.context.longpathmap,self.context.maxfstoken,1000000)
-    box=_Box(self.context.longpathmap,self.context.maxfstoken,_test_fadvice_print,top)
-    box.add_batch("0+20000_40000+20000") #
-    box.add_batch("10000+40000")         #
-    box.add_batch("15000+30000")         #
-    box.add_batch("16000+28000")
-    box.add_batch("0+100000")            #
-    box.add_batch("0+500000")
-    box.add_batch("1000+998000")         #
-    cp=box.priority_customsorted("R",reverse=True)
-    print("Sorted R: "+str(cp))
-    cp=box.priority_customsorted("r",reverse=True)
-    print("Sorted r: "+str(cp))
-    cp=box.priority_customsorted("O")
-    print("Sorted O: "+str(cp))
-    cp=box.priority_customsorted("S")
-    print("Sorted S: "+str(cp))
-    cp=box.priority_customsorted("D")
-    print("Sorted D: "+str(cp))
-    cp=box.priority_customsorted("W")
-    print("Sorted W: "+str(cp))
-    cp=box.priority_customsorted("ORS")
-    print("Sorted ORS: "+str(cp))
-    cp=box.priority_customsorted("DWS")
-    print("Sorted DWS: "+str(cp))
-    ol=box._overlaps(1550,600)
-    print("Overlaps: "+str(ol))
-    box.remove_batch("15000+30000")
-    box.remove_batch("0+20000_40000+20000")
-    box.remove_batch("1000+998000")
-    box.remove_batch("0+100000")
-    box.remove_batch("10000+40000")
-    box.remove_batch("0+500000")
-    #Now only 16000+28000 should remain
-    if len(box.fragmentrefstack) != 1:
-      print("BOXTEST FAIL: not exactly one entities remaining")
-      print(str(box))
-      return
-    if str(box.fragmentrefstack[0]) != "16000+28000":
-      print("BOXTEST FAIL: not expexted value of only box entry")
-      print(str(box))
-      return
-    print("OK (Boxtest)")
-
+  def testrepository(self):
+    print("TESTREPOSITORY:")
+    context=Context({})
+    repository=context.open_repository("/tmp/rep.dd")
+    m1=repository.newmutable(100000000)
+    m2=repository.newmutable(20000000)
+    m3=repository.newmutable(3000000)
+    m4=repository.newmutable(400000)
+    m5=repository.newmutable(50000)
+    m6=repository.newmutable(6000)
+    m7=repository.newmutable(700)
+    m8=repository.newmutable(80)
+    m9=repository.newmutable(9)
+    print("New mutable: "+m1)
+    print("New mutable: "+m2)
+    print("New mutable: "+m3)
+    print("New mutable: "+m4)
+    print("New mutable: "+m5)
+    print("New mutable: "+m6)
+    print("New mutable: "+m7)
+    print("New mutable: "+m8)
+    print("New mutable: "+m9)
 if __name__ == "__main__":
+  context=Context({})
   t=_Test({},160)
-  t.testflatten("0+0","S0");
-  t.testflatten("S0","S0");
-  t.testflatten("0+0/0+0","S0");
-  t.testflatten("20000+0","S0");
-  t.testflatten("20000+0_89765+0","S0");
-  t.testflatten("1000+0_2000+0/0+0","S0");
-  t.testflatten("0+5","0+5");
-  t.testflatten("S1_S1","S2");
-  t.testflatten("S100_S200","S300");
-  t.testflatten("0+20000_20000+20000","0+40000");
-  t.testflatten("0+20000_20000+20000/0+40000","0+40000");
-  t.testflatten("0+20000_20000+20000/0+30000","0+30000");
-  t.testflatten("0+20000_20000+20000/10000+30000","10000+30000");
-  t.testflatten("0+20000_40000+20000/10000+20000","10000+10000_40000+10000");
-  t.testflatten("0+20000_40000+20000/10000+20000/5000+10000","15000+5000_40000+5000");
-  t.testflatten("0+20000_40000+20000/10000+20000/5000+10000/2500+5000","17500+2500_40000+2500");
-  t.testflatten("0+20000_40000+20000/10000+20000/5000+10000/2500+5000/1250+2500","18750+1250_40000+1250");
-  t.testflatten("0+20000_40000+20000/10000+20000/5000+10000/2500+5000/1250+2500/625+1250","19375+625_40000+625");
-  t.testflatten("0+100_101+100_202+100_303+100_404+100_505+100_606+100_707+100_808+100_909+100_1010+100_1111+100_1212+100_1313+100_1414+100_1515+100_1616+100_1717+100_1818+100_1919+100_2020+100_2121+100_2222+100_2323+100_2424+100","D901141262aa24eaaddbce2f470615b6a47639f7a62b3bc7c65335251fe3fa480");
-  t.testflatten("0+100_101+100_202+100_303+100_404+100_505+100_606+100_707+100_808+100_909+100_1010+100_1111+100_1212+100_1313+100_1414+100_1515+100_1616+100_1717+100_1818+100_1919+100_2020+100_2121+100_2222+100_2323+100_2424+100/1+2488","D0e2ded6b35aa15baabd679f7d8b0a7f0ad393948988b6b2f28db7c283240e3b6");
-  t.testflatten("D901141262aa24eaaddbce2f470615b6a47639f7a62b3bc7c65335251fe3fa480/1+2488","D0e2ded6b35aa15baabd679f7d8b0a7f0ad393948988b6b2f28db7c283240e3b6");
-  t.testflatten("D901141262aa24eaaddbce2f470615b6a47639f7a62b3bc7c65335251fe3fa480/350+100","353+50_404+50");
-  t.testflatten("S200000/1000+9000","S9000")
+  t.testflatten(context,"0+0","S0");
+  t.testflatten(context,"S0","S0");
+  t.testflatten(context,"0+0/0+0","S0");
+  t.testflatten(context,"20000+0","S0");
+  t.testflatten(context,"20000+0_89765+0","S0");
+  t.testflatten(context,"1000+0_2000+0/0+0","S0");
+  t.testflatten(context,"0+5","0+5");
+  t.testflatten(context,"S1_S1","S2");
+  t.testflatten(context,"S100_S200","S300");
+  t.testflatten(context,"0+20000_20000+20000","0+40000");
+  t.testflatten(context,"0+20000_20000+20000/0+40000","0+40000");
+  t.testflatten(context,"0+20000_20000+20000/0+30000","0+30000");
+  t.testflatten(context,"0+20000_20000+20000/10000+30000","10000+30000");
+  t.testflatten(context,"0+20000_40000+20000/10000+20000","10000+10000_40000+10000");
+  t.testflatten(context,"0+20000_40000+20000/10000+20000/5000+10000","15000+5000_40000+5000");
+  t.testflatten(context,"0+20000_40000+20000/10000+20000/5000+10000/2500+5000","17500+2500_40000+2500");
+  t.testflatten(context,"0+20000_40000+20000/10000+20000/5000+10000/2500+5000/1250+2500","18750+1250_40000+1250");
+  t.testflatten(context,"0+20000_40000+20000/10000+20000/5000+10000/2500+5000/1250+2500/625+1250","19375+625_40000+625");
+  t.testflatten(context,"0+100_101+100_202+100_303+100_404+100_505+100_606+100_707+100_808+100_909+100_1010+100_1111+100_1212+100_1313+100_1414+100_1515+100_1616+100_1717+100_1818+100_1919+100_2020+100_2121+100_2222+100_2323+100_2424+100","D901141262aa24eaaddbce2f470615b6a47639f7a62b3bc7c65335251fe3fa480");
+  t.testflatten(context,"0+100_101+100_202+100_303+100_404+100_505+100_606+100_707+100_808+100_909+100_1010+100_1111+100_1212+100_1313+100_1414+100_1515+100_1616+100_1717+100_1818+100_1919+100_2020+100_2121+100_2222+100_2323+100_2424+100/1+2488","D0e2ded6b35aa15baabd679f7d8b0a7f0ad393948988b6b2f28db7c283240e3b6");
+  t.testflatten(context,"D901141262aa24eaaddbce2f470615b6a47639f7a62b3bc7c65335251fe3fa480/1+2488","D0e2ded6b35aa15baabd679f7d8b0a7f0ad393948988b6b2f28db7c283240e3b6");
+  t.testflatten(context,"D901141262aa24eaaddbce2f470615b6a47639f7a62b3bc7c65335251fe3fa480/350+100","353+50_404+50");
+  t.testflatten(context,"S200000/1000+9000","S9000")
 
   t.testrange(200000000000,"0+100000000000/0+50000000",True)
   t.testrange(20000,"0+100000000000/0+50000000",False)
-  t.testsize("20000+0_89765+0",0)
-  t.testsize("0+20000_40000+20000/10000+20000/5000+10000",10000)
-  t.testsize("D901141262aa24eaaddbce2f470615b6a47639f7a62b3bc7c65335251fe3fa480/350+100",100)
+  t.testsize(context,"20000+0_89765+0",0)
+  t.testsize(context,"0+20000_40000+20000/10000+20000/5000+10000",10000)
+  t.testsize(context,"D901141262aa24eaaddbce2f470615b6a47639f7a62b3bc7c65335251fe3fa480/350+100",100)
   t.teststripsparse("0+1000_S2000_1000+2000","0+3000")
   t.teststripsparse("1000+2000_S2000_0+1000","0+3000")
   t.teststripsparse("0+1000_S2000_4000+2000","0+1000_4000+2000")
@@ -1015,5 +1030,5 @@ if __name__ == "__main__":
   t.testmerge("0+1000_2000+1000","500+1000","0+1500_2000+1000")
   t.testmerge("S0","0+1000_2000+1000","0+1000_2000+1000")
   t.testmerge("0+60000","15000+30000","0+60000")
-  t.testbox()
+  t.testrepository()
    
