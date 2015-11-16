@@ -7,29 +7,29 @@
     \item \emph{<carvpath-entity>.<ext>} 
     \item \emph{<carvpath-entity>/} 
     \begin{itemize}
-      \item \emph{<carvpath-entity>.<ext>} $\Longrightarrow$ ../<carvpath-entity>.<ext>
-      \item \emph{<carvpath-entity>} $\Longrightarrow$ ../<carvpath-entity>
+      \item \emph{<carvpath-entity>.<ext>} $\Longrightarrow$ \$mp/data/<carvpath-entity>.<ext>
+      \item \emph{<carvpath-entity>} $\Longrightarrow$ \$mp/data/<carvpath-entity>
     \end{itemize}
   \end{itemize}
   \item \emph{module/}
   \begin{itemize}
-    \item \emph{<module-name>.register} $\Longrightarrow$ ../instance/<instance-handle>
+    \item \emph{<module-name>.register} $\Longrightarrow$ \$mp/instance/<instance-handle>
   \end{itemize}
   \item \emph{instance/}
   \begin{itemize}
     \item \emph{<instance-handle>/}
     \begin{itemize}
-      \item \emph{<sort-pollicy>.accept} $\Longrightarrow$ ../job/<job-handle>
+      \item \emph{<sort-pollicy>.accept} $\Longrightarrow$ \$mp/job/<job-handle>
     \end{itemize}
   \end{itemize}
   \item \emph{job}
   \begin{itemize}
     \item \emph{<job-handle>/}
     \begin{itemize}
-      \item \emph{data.all} $\Longrightarrow$ ../../data/<carvpath-entity>.<ext>
+      \item \emph{data.all} $\Longrightarrow$ \$mp/data/<carvpath-entity>.<ext>
       \item \emph{data/}
       \begin{itemize}
-        \item \emph{<carvpath-entity>.<ext>} $\Longrightarrow$ ../../../data/<carvpath-entity>.<ext>
+        \item \emph{<carvpath-entity>.<ext>} $\Longrightarrow$ \$mp/data/<carvpath-entity>.<ext>
       \end{itemize}
       \item \emph{newdata/}
       \begin{itemize}
@@ -38,13 +38,20 @@
     \end{itemize}
   \end{itemize}
 \end{itemize}
+In this appendix we describe the technical interface to the MattockFS user-space file-system. This interface consists of two parts. The clasical CarvFS-style interface of the \emph{data.all} and \emph{data} read-only self-flatening carvpath-annotation based data access, and the framework geared interface centered around the core concepts of \emph{module}, \emph{instance} and \emph{job}. The second part aims to be an API implemented as file-system interface. To understand the API as file-system interface, we first need to discuss these three core concepts, and the concept of sparse capabilities and their use as handle to in-file-system state.
+\section{Modules, instances \& jobs}
+On a system running MattockFS there can be multiple worker processes running. A worker process handles evidence data or evidence meta-data of a particular type, and the the code for processing such data is called a module. The process running that code is seen as a module instance. There can be multiple instances of the same module running on one machine. This can be particularily usefull for single-threaded modules with a high CPU-load/data-volume ratio on a server with multiple dozens of processing cores. Most modules will need only one instance running on a single MattockFS instance. Most modules will not initiate any work, but wil work with evidence-data or meta-data that is given to its instance as \emph{job}. During the processing of a job, the evidence data is used to either sub-entities (that can be designated by a carvpath annotation), extracted entities that introduce new content to the repository, and evidence meta-data that represents meta information regarding the evidence data. Once a job is done, the module instance needs to submit the evidence-data for further processing by an other module or for chain termination by the data-store-module. Sub-entities , extracted data and meta-data also constitute jobs that must be submitted to other modules. By default the next module will be the data-store-module unless it is changed during job processing by the modulke instance. There is one module that may create a job out of thin-air and add data \& meta-data to it: The \emph{kickstart}.
+\section{Sparse capabilities as handles}
+MattockFS aims to provide a least-authority cross-tool labratory variant of a sealed digital evidence bag (S-DEB). To do this, MattockFS runs under a special uid different from that used by any module, and defines all data in the repository as file-system enforced immutable after the initial initialisation. Further, the file-system is made responsable for provenance meta-data regarding the lab tool-chain. The modules provide the normal evidence meta-data as storage entities, but the file-system keeps track of provenance as part as its role as trusted sub-system. In order for the system to truly function as anti-forensics resistant trusted code-base, the running as a different user is not sufficient. The system will need to be hardened to keep module instances from intervering with each others processes and provenance chains, and at the same time, writing modules that can invoke tools that still have access to essential data or sub-functionality is needed to keep the system flexible enough for reactive usage.
+In order to facilitate this, we look at the concept of sparse capabilities. Sparse capabilities are authority tokens or handles that are represented as unguessable strings. The same way that in a programming language an object gets passed by reference to an other object, so to can a sparse capability be handed to an other process. An example oth where this technique of using sparse capabilities together with a user-space file-system and hardening setups was shown to be usable is the MinorFS system. We shall be using sparse capabilities for two things in our file-system: For module-instances and for jobs.  
 \section{data.all}
 This symbolic link is meant for human use only. It is a symbolic link to a carvpath that represents the current whole repository.
 If for example at a given point in time the total repository size is 3298534883328 bytes in size, than \emph{data.all} will be a symbolic link to \emph{data/0+3298534883328.all}. There is no specific meeta-data asociated with this directory entry.
 \section{\emph{data}/}
 The data directory is the core of the MattockFS interface. The directory itself has its access mask set to \emph{x} only (0x111). This means that no directory listing is allowed, nor are file or directory creation actions. Files that fall within the size range of the repository don'n need to be created though, they just are, and can be accessed.
 \subsection{data/<carvpath-entity>.<ext>}
-Any disignation of a carvpath that is valid within the bounds of the repository can be used to get a read-only pseudo file that can be used by any forensic or non-forensic tool that expect to work on a regular file. These CarvPath files have a set of read only extended attributes to be used either by human operators, the Mattock framework or a possible future WUI. The file may be designated with any file extension as to accomodate processing tools. Some tools for processing a specific type of file won't run unless the file name has an expected file extension. For this reason, any file-extension is treated the same.
+Any disignation of a carvpath that is valid within the bounds of the repository can be used to get a read-only pseudo file that can be used by any forensic or non-forensic tool that expect to work on a regular file. These CarvPath files have a set of read only extended attributes to be used either by human operators, the Mattock framework or a possible future user-interface.
+The file may be designated with any file extension as to accomodate processing tools. Some tools for processing a specific type of file won't run unless the file name has an expected file extension. For this reason, any file-extension is treated the same.
 \subsubsection{data/<carvpath-entity>.<ext>::path\_state}
 In order to minimize the number of OS context switches needed in framework operations, the whole set of file-system level carvpath meta-data, not related to throtling, is made accessable through a single file-system operation as a single read-only extended attribute named '\emph{path\_state}. The value of this extended attribute is a semicolon seperated list of fields with the following info:
 \begin{itemize}
@@ -69,24 +76,36 @@ If an entry itself is a valid CarvPath, with or without an extension, than the e
 \section{module/}
 The \emph{module} directory is meant as an API into the MatockFS anycast functionality. It allows a module to register as an instance of a given module by means of a simple \emph{chdir} command. Like the \emph{data} directory, the \emph{module} directory has its access mask set to \emph{x} only (0x111). This means that no directory listing is allowed, nor are file or directory creation actions.  
 \subsection{module/::throttle\_state}
-FIXME: fadv\_normal,willneed,dontneed,io-access-size,queue\_size,queue\_volume
+Before a module enters extracted entities or sub-entities into the file-system, the module needs to make sure the page-cache does not run the risk of being over-filled. To eliviate that problem, the file-system provides the throtle\_state meta data. This extended attributes provides a combination of file-system level stats and information about the queue for designated module. The content of this attribute is a semicolon seperated list with the following meta-data:
+\begin{itemize}
+\item fadv\_normal\_size
+\item fadv\_willneed\_size
+\item fadv\_dontneed\_size
+\item io\_access\_size
+\item queue\_size
+\item queue\_volume
+\end{itemize}
+It is up to the envisioned Mattock framework code-base to make sure the information is used for effective throtling, balancing the need for effective system resource and processing power usage with the mittigation of disk-cache-miss leveles.
 \subsection{module/<module-name>.register}
-If a process wants to register as an instance of a particular module, it should do a chdir to the directory designated by this symbolic link. On each readlink invocation a new instance representation is generated within MattockFS, so the link should only be dereferenced once by every module instance. The link generated refers to a unique per instance directory where the module instance can start accepting jobs and cooperating with the rest of the Mattock modules.
+If a process wants to register as an instance of a particular module, it should do a chdir to the directory designated by this symbolic link. On each readlink invocation a new instance representation is generated within MattockFS, so the link should only be dereferenced once by every module instance. The link generated refers to a unique per instance directory where the module instance can start accepting jobs and cooperating with the rest of the Mattock modules. A valid way to do that would be by changing the working directory to the path designated by this symlink.
 \subsection{instance/}
 Like the \emph{data} and \emph{module} directory, the \emph{instance} directory  has its access mask set to \emph{x} only (0x111). This means that no directory listing is allowed, nor are file or directory creation actions. The directory is meant as holding point for instance handle pseudo directories.
 \subsection{instance/<instance-handle>/}
 Each module instance has its own instance-handle directory. The  access mask for this directory is set to \emph{x} only (0x111).  This means that no directory listing is allowed, nor are file or directory creation actions. If the module queue is non empty, the directory contains a symbolic link entry \emph{<sort-pollicy>.accept} for any valid sort-pollicy. If the module is the \emph{kickstart} module, than instead of a possible \emph{<sort-pollicy>.accept} symlink, there is a \emph{kickstart} sym-link.
 \subsection{instance/<instance-handle>/<sort-pollicy>.accept}
+A normal module will attempt to dereference this symbolic link in order to assume responsibility over a job. If no job is available, than this link will not exist. Otherwise, the acto of reading the content of this symlink will pop a job from the current jobs queue, sorted in a way defined by the given sort-pollicy.
 \subsection{instance/<instance-handle>/kickstart}
+If the module is a kickstart, no job will normally ever be submitted to it. Instead the kickstart can start of a new tool-chain by asking for the creation of a completely new empty job by dereferecing this symbolic link.
 \section{job/}
-\subsection{job/<job-handle>
+\subsection{job/<job-handle>}
 \subsection{job/<job-handle>/data.all}
 \subsection{job/<job-handle>/data/}
 \subsection{job/<job-handle>/data/<carvpath-entity>.<extension>}
 \subsubsection{job/<job-handle>/data/<carvpath-entity>.<ext>::submit}
 \subsection{job/<job-handle>/newdata/}
-\subsection{job/<job-handle>/newdata/0+<size>.<extension>
+\subsection{job/<job-handle>/newdata/0+<size>.<extension>}
 \subsubsection{job/<job-handle>/newdata/0+<size>.<extension>::immutable\_path}
+
 \section{Framework use-cases}
 \subsection{Register as module}
 \subsection{Kickstarting an image file}
