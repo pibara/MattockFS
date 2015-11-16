@@ -1,0 +1,122 @@
+\chapter{File-system structure as API}
+\begin{itemize}
+\item \emph{data.all} -> data/<carvpath>.all 
+\item \emph{data/} 
+\begin{itemize}
+\item \emph{<carvpath>.<ext>} 
+\item \emph{<carvpath>/} 
+\begin{itemize}
+\item \emph{<carvpath>.<ext>} -> ../<flattened-carvpath>.<ext>
+\item \emph{<carvpath>} -> ../<flattened-carvpath>/
+\item \emph{<elevated-accessrights-capability>.<ext>}
+\end{itemize}
+\end{itemize}
+\item \emph{mattock/} 
+\begin{itemize}
+\item \emph{<modulename>.register} -> ../module\_instance/<module-instance-capability>/
+\end{itemize}
+\item \emph{module\_instance/} 
+\begin{itemize}
+\item \emph{<module-instance-capability>/}
+\begin{itemize}
+\item \emph{accept/}
+\begin{itemize}
+\item \emph{<sort-policy>.accept} -> ../../../data/<carvpath>/<elevated-accessrights-capability>.<ext>
+\begin{itemize}
+\item \emph{mattock.ctl}
+\item \emph{queue/}
+\begin{itemize}
+\item \emph{<sequence>.<ext>}
+\begin{itemize}
+\end{itemize}
+\end{itemize}
+\end{itemize}
+\section{The data.all symlink}
+This symbolic link is meant for human use only. It is a symbolic link to a carvpath that represents the current whole repository.
+If for example at a given point in time the total repository size is 3298534883328 bytes in size, than \emph{data.all} will be a symbolic link to \emph{data/0+3298534883328.all}. There is no specific meeta-data asociated with this directory entry.
+\section{The \emph{data} directory}
+The data directory is the core of the MattockFS interface. The directory itself has its access mask set to \emph{x} only (0x111). This means that no directory listing is allowed, nor are file or directory creation actions. Files that fall within the size range of the repository don'n need to be created though, they just are, and can be accessed.
+\subsection{CarvPath as read-only file}
+Any disignation of a carvpath that is valid within the bounds of the repository can be used to get a read-only pseudo file. To do so, a path of the form \emph{data/<valid-carvpath>.<any-extension>} can be used. These CarvPath files have a set of rad only extended attributes that we shall now discuss.
+\subsection{CarvPath MattockFS core meta-data}
+\begin{itemize}
+\item state : Can be :
+\begin{itemize}
+\item "non" : This CarvPath is not currently known to the batches sub-system. 
+\item "initializing" : This carvpath is currently being initialized by its creator module.
+\item "anycast" : This carvpath is currently is an anycast queue, waiting for a module to process it.
+\item "pending" : This carvpath has been accepted by a module but is not yet finished being processed.
+\item "migrating": A migration attempt to an other host is currently taking place.
+\end{itemize}
+\item fadv\_normal\_size: The size of the part of this entity marked as POSIX\_FADV\_NORMAL.
+\item fadv\_willneed\_size : The size of the part of this entity marked as POSIX\_FADV\_WILLNEED.
+\item fadv\_dontneed\_size : The size of the part of this entity marked as POSIX\_FADV\_DONTNEED.
+\item possibly\_incore\_size : The size of the part of this entity that has been read from or written to since batch creation.
+\item hash : If opportunistic hashing is active and complete, this string will hold the BLAKE2 hash of the data.
+\item hashoffset : If opportunistic hashing is active and incomplete, this attribute will hold the offset of the not yet hashed part of this entity.
+\item maxrefcount: The refcount of the fragment(s) contained in this entity with the highest refcount.
+\item minrefcount: The refcount of the fragment(s) contained in this entity with the lowest (possibly zero) refcount.
+\item mimetype: Mime-type currently set for this entity.
+\item ext: File extension currently used for this entity.
+\item framework\_state: State sting to be used by framework, for example for a FIVES-router-style rule-list state string. 
+\item module: The module this carvpath is currently bound to.
+\end{itemize}
+\subsection{CarvPath as multi-purpose directory}
+Without an extension, the CarvPath annotation in the \emph{data} directory refers to a sub directory with special purpose entries. Like the \emph{data} directory, this directory has mode \emph{0x111} and thus can't be listed. The following entry typed can be addressed though:
+\subsubsection{Linking back for sub entities}
+If an entry itself is a valid CarvPath, with or without an extension, than the entry is represented by a symbolic link back into the \emph{data} directory, carying the exact same extension. The file-system will flatten the carvpath into representing the proper data entity. For example: \emph{data/3145728+786432/1048576+65536.gif} will be a symlink to \emph{../4194304+65536.gif}.
+\subsubsection{Extended priviledge sparse capabilities}
+\begin{itemize}
+\item provenance cap
+\item construction cap
+\item migration cap
+\end{itemize}
+\subsection{hmm}
+If a module extracts for example uncompressed data from a compressed archive, that module will need to submit the data to the file-system. To do this a writable entity is needed. MattockFS supports pre-set size mutable entities. To access such an entity, an initialisation capability is needed. Ithis is a special unguessable string that starts with a capitol "I". A valid initialisation cap is a writable representation of the top level CarvPath entity. An invalid or no longer valid initialization cap will instantly become s symlink back to the top-level carvpath entity. Next to being writable, this representation of the entity also allows setting the following attributes:
+\begin{itemize}
+\item mimetype
+\item framework\_state
+\item module
+\end{itemize}
+\subsubsection{Provenance capabilities as file}
+Just as with the initialisation capability, a provenance capability can be used to access the underlying entities with special priviledges. In this case, the file itself is imutable. The three attributes mentioned before however are settable, and this capability designation, when used without an extention will become a special purpose directory. 
+\subsubsection{Provenance capabilities as directory}
+\subsubsection{Migrational capabilities}
+\subsubsection{Batch completion capabilities as file}
+\subsection{The \emph{mattock} directory for module instance registration}
+\begin{itemize}
+\item generic module instance cap
+\item kickstart module instance cap
+\item dsm module instance cap
+\item loadbalance module instance cap
+\end{itemize}
+
+\section{The \$MODULE directories}
+\subsection{A standard \$MODULE directory}
+\subsection{The \emph{kickstart} directory}
+\subsection{The \emph{dsm} directory}
+\subsection{The \emph{loadbalance} directory}
+\section{File-extensions}
+\section{Use of extended attributes}
+\subsection{The mattock.ctl files}
+\subsection{The standard carvpath files}
+\subsection{The capability files}
+\subsubsection{The data initialisation capability files}
+\subsubsection{The provenance capability files}
+\subsubsection{The migrational capability files}
+\subsubsection{The match completion capability files}
+\section{Framework use-cases}
+\subsection{Kickstarting an image file}
+\subsection{Closing the toolchain as data-store module}
+\subsubsection{Closing the toolchain for evidence data}
+\subsubsection{Closing the toolchain for evidence meta-data}
+\subsubsection{Closing the toolchain for evidence provenance meta-data}
+\subsection{Processing evidence data}
+\subsubsection{Processing evidence data, side-effects only}
+\subsubsection{Processing evidence-data and extracting meta-data}
+\subsubsection{Processing evidence-data and deriving a child from a sub-carvpath}
+\subsubsection{Processing evidence-data and deriving a child from extracted data}
+\subsection{Load-balancing}
+\subsubsection{Monitoring page-cache pressure and disk-cache miss rates} 
+\subsubsection{Migrating batches to other nodes}
+\subsubsection{Accepting batches from other nodes}
