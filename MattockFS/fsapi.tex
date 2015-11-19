@@ -14,12 +14,13 @@
   \item \emph{module/}
   \begin{itemize}
     \item \emph{<module-name>.register} $\Longrightarrow$ \$mp/instance/<instance-handle>
+    \item \emph{<module-name>.ctl}
   \end{itemize}
-  \item \emph{instance/}
+  \item \emph{instance}
   \begin{itemize}
     \item \emph{<instance-handle>/}
     \begin{itemize}
-      \item \emph{<sort-pollicy>.accept} $\Longrightarrow$ \$mp/job/<job-handle>
+      \item \emph{<set-select-policy>-<sort-policy>.accept} $\Longrightarrow$ \$mp/job/<job-handle>
     \end{itemize}
   \end{itemize}
   \item \emph{job}
@@ -29,7 +30,7 @@
       \item \emph{data.all} $\Longrightarrow$ \$mp/data/<carvpath-entity>.<ext>
       \item \emph{data/}
       \begin{itemize}
-        \item \emph{<carvpath-entity>.<ext>} $\Longrightarrow$ \$mp/data/<carvpath-entity>.<ext>
+        \item \emph{<carvpath-entity>.<ext>} $\Longrightarrow$ \$mp/job/<job-handle>
       \end{itemize}
       \item \emph{newdata/}
       \begin{itemize}
@@ -59,7 +60,7 @@ In order to minimize the number of OS context switches needed in framework opera
 \begin{itemize}
 \item "non" : This CarvPath is not currently known to the batches sub-system. 
 \item "initializing" : This carvpath is currently being initialized by its creator module.
-\item "anycast" : This carvpath is currently is an anycast queue, waiting for a module to process it.
+\item "anycast" : This carvpath is currently is an anycast set, waiting for a module to process it.
 \item "pending" : This carvpath has been accepted by a module but is not yet finished being processed.
 \item "migrating": A migration attempt to an other host is currently taking place.
 \end{itemize}
@@ -71,54 +72,213 @@ In order to minimize the number of OS context switches needed in framework opera
 \end{itemize}
 \subsection{data/<carvpath-entity>/}
 Without an extension, the CarvPath annotation in the \emph{data} directory refers to a sub directory with special purpose entries. Like the \emph{data} directory, this directory has mode \emph{0x111} and thus can't be listed. The directory provides the possibility to work with nested carvpath entities by means of flatening symbolic links, thus allowing CarvPath aware forensic tools to produce new valid CarvPath entities by designating a relative path and dereferencing the sysmbolic link.
-\subsection{data/<carvpath-entity/<carvpath-entity> and data/<carvpath-entity/<carvpath-entity>.<extension>}
-If an entry itself is a valid CarvPath, with or without an extension, than the entry is represented by a symbolic link back into the \emph{data} directory, carying the exact same extension. The file-system will flatten the carvpath into representing the proper data entity. For example: \emph{data/3145728+786432/1048576+65536.gif} will be a symlink to \emph{../4194304+65536.gif}.
+\subsubsection{The carvpath-entity string}
+A carvpath-entity string has a simple layout that is the same as the string layout used by the original CarvFS implementation. Note though that they are not 100\% compatible dueue to the use of a different hashing algoritm. A carvpath entity string comes in two forms. The full form consists of one or more carvpath-chunk strings separated by underscores. The reduced form consists of a capital character \emph{D} followed by a hexidecimal depiction of the BLAKE2 hash of the full version. This reduced variant is used only when the total size of the full version string would exceed a reasonable treshold. The carvpath-chunk strings also come in two variants. The sparse-chunk string and the fragment-chunk string. A sparse-chunk string consists of a capital \emph{S} character followed by the decimal depiction of the size of the chunk. A fragment chunk consists of the decimal depiction of the fragment offset within its parent entity, followed by a plus (+) character, followed by the decimal depiction of the size of the fragment.
+\subsection{data/<carvpath-entity/<carvpath-entity> and data/<carvpath-entity/ <carvpath-entity>.<ext>}
+If an entry itself is a valid CarvPath, with or without an extension, than the entry is represented by a symbolic link back into the \emph{data} directory, carying the exact same extension. The file-system will flatten the carvpath into representing the proper data entity. For example: \emph{data/3145728+786432/ 1048576+65536.gif} will be a symlink to \emph{../4194304+65536.gif}.
 \section{module/}
 The \emph{module} directory is meant as an API into the MatockFS anycast functionality. It allows a module to register as an instance of a given module by means of a simple \emph{chdir} command. Like the \emph{data} directory, the \emph{module} directory has its access mask set to \emph{x} only (0x111). This means that no directory listing is allowed, nor are file or directory creation actions.  
-\subsection{module/::throttle\_state}
-Before a module enters extracted entities or sub-entities into the file-system, the module needs to make sure the page-cache does not run the risk of being over-filled. To eliviate that problem, the file-system provides the throtle\_state meta data. This extended attributes provides a combination of file-system level stats and information about the queue for designated module. The content of this attribute is a semicolon seperated list with the following meta-data:
+\subsection{module/<module-name>.register}
+If a process wants to register as an instance of a particular module, it should do a chdir to the directory designated by this symbolic link. On each readlink invocation a new instance representation is generated within MattockFS, so the link should only be dereferenced once by every module instance. The link generated refers to a unique per instance directory where the module instance can start accepting jobs and cooperating with the rest of the Mattock modules. A valid way to do that would be by changing the working directory to the path designated by this symlink.
+\subsection{module/<module-name>.ctl}
+This zero size file is meant as handle for multiple module controll interfaces listed below.
+\subsubsection{module/<module-name>.ctl::weight}
+This mutable extended attribute defines the weight that is assigned to the anycast-set of this module for load-balancing purposes. The default value is 100. The weight is meant to represent the CPU/data-volume ratio in such a way that 100 represents the 100\% value of a default module. A very CPU intensive module may have a weight multiple orders of magnitude higher. The idea is that jobs for high weight values are good candidates for migration to other nodes in laod-balancing scenarios.
+\subsubsection{module/<module-name>.ctl::overflow}
+This mutable extended attribute defines the number of entities in the module's anycast-set that should not be considered candidated for migration. The default value is 10. By changing this value, the eagerness of the load-balancing process is tunable. We consider migration to be expensive and premature migration undesireable. It may be desireable to decrease the value of this attribute for high weight modules or to increase it for modules that are low on both IO operations and CPU load, for example modules that only extract limited meta-data from large archives.
+\subsection{module/<module-name>.ctl::throttle\_state}
+Before a module enters extracted entities or sub-entities into the file-system, the module needs to make sure the page-cache does not run the risk of being over-filled. To eliviate that problem, the file-system provides the throtle\_state meta data. This extended attributes provides a combination of file-system level stats and information about the anycast-set for designated module. The content of this attribute is a semicolon seperated list with the following meta-data:
 \begin{itemize}
 \item fadv\_normal\_size
 \item fadv\_willneed\_size
 \item fadv\_dontneed\_size
 \item io\_access\_size
-\item queue\_size
-\item queue\_volume
+\item set\_size
+\item set\_volume
 \end{itemize}
 It is up to the envisioned Mattock framework code-base to make sure the information is used for effective throtling, balancing the need for effective system resource and processing power usage with the mittigation of disk-cache-miss leveles.
-\subsection{module/<module-name>.register}
-If a process wants to register as an instance of a particular module, it should do a chdir to the directory designated by this symbolic link. On each readlink invocation a new instance representation is generated within MattockFS, so the link should only be dereferenced once by every module instance. The link generated refers to a unique per instance directory where the module instance can start accepting jobs and cooperating with the rest of the Mattock modules. A valid way to do that would be by changing the working directory to the path designated by this symlink.
 \subsection{instance/}
 Like the \emph{data} and \emph{module} directory, the \emph{instance} directory  has its access mask set to \emph{x} only (0x111). This means that no directory listing is allowed, nor are file or directory creation actions. The directory is meant as holding point for instance handle pseudo directories.
 \subsection{instance/<instance-handle>/}
-Each module instance has its own instance-handle directory. The  access mask for this directory is set to \emph{x} only (0x111).  This means that no directory listing is allowed, nor are file or directory creation actions. If the module queue is non empty, the directory contains a symbolic link entry \emph{<sort-pollicy>.accept} for any valid sort-pollicy. If the module is the \emph{kickstart} module, than instead of a possible \emph{<sort-pollicy>.accept} symlink, there is a \emph{kickstart} sym-link.
-\subsection{instance/<instance-handle>/<sort-pollicy>.accept}
-A normal module will attempt to dereference this symbolic link in order to assume responsibility over a job. If no job is available, than this link will not exist. Otherwise, the acto of reading the content of this symlink will pop a job from the current jobs queue, sorted in a way defined by the given sort-pollicy.
-\subsection{instance/<instance-handle>/kickstart}
+Each module instance has its own instance-handle directory. The  access mask for this directory is set to \emph{x} only (0x111).  This means that no directory listing is allowed, nor are file or directory creation actions. If the module anycast-set is non empty, the directory contains a symbolic link entry \emph{set-select-policy>-<sort-policy>.accept} for any valid que-select/sort policy combination. If the module is the \emph{kickstart} module, than instead of the regular symlink, there is a \emph{kickstart} sym-link that can be used to actively create a new job rather than fatching one from a worker perspective.
+\subsection{instance/<set-select-policy>-<instance-handle>/<sort-policy>.accept}
+A module-instance should attempt to dereference this symbolic link in order to assume responsibility over a job. If no job is available, than this link will not exist. Otherwise, the act of reading the content of this symlink will pop a job from the current module anycast-set, sorted in a way defined by the given sort-policy. For normal modules the set-select-policy is meaningless an can be any alphanumeric token. For a loadbalance module though, the value of this pollicy is used to determine what anycast-set to seek a job from.
+\subsubsection{The sort-policy string}
+In our fact-finding study on OCFA timing we discovered that the priority queueing used by OCFA was largely ineffective. In MattockFS we no longer have priority queues, we have sortable sets instead. So rather than asking an Anycast functionality for the next highest priority entity in the queue, we ask for the first entity in the set according to a given sorting pollicy. MattockFS implements a number of choiches to the framework layer in the form of a policy string. The pollicy string consists of a number of consecutive letters that represent set-member properties that can be used for sorting. The next letter from such a string is only used in case of equality according to previous letters. In the end, the entity to be returned will be the one at the start of the resulting sorted set. The sort-policy string can consist of the following letters;
+\begin{itemize}
+\item \emph{R} : Prefer entities that contain fragment chunks that have the highest currently existing reference-count. The idea would be that processing these entities might have the greatest opportunistic-hashing impact if processing this entity could make the opportunistic hashing of more entities progress.
+\item \emph{r} : Prefer entities that contain fragment chunks that have a reference-count of one. The idea would be that processing this entity will allow the refcount=1 chunks to be marked as no longer needed, thus reducing page-cache pressure.
+\item \emph{O} : Prefer entities that contain a fragment chunk with the lowest possible fragment offset. The idea would be that opportunistic hashing is sequential and not processing this entity first might intervene with its opportunistic hashing later on.
+\item \emph{H} : Prefer entities that contain a fragment chunk with the lowest possible hashing offset parent reference. The idea would be that opportunistic hashing is sequential and not processing this entity first might intervene with its opportunistic hashing later on. The difference with the O lies in the fact that here the data that has already been opportunistically hashed is ignored.
+\item \emph{D} : Prefer entities with the lowest density of chunks with the highest currently existing reference-count. The idea is that processing entities containing much highest-refcount fragments are less likely to contribute much to freeing up page-cache in the short run.
+\item \emph{d} : Prefer entities with the lowest density of chunks with  a reference-count other than one. The idea would be that processing these first will free up page-cache.
+\item \emph{W} : Prefer entities with the lowest weighted average reference count. The idea would be that processing these first would contribute to freeing page-cache in the least amount of steps.
+\item \emph{S} : Prefer entities with the lowest total size. The idea is that small entities take up relatively much in-process state for the file-system and can be handled quite quickly.
+\end{itemize}
+Note that different sorting pollicies may be beneficial depending on the current page-cache pressure caused by MattockFS\@.
+It might also be different depending on the specific module access patterns and/or system load characteristics. Further research is needed to determine the momt appropriate It is up to the framework, not the file-system to choose the proper sorting pollicy 
+\subsubsection{The set selection pollicy string}
+For normal modules the concept of anycast-set selection is not relevant as those modules only access the set bound to their module name. For the load-balancer however, the next job may come from any module and a set selection pollicy is needed. This policy is partially related to the \emph{weight} and \emph{overflow} extended attributes of \emph{module/<modulename>.register}, settable attributes that plays a part in selecting the set. Like the sort-policy string, the set-selection-policy string consists of a number of ordered characters used in sorting, but now it's the sets themselves that are sorted. Other than for the sort-pollicy string, the sorting will favor the largest value rather than the lowest. It is important to note that the \emph{overflow} extended attribute defines a minimum value of entities in a module's set that is not to result in any migrational activity and thus modules staying below this trehshold will not be part of the sorting and selecting process.
+\begin{itemize}
+\item \emph{S} : Prefer the set holding the highest number of entities. This pollicy should be prefered for CPU related load-balancing.
+\item \emph{V} : Prefer the set with the highest total entity size. This pollicy might be prefered for page-cache over-pressure related load-balancing.
+\item \emph{D} : Prever the set with the highest entitycount/volume ratio, what is the same as the lowest average entity size. 
+\item \emph{W} : Prefer the the set with the highest weight module (as set with the \emph{weight} extended attribute.
+\item \emph{C} : Prefer the set with the highest weight*entitycount/volume number. This should represent small yet CPU intensive jobs that should be very much suitable for migration. 
+\end{itemize} 
+We suggest that the \emph{C} should be a sane default, and given that this string is ignored for regular modules may be uses for those as well.  
+
 If the module is a kickstart, no job will normally ever be submitted to it. Instead the kickstart can start of a new tool-chain by asking for the creation of a completely new empty job by dereferecing this symbolic link.
 \section{job/}
+This directory is meant to provide the JOB related API functionality for module instances. Like the \emph{data} and \emph{module} directory, the \emph{job} directory has its access mask set to \emph{x} onlu (0x111). So again no directory listing is allowed, nor ar any file or directory creation actions.
 \subsection{job/<job-handle>}
+The job level directory structure somewhat resembles that of the top level directory of the file-system. There is a \emph{data.all} symlink and a \emph{data} directory, yet their meaning are slightly different. The goal of this directory is to provide for an ephemeral envinronment for processing a single job by a single module instance. Once a module-instance is done with the job, the directory should be unlinked by the module-instance. Before unlinking, the directory provides facilities for accessing the evidence-data, deriving designatable and extracted sub-entities, linking meta-data entities and provisioning the next hop in the routing process. 
 \subsection{job/<job-handle>/data.all}
+This symbolic link references the read-only job input-data inside of the main CarvFS style repository \emph{data} directory.
+\subsubsection{job/<job-handle>/data.all::routing\_info}
+By default this extended attribute will be set to '\emph{dsm};' for the kickstart and all regular modules and to ';' for the load-balancer and the dsm. 
+The extended attribute is made-up out of two parts separated by a semicolon. The first part is the name of the next module that is to receive this entity as job. The second part is meant to contain a state variable that could be used by a distributed FIVES-OCFA-router style routing facility within the computer-forensic framework. The idea of the FIVES-OCFA-router was that an entity traversed a routing rule-list based on meta-data artifects. When after being processed by an other module the entity returned at the router functionality, the router state string was used to find the location in the rule-list to continue the processing.
+A module may update this extended attribute to a valid module name and router state.
+\subsubsection{job/<job-handle>/data.all::submit\_info}
+If a job wasn't fetched from any anycast-set but was created by a kickstart or in the process of deriving sub-entities, the job is new and needs to be submitted as such rather than just having the routing\_info set appropriately.  Submitting a new job requires a small set of MattockFS-level meta-data to be set once, next to the meta-data needed for routing purposes. This extended attribute must be made (by the module instance) to contain the following meta-data:
+\begin{itemize}
+\item \emph{next-module}
+\item \emph{router-state}
+\item \emph{mime-type}
+\item \emph{file-extention}
+\end{itemize}
+As with the submit\_info attribute, the values are placed as semicolon separated tokens into a single string.
 \subsection{job/<job-handle>/data/}
-\subsection{job/<job-handle>/data/<carvpath-entity>.<extension>}
-\subsubsection{job/<job-handle>/data/<carvpath-entity>.<ext>::submit}
+Like the top level \emph{data} directory, this directory is unlistable.
+\subsection{job/<job-handle>/data/<carvpath-entity>.ext}
+Dereferencing this symbolic link will return a new linked child job from a sub-carvpath of the input data of the current job.
 \subsection{job/<job-handle>/newdata/}
-\subsection{job/<job-handle>/newdata/0+<size>.<extension>}
-\subsubsection{job/<job-handle>/newdata/0+<size>.<extension>::immutable\_path}
-
+Again this is an unlistable directory. 
+\subsection{job/<job-handle>/newdata/0+<size>.<ext>}
+Opening this file in rw mode will allocate a chunk of data of the given size within our archive. This data chunk will be mutable untill the \emph{as\_job} attribute is read. This facility can be used either for adding extracted evidence-data to the archive, for example the content of a file within a zip file, or for creating the accompanying meta-data.
+\subsubsection{job/<job-handle>/newdata/0+<size>.<ext>::as\_job}
+Reading this attribute will mark the new entity as immutable and will return a new job-handle link for the just created data.
 \section{Framework use-cases}
-\subsection{Register as module}
+Now that we have described the basic lay-out of our MattockFS user-space file-system interface, we should have a look at how we expect the framework that uses MattockFS to make use of the different parts. We shall describe this in a number of short incremental use cases.
+\subsection{Register as module-instance}
+When a module starts up, it needs to register as a module. We consider the lifetime of the module-instance to idealy be equal to the lifetime of the module instance process. We shall use a module named \emph{antiword} as example. To register a module, this module needs to do the equivalent of:
+\begin{itemize}
+\item cd \$mp/module/antiword.register
+\end{itemize} 
+This command will follow the symlink of the regestering action that is comprised by the dereferencing of the symbolic link, and will have the module running in the module-instance specific working directory.
+\subsection{Shutting down as module-instance}
+When a module instance shuts down, it's the responsibility of the framework to nofify MattockFS that all module-instance related state may be dropped in an appropriate way. To unregister a module instance , the framework is expected to do the equivalent of:
+\begin{itemize}
+\item rmdir \$mp/module/antiword.register
+\end{itemize}
 \subsection{Kickstarting an image file}
+A registered kickstart process running in its own working directory that needs to kickstart an EWF file would take the following list of actions:
+\begin{itemize}
+\item Get a new top-level job handle (\$topjob) : readlink \@./C-S.accept
+\item Determine the size of the image data by querying the EWF file. For our example, the size could be 549755813888 bytes long.
+\item Open the file \$topjob/newdata/0+549755813888.dd and copy all content data from the EWF file to that file, than close the file.
+\item Create a sub-job for our evidence-data (\$datajob): getfattr -n as\_job \$topjob/newdata/0+549755813888.dd
+\item Determine routing and magic info and submit the data: setfattr -h -n submit\_info -v \'mmls;114;x-mattock/disk-image;dd\' \$datajob/data.all
+\item Determine the size of our meta-data (712 bytes in our example), and open the meta-data file \$topjob/newdata/0+712.meta. Than write the meta-data to the file and close the file.
+\item Create a sub-job for our evidence-meta-data (\$metajob): getfattr -n as\_job \$topjob/newdata/0+712.meta
+\item Determine routing and magic info and submit the data: setfattr -h -n submit\_info -v \'dsm;;x-mattock/framework-meta;meta\' \$metajob/data.all
+\item Let the file-system know we are done with the job without setting routing\_info: rmdir \$topjob
+\end{itemize}
 \subsection{Closing the toolchain as data-store module}
+the DSM and load-balancer are the odd one out in that the jobs they process should not be forwarded any further.
+\begin{itemize}
+\item Get the next job handle (\$job) : readlink \@./C-SO.accept
+\item Fetch the path state and process that data: getfattr -n path\_state \$job/data.all
+\item Process any meta-data content in a way in sync with the content mime-type.
+\item Mark the job as complete by setting next module and routing state to empty string:  setfattr -h -n routing\_info -v ';' \$datajob/data.all
+\end{itemize}
 \subsubsection{Closing the toolchain for evidence data}
-\subsubsection{Closing the toolchain for evidence meta-data}
+There is no actual need for evidence-data to be routed beyond the last data processing module that accesses its content.
+\begin{itemize}
+\item Get the next job handle (\$job) : readlink \@./C-SO.accept
+\item Fetch the path state and initialize the router info with that: getfattr -n path\_state \$job/data.all
+\item Process any evidence-data content in a way in sync with the content mime-type and extract the meta-data.
+\item Determine the size of our meta-data (1834 bytes in our example), and open the meta-data file \$job/newdata/0+1834.meta. Than write the meta-data to the file and close the file
+\item Create a sub-job for our evidence-meta-data (\$metajob): getfattr -n as\_job \$job/newdata/0+1834.meta
+\item Determine routing and magic info and submit the data: setfattr -h -n submit\_info -v \'dsm;;x-mattock/framework-meta;meta\' \$metajob/data.all
+\item Mark the job as complete by setting next module and routing state to empty string:  setfattr -h -n routing\_info -v ';' \$job/data.all
+\end{itemize}
+\subsubsection{Closing the toolchain for migrational purposes}
+\begin{itemize}
+\item Regular load-balancing operation determines migration is desired.
+\item Fetch a job according to the current weight and overflow settings: readlink \@./C-dS.accept
+\item Fetch the entity state: getfattr -n path\_state \$job/data.all
+\item Communicate the migratable path and path\_state string with the peer and make sure the job has been continued by peer.
+\item Discontinue on this node: setfattr -h -n routing\_info -v \';\' \$job/data.all
+\end{itemize}
 \subsubsection{Closing the toolchain for evidence provenance meta-data}
+Closing the toolchain for anything with a mime-type other than x-mattock/provenance-meta will result in the implicit creation of a provenance meta-data entity that is placed into the dsm anycast-set. No different processing is needed for closing the tool-chain for this provenance meta-data.
 \subsection{Processing evidence data}
+The main task of regular modules is the processing of evidence data.
 \subsubsection{Processing evidence data, side-effects only}
+Some modules such as a full-text indexer won't produce any new jobs and are considered to be side-effect only modules.
+\begin{itemize}
+\item Get the next job handle (\$job) : readlink \@./C-SO.accept
+\item Fetch the path state and initialize the routing state: getfattr -n path\_state \$job/data.all
+\item Process the evidence-data in \$job/data.all
+\item Determine the next module with the router logic and update the routing info: setfattr -h -n submit\_info -v \'mmls;114;x-mattock/disk-image;dd\' \$datajob/data.all
+\end{itemize}
 \subsubsection{Processing evidence-data and extracting meta-data}
+Other modules extract meta-data from the evidence-data.
+\begin{itemize}
+\item Get the next job handle (\$job) : readlink \@./C-SO.accept
+\item Fetch the path state and initialize the routing state: getfattr -n path\_state \$job/data.all
+\item Process the evidence-data in \$job/data.all and extract the relevant meta-data.
+\item Determine the size of our meta-data (712 bytes in our example), and open the meta-data file \$topjob/newdata/0+712.meta. Than write the meta-data to the file and close the file.
+\item Create a sub-job for our evidence-meta-data (\$metajob): getfattr -n as\_job \$job/newdata/0+712.meta
+\item Determine routing and magic info and submit the data: setfattr -h -n submit\_info -v \'dsm;;x-mattock/framework-meta;meta\' \$metajob/data.all
+\item Determine the next module for our evidence-data using the state and router logic and update the routing info: setfattr -h -n submit\_info -v \'mmls;114;x-mattock/disk-image;dd\' \$datajob/data.all
+\end{itemize}
 \subsubsection{Processing evidence-data and deriving a child from a sub-carvpath}
+Other modules could locate a sub-entity inside of the input-entity and submit that as new job.
+\begin{itemize}
+\item Get the next job handle (\$job) : readlink \@./C-SO.accept
+\item Fetch the path state and initialize the routing state: getfattr -n path\_state \$job/data.all
+\item Process the evidence-data in \$job/data.all and extract the relevant sub-data carvpath as job: readlink \$job/data/64512+45097156608.dd
+\item Determine mime-type and extention for the sub-entity and submit that with the router state: setfattr -h -n submit\_info -v \'tskfs;19;x-mattock/ext4-file-system;dd\' \$cpjob/data.all
+\item Mark the current evidence-data as fully processed: rmdir \$job
+\end{itemize}
 \subsubsection{Processing evidence-data and deriving a child from extracted data}
+In some cases the parent entity is encoded and the child thus can not be designated with a carvpath yet.
+\begin{itemize}
+\item Get the next job handle (\$job) : readlink \@./C-SO.accept
+\item Fetch the path state and initialize the routing state: getfattr -n path\_state \$job/data.all
+\item Determine the space needed for the extractable data and open a target file as \$job/newdata/0+45097156608.img
+\item Extract the data into the new pseudo-file and create a new job: readlink \$job/data/0+45097156608.img
+\item Determine mime-type and extention for the sub-entity and submit that with the router state: setfattr -h -n submit\_info -v \'tskfs;19;x-mattock/ext4-file-system;dd\' \$extractedjob/data.all
+\item Mark the current evidence-data as fully processed: rmdir \$job
+\end{itemize}
+\subsection{Extracting a tree}
+It is important to realize that the provenance tree and the logical tree don't need to mirror each-other. It is suggested that the framework doesn't generate spurious meta-data entities in an attempt to make these tree structures match up. Instead, the logical graph relations between the different child entities of the parent should be consolidated in a limited set of child meta-data entities. The processing of these entities is described in the above use cases.
 \subsection{Load-balancing}
-\subsubsection{Monitoring page-cache pressure and disk-cache miss rates} 
+MattockFS itself runs on a single server, but if the underlying file-system is shared or distributed and a distributed key/value store is used for longpath storage, than a load-balancer module may migrate jobs to other systems with access to the same data.
+\subsubsection{Monitoring page-cache pressure} 
+Before a load-balancing module can know if migration is oportune, the load-balancer on each system needs to monitor system load. Part of that load is seperate from MattockFS, such as the total CPU usage, while other monitoring info can be queried from MattockFS.
+\begin{itemize}
+\item Get the throtling info: getfattr -n throttle\_state: getfattr -h -n thottle\_state \$mp/module/loadbalancer.ctl
+\item If the FS-wide throttle\_state combined with other load factors results in a severe load inbalance between Mattock servers, an overloaded node can accept a job from one of its queues and migrate it to a node with a lower system-load.
+\end{itemize}
+\subsubsection{Setting module parameters for load balancing}
+After a node determines it needs to offload to an other node, it will need to pick the \emph{cheapest} transfers in terms of cost/benefit. To do this, the framework or load-balancer will need to communicate per-module stats with the file-system.
+\begin{itemize}
+\item Gather information on processing speed and CPU load for each running module from the framework.
+\item Set per-module weight information: setfattr -h -n weight -v 9000 \$mp/module/ocr.ctl
+\item Set per-module overflow information: setfattr -h -n overflow -v 3 \$mp/module/ocr.ctl
+\end{itemize}
 \subsubsection{Migrating batches to other nodes}
+This use-case was described above as \emph{Closing the toolchain as data-store module}.
 \subsubsection{Accepting batches from other nodes}
+Accepting batches from an other node is basically a carvpath based kickstart with transfered router-state.
+\begin{itemize}
+\item Receive carvpath and path\_state from other node.
+\item Get a new top-level job handle (\$topjob) : readlink \@./C-S.accept
+\item Create a sub-job for our evidence-data (\$datajob): getfattr -n as\_job \$topjob/data/\$carvpath
+\item Determine routing and magic info from the transfered path\_info and submit: setfattr -h -n submit\_info -v \'ocr;77;application/pdf;pdf\' \$datajob/data.all
+\item Let the file-system know we are done with the job without setting routing\_info: rmdir \$topjob
+\item Communicate with peer that job-transfer has succeeded and job has been accepted.
+\end{itemize}
