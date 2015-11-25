@@ -2,68 +2,54 @@
 import fuse
 import stat
 import errno 
+import ranrom
+import re
 
 fuse.fuse_python_api = (0, 2)
 
-class MattockFSCore:
-  def datacapsize(self,handle):
-    return 18181874
-  def getThottleInfo(self):
-    return (8000000,0,900000000,1689990,12,19000)
-  def validjobcap(self,cap):
-    return True
+try:
+    from pyblake2 import blake2b
+except ImportError:
+    import sys
+    print("")
+    print("\033[93mERROR:\033[0m Pyblake2 module not installed. Please install blake2 python module. Run:")
+    print("")
+    print("    sudo pip install pyblake2")
+    print("")
+    sys.exit()
+
+class Repository:
+  def __init__(self):
+    pass
   def validcarvpath(self,cp):
     return True
-  def repositorySize(self):
-    return 12345678
-  def getJobCarvPath(self,jobcap):
-    return "data/10000+23456"
-  def getJobFileExtension(self,jobcap):
-    return "gif"
   def FlattenCarvPath(self,basecp,subcp):
     return "8756+1744"
-  def registerNewInstance(self,module):
-    return "boo47lntpq91t"
-  def unregisterInstance(self,handle):
-    return
   def carvpathSize(self,cp):
-    return 2345
-  def validModuleName(self,modname):
-    return True
-  def validinstancecap(self,cap):
-    return True
-  def validnewdatacap(self,cap):
-    return True
-  def validSelectPolicy(self,pol):
-    return True
-  def validSortPolicy(self,pol):
-    return True
-  def acceptJob(self,instancecap):
-    return "J47nPqWptT"
-  def createSubJobFromCarvpath(self,jobcap,carvpath):
-    return "Sub759BfFQ"
+    return 2345 
+  def full_archive_size(self):
+    return 1234567890
+
+class CarvpathBox:
+  def __init__(self,rep):
+    self.rep=rep
+  def getPathState(self,cp):
+    return ("INCOMPLETE",1821)
+  def anycast_best(self,modulename,anycast,sort_policy,select_policy);
+    return anycast.keys()[0] #FIXME
+  def anycast_set_volume(self,anycast):
+    return 1000 #FIXME
+  def anycast_best_modules(self,allmodules,moduleset,letter):
+    return (moduleset.modules[moduleset.modules.keys()[0])
+  def throttle_state(self):
+    return (10,0,0,0,0,0)
+  def getPathThottleInfo(self,cp):
+    return (8000000,0,900000000,1689990,12,19000)
+
+
+class MattockFSCore:
   def getPathState(self,cp):
     return "anycast;antiword;application/ms-word;doc;INCOMPLETE;4096"
-  def getPathThottleInfo(self,cp): 
-    return (8000000,0,900000000,1689990,12,19000)
-  def getModuleWeight(self,module):
-    return 100
-  def getModuleOverflow(self,module):
-    return 10
-  def setModuleWeight(self,module,weight):
-    return
-  def setModuleOverflow(self,module,overflow):
-    return
-  def getModuleThrottleState(self,module):
-    return (8000000,0,900000000,1689990,12,19000)
-  def getJobRoutingInfo(self,jobcap):
-    return "dsm;"
-  def getJobSubmitInfo(self,jobcap):
-    return "dsm;;application/octetstream;data"
-  def setJobRoutingInfo(self,jobcap,nextmodule,routerstate):
-    return
-  def setJobSubmitInfo(self,jobcap,nextmodule,routerstate,mimetype,ext):
-    return
   def createSubJobFromMutable(self,job,mutable):
     return "JOBjobJOB"
   def validExtension(self,ext):
@@ -82,6 +68,160 @@ class MattockFSCore:
     return
   def createMutableChildEntity(self,handle,ival):
     return
+  def getTopThrottleInfo(self):
+    return (10,0,0,0,0,0)
+    
+class ModuleInstance:
+  def __init__(self,modulename,instancehandle,module):
+    self.modulename=modulename
+    self.instancehandle=instancehandle
+    self.module=module
+    self.lastjobno=0
+    self.currentjob=None
+    self.currentjobhandle=None
+    self.select_policy="S"
+    self.sort_policy="HrdS"
+  def active(self):
+    return self.currentjob != None
+  def teardown(self):
+    if self.currentjob != None:
+      self.currentjob.commit()
+  def unregister(self):
+    module.unregister(self.instancehandle)
+  def accept_job(self):
+    if self.currentjob != None:
+      self.currentjob.commit()
+    self.currentjob=self.anycast.pop(self.modulename,self.select_policy,self.sort_policy)
+    if self.currentjob != None:
+      jobno=self.lastjobno
+      self.lastjobno += 1
+      jobhandle = "J" + blake2b(hex(jobno)[2:].zfill(16),digest_size=32,key=self.instancehandle).hexdigest()
+    
+class Job:
+  def __init__(self,jobhandle,modulename,carvpath,router_state,mime_type,file_extension):
+    self.jobhandle=jobhandle
+    self.modulename=modulename
+    self.carvpath=carvpath
+    self.router_state=router_state
+    self.mime_type=mime_type
+    self.file_extension=file_extension
+    self.routing_info=""
+    self.submit_info=[]
+
+class ModuleState:
+  def __init__(self,modulename,strongname,allmodules):
+    self.name=modulename
+    self.instances={}
+    self.anycast={}
+    self.lastinstanceno=0
+    self lastjobno=0
+    self.secret=strongname
+    self.weight=100              #rw extended attribute
+    self.overflow=10             #rw extended attribute
+    self.allmodules=allmodules
+  def register_instance(self):   #read-only (responsibility accepting) extended attribute.
+    instanceno=self.lastinstanceno
+    self.lastinstanceno += 1
+    rval = "I" + blake2b("I" + hex(instanceno)[2:].zfill(16),digest_size=32,key=self.secret).hexdigest()
+    self.instances[rval]=ModuleInstance(self.name,rval,module)
+    self.allmodules.instances[rval]=self.instances[rval]
+  def unregister(self,handle):
+    if handle in self.instances:
+      self.instances[handle].teardown()
+      del self.instances[handle]
+      del self.allmodules.instances[rval]
+  def reset(self):             #writable extended attribute (setting to one results in reset)
+    handles=self.instances.keys()
+    for handle in handles:
+      self.unregister(handle)
+  def instance_count(self):   #read-only extended attribute
+    return len(self.instances)
+  def throttle_info(self):    #read-only extended attribute
+    set_size=len(self.anycast)
+    set_volume=anycast_set_volume(anycast)
+    return (set_size,set_volume)
+  def anycast_add(self,carvpath,router_state,mime_type,file_extension):
+    jobno=self.lastjobno
+    self.lastjobno += 1
+    jobhandle = "J" + blake2b("J" + hex(jobno)[2:].zfill(16),digest_size=32,key=self.secret).hexdigest()
+    self.anycast[jobhandle]=Job(jobhandle,self.name,carvpath,router_state,mime_type,file_extension)
+    self.allmodules.path_state[carvpath]="anycast"
+    self.allmodules.path_module[carvpath]=self.name
+  def anycast_pop(self,sort_policy,select_policy="S"):
+    if self.name != "loadbalance":
+      best=anycast_best(self.name,anycast,sort_policy)
+      self.allmodules[best]=self.anycast.pop(best)
+      self.allmodules.path_state[carvpath]="pending"
+    else:
+      best=self.allmodules.selectmodule(select_policy).anycast_pop(sort_policy,select_policy)
+      self.allmodules.path_state[carvpath]="migrating"
+    self.allmodules.path_module[carvpath]=self.name
+    return best
+
+class ModulesState:
+  def __init__(self):
+    self.modules={}
+    self.instances={}
+    self.jobs={}
+    self.newdata={}
+    self.path_state={} 
+    self.path_module={}
+    random.seed()
+    self.rumpelstiltskin=''.join(random.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") for _ in range(0,32))
+    self.re_select = re.compile(r'^[SVDWC]{1,5}$')
+    self.re_sort = re.compile(r'^[RrOHDdWS]{1,6}$')    
+  def __getitem__(self,key):
+    if not key in self.modules:
+      strongname = "M" + key,digest_size=32,key=self.secret).hexdigest()
+      self.modules[key]=ModuleState(key,strongnamei,self)
+    return self.modules[key]
+  def getinstance(self,handle):
+    if handle in self.instances:
+      return self.instances[handle]
+    return None
+  def getjob(self,handle);
+    if handle in self.jobs:
+      return self.jobs[handle]
+    return None
+  def getnewdata(self,handle):
+    if handle in self.newdata:
+      return self.newdata[handle]
+    return None
+  def selectmodule(self,select_policy);
+    moduleset=self.modules.keys()
+    if len(moduleset) == 0:
+      return None
+    if len(moduleset) == 1:
+      return moduleset[0]
+    for letter in select_policy:
+      moduleset=anycast_best_modules(self,moduleset,letter)
+      if len(moduleset) == 1:
+        return moduleset[0]
+    return moduleset[0]
+  def validmodulename(self,modulename);
+    if len(modulename) < 2:
+      return False
+    if len(modulename) > 40:
+      return False
+    if not modulename.isalpha() and  modulename.islower():
+      return False
+    return True
+  def validinstancecap(self,handle):
+    if handle in self.instances:
+      return True
+    return False
+  def validjobcap(self,handle):
+    if handle in self.jobs:
+      return True
+    return False  
+  def validnewdatacap(self,handle):
+    if handle in self.newdata:
+      return True
+    return False
+  def validSelectPolicy(self,pol):
+    return bool(self.re_select.search(pol))
+  def validSortPolicy(self,pol): 
+    return bool(self.re_sort.search(pol))
 
 def defaultstat():
   st = fuse.Stat()
@@ -101,6 +241,9 @@ class MattockFS(fuse.Fuse):
     def __init__(self,dash_s_do,version,usage):
       super(MattockFS, self).__init__(version=version,usage=usage,dash_s_do=dash_s_do)
       self.core=MattockFSCore()
+      self.ms=ModulesState()
+      self.rep=Repository()
+      self.box=CarvpathBox(self.rep)
     def getattr(self, path):
         print "getattr" , path
         st = defaultstat()
@@ -116,7 +259,7 @@ class MattockFS(fuse.Fuse):
         if tokens[0] in ("data","module","instance","job","newdata","mattockfs.ctl"):
           if len(tokens) == 1:
             if tokens[0] == "mattockfs.ctl":
-              st.st_mode = symlinkmode
+              st.st_mode = regfilemode
               return st
             st.st_mode = nolistdirmode
             return st
@@ -125,20 +268,20 @@ class MattockFS(fuse.Fuse):
               lastpart=tokens[1].split(".")
               if len(lastpart) > 2:
                 return -errno.ENOENT #More than one dot in filename, not valid for $mp/data/ entries.
-              if self.core.validcarvpath(lastpart[0]):
+              if self.rep.validcarvpath(lastpart[0]):
                 if len(lastpart) == 2:
                   st.st_mode = regfilemode
-                  st.st_size = self.core.carvpathSize(lastpart[0])
+                  st.st_size = self.rep.carvpathSize(lastpart[0])
                   print "Returning regular file stat"
                   return st
                 st.st_mode = nolistdirmode
                 return st
               return -errno.ENOENT      #Invalid carvpath
-            if len(tokens) == 3 and self.core.validcarvpath(tokens[1]):
+            if len(tokens) == 3 and self.rep.validcarvpath(tokens[1]):
               lastpart=tokens[2].split(".")
               if len(lastpart) > 2:
                 return -errno.ENOENT #More than one dot in filename, not valid for $mp/data/<carvpath>/
-              if self.core.validcarvpath(lastpart[0]):
+              if self.rep.validcarvpath(lastpart[0]):
                 st.st_mode = symlinkmode
                 return st
               return -errno.ENOENT #Invalid carvpath
@@ -151,24 +294,24 @@ class MattockFS(fuse.Fuse):
           handle = lastpart[0]
           extension = lastpart[1]
           if tokens[0] == "module":
-            if extension == "ctl" and self.core.validModuleName(handle):
-              st.st_mode = symlinkmode
+            if extension == "ctl" and self.ms.validmodulename(handle):
+              st.st_mode = regfilemode
               return st
             return -errno.ENOENT
           if tokens[0] == "instance":
-            if extension == "ctl" and self.core.validinstancecap(handle):
-              st.st_mode = symlinkmode
+            if extension == "ctl" and self.ms.validinstancecap(handle):
+              st.st_mode = regfilemode
               return st
             return -errno.ENOENT
           if tokens[0] == "job":
-            if extension == "ctl" and self.core.validjobcap(handle):
-              st.st_mode = symlinkmode
+            if extension == "ctl" and self.ms.validjobcap(handle):
+              st.st_mode = regfilemode
               return st
             return -errno.ENOENT
           if tokens[0] == "newdata":
-            if extension == "dat" and self.core.validnewdatacap(handle):
+            if extension == "dat" and self.ms.validnewdatacap(handle):
               st.st_mode = rwfilemode
-              st.st_size = self.core.datacapsize(handle)
+              st.st_size = self.ms.getnewdata(handle).size
               return st
             return -errno.ENOENT
         else:
@@ -189,16 +332,16 @@ class MattockFS(fuse.Fuse):
             lastpart=tokens[1].split(".")
             if len(lastpart) > 2:
               return -errno.ENOENT #More than one dot in filename, not valid for $mp/data/ entries.
-            if self.core.validcarvpath(lastpart[0]):
+            if self.rep.validcarvpath(lastpart[0]):
               if len(lastpart) == 2:
                 return -errno.ENOTDIR #$mp/data/<carvpath>.<ext> is a file, not a dir
               return -errno.EPERM     #$mp/data/<carvpath> is an unlistable dir.
             return -errno.ENOENT      #Invalid carvpath
-          if len(tokens) == 3 and self.core.validcarvpath(tokens[1]):
+          if len(tokens) == 3 and self.rep.validcarvpath(tokens[1]):
             lastpart=tokens[2].split(".")
             if len(lastpart) > 2:
               return -errno.ENOENT #More than one dot in filename, not valid for $mp/data/<carvpath>/
-            if self.core.validcarvpath(lastpart[0]):
+            if self.rep.validcarvpath(lastpart[0]):
               return -errno.ENOTDIR #$mp/data/<carvpath>/<carvpath>[.<ext>] is a symlink, not a dir.
             return -errno.ENOENT #Invalid carvpath
           return -errno.ENOENT #No entities that deep in the data dir.
@@ -210,19 +353,19 @@ class MattockFS(fuse.Fuse):
         handle = lastpart[0]
         extension = lastpart[1]
         if tokens[0] == "module":
-          if extension == "ctl" and self.core.validModuleName(handle):
+          if extension == "ctl" and self.ms.validmodulename(handle):
              return -errno.ENOTDIR
           return -errno.ENOENT
         if tokens[0] == "instance":
-          if extension == "ctl" and self.core.validinstancecap(handle):
+          if extension == "ctl" and self.ms.validinstancecap(handle):
             return -errno.ENOTDIR
           return -errno.ENOENT
         if tokens[0] == "job": 
-          if extension == "ctl" and self.core.validjobcap(handle):
+          if extension == "ctl" and self.ms.validjobcap(handle):
             return -errno.ENOTDIR
           return -errno.ENOENT
         if tokens[0] == "newdata":
-          if extension == "dat" and self.core.validnewdatacap(handle):
+          if extension == "dat" and self.ms.validnewdatacap(handle):
             return -errno.ENOTDIR
           return -errno.ENOENT
         return -errno.ENOENT
@@ -241,7 +384,7 @@ class MattockFS(fuse.Fuse):
           return -errno.EINVAL #root dir is no symlink
         tokens=path[1:].split("/")
         if len(tokens) == 1 and tokens[0] == "mattockfs.ctl":
-          return "./data/0+" + str(self.core.repositorySize()) + ".dd"
+          return "./data/0+" + str(box_full_archive_size()) + ".dd"
         if len(tokens) == 1:
           if  tokens[0] in ("data","module","instance","job","newdata"):
             return -errno.EINVAL #dir not symlink
@@ -251,11 +394,11 @@ class MattockFS(fuse.Fuse):
             lastpart=tokens[1].split(".")
             if len(lastpart) > 2:
               return -errno.ENOENT
-            if self.core.validcarvpath(lastpart[0]):
+            if self.rep.validcarvpath(lastpart[0]):
               return -errno.EINVAL  #dir or file, not a symlink
             return -errno.ENOENT
-          if len(tokens) == 3 and self.core.validcarvpath(tokens[1]):
-            if not self.core.validcarvpath(tokens[1]):
+          if len(tokens) == 3 and self.rep.validcarvpath(tokens[1]):
+            if not self.rep.validcarvpath(tokens[1]):
               return -errno.ENOENT
             lastpart=tokens[2].split(".")
             if len(lastpart) > 2:
@@ -263,7 +406,7 @@ class MattockFS(fuse.Fuse):
             ext=""
             if len(lastpart) == 2:
               ext = "." + lastpart[1]
-            flattened=self.core.FlattenCarvPath(tokens[1],lastpart[0])
+            flattened=self.rep.FlattenCarvPath(tokens[1],lastpart[0])
             if flattened != None:
               return "../" + flattened + ext
             return -errno.ENOENT
@@ -276,19 +419,19 @@ class MattockFS(fuse.Fuse):
         handle = lastpart[0]
         extension = lastpart[1]
         if tokens[0] == "module":
-          if extension == "ctl" and self.core.validModuleName(handle):
-            return "../instance/" + self.core.registerNewInstance(handle) + ".ctl"
+          if extension == "ctl" and self.ms.validmodulename(handle):
+            return "../instance/" + self.ms[handle].register_instance() + ".ctl"
           return -errno.ENOENT
         if tokens[0] == "instance":
-          if extension == "ctl" and self.core.validinstancecap(handle):
-            return "../job/" + self.core.acceptJob(handle) + ".ctl"
+          if extension == "ctl" and self.ms.validinstancecap(handle):
+            return "../job/" + self.ms.getinstance(handle).accept_job() + ".ctl"
           return -errno.ENOENT
         if tokens[0] == "job":
-          if extension == "ctl" and self.core.validjobcap(handle):
-            return "../" + self.core.getJobCarvPath(handle)
+          if extension == "ctl" and self.ms.validjobcap(handle):
+            return "../" + self.ms.getjob(handle).carvpath
           return -errno.ENOENT
         if tokens[0] == "newdata":
-          if extension == "dat" and self.core.validnewdatacap(handle):
+          if extension == "dat" and self.ms.validnewdatacap(handle):
             return -errno.ENODATA
         return -errno.ENOENT      
 
@@ -297,9 +440,10 @@ class MattockFS(fuse.Fuse):
       if path == "/":
         return []
       tokens=path[1:].split("/")
+      print tokens
       if len(tokens) == 1:
         if tokens[0] == "mattockfs.ctl":
-          return ["throttle\_info"]
+          return ["user.throttle_info","user.full_archive"]
         if tokens[0] in ("data","module","instance","job","newdata"):
           return []
         else:
@@ -311,18 +455,18 @@ class MattockFS(fuse.Fuse):
           lastpart=tokens[1].split(".")
           if len(lastpart) > 2:
             return -errno.ENOENT
-          if self.core.validcarvpath(lastpart[0]):
+          if self.rep.validcarvpath(lastpart[0]):
             if len(lastpart) == 1:
               return []
-            return ["user.path_state","throttle\_info"]
+            return ["user.path_state","user.throttle_info"]
           return -errno.ENOENT
         if len(tokens) == 3:
-          if not self.core.validcarvpath(tokens[1]):
+          if not self.rep.validcarvpath(tokens[1]):
             return -errno.ENOENT
           lastpart=tokens[2].split(".")
           if len(lastpart) > 2:
             return -errno.ENOENT
-          flattened=self.core.FlattenCarvPath(tokens[1],lastpart[0])
+          flattened=self.rep.FlattenCarvPath(tokens[1],lastpart[0])
           if flattened != None:
             return []
           return -errno.ENOENT
@@ -335,31 +479,32 @@ class MattockFS(fuse.Fuse):
       handle = lastpart[0]
       extension = lastpart[1]
       if tokens[0] == "module":
-        if extension == "ctl" and self.core.validModuleName(handle):
-          return ["user.weight","user.overflow","user.throttle_info"]
+        if extension == "ctl" and self.ms.validmodulename(handle):
+          return ["user.weight","user.overflow","user.throttle_info","user.instance_count","user.reset","user.register_instance"]
         return -errno.ENOENT
       if tokens[0] == "instance":
-        if extension == "ctl" and self.core.validinstancecap(handle):
-          return ["user.sort_policy","user.select_policy","user.registered"]
+        if extension == "ctl" and self.ms.validinstancecap(handle):
+          return ["user.sort_policy","user.select_policy","user.unregister","user.active","accept_job"]
         return -errno.ENOENT
       if tokens[0] == "job":
-        if extension == "ctl" and self.core.validjobcap(handle):
-          return ["user.routing_info","user.derive_child_entity","user.create_mutable_child_entity","user.last_child_submit_info"]
+        if extension == "ctl" and self.ms.validjobcap(handle):
+          return ["user.routing_info","user.derive_child_entity","user.create_mutable_child_entity","user.set_child_submit_info","user.active_child","user.job_carvpath"]
         return -errno.ENOENT
       if tokens[0] == "newdata":
-        if extension == "dat" and self.core.validnewdatacap(handle):
+        if extension == "dat" and self.ms.validnewdatacap(handle):
           return []
         return -errno.ENOENT
       return -errno.ENOENT
 
-    def getxattr(self, path, name, position=0):
+    def getxattr(self, path, name, size):
+      print "getxattr",path,name,size
       if path == "/":
         return -errno.ENODATA
       tokens=path[1:].split("/")
       if len(tokens) == 1:
         if tokens[0] == "mattockfs.ctl":
-          if name == "throttle_info":
-            return ";".join(map(lambda x: str(x),self.core.getThrottleInfo(handle)))
+          if name == "user.throttle_info":
+            return ";".join(map(lambda x: str(x),self.core.getTopThrottleInfo()))
           return -errno.ENODATA
         if tokens[0] in ("data","module","instance","job","newdata"):
           return -errno.ENODATA
@@ -372,7 +517,7 @@ class MattockFS(fuse.Fuse):
           lastpart=tokens[1].split(".")
           if len(lastpart) > 2:
             return -errno.ENOENT
-          if self.core.validcarvpath(lastpart[0]):
+          if self.rep.validcarvpath(lastpart[0]):
             if len(lastpart) == 1:
               return -errno.ENODATA
             if name == "user.path_state":
@@ -383,12 +528,12 @@ class MattockFS(fuse.Fuse):
               return -errno.ENODATA
           return -errno.ENOENT
         if len(tokens) == 3:
-          if not self.core.validcarvpath(tokens[1]):
+          if not self.rep.validcarvpath(tokens[1]):
             return -errno.ENOENT
           lastpart=tokens[2].split(".")
           if len(lastpart) > 2:
             return -errno.ENOENT
-          flattened=self.core.FlattenCarvPath(tokens[1],lastpart[0])
+          flattened=self.rep.FlattenCarvPath(tokens[1],lastpart[0])
           if flattened != None:
             return -errno.ENODATA
           return -errno.ENOENT
@@ -401,28 +546,28 @@ class MattockFS(fuse.Fuse):
       handle = lastpart[0]
       extension = lastpart[1]
       if tokens[0] == "module":
-        if extension == "ctl" and self.core.validModuleName(handle):
+        if extension == "ctl" and self.ms.validmodulename(handle):
           if name == "user.weight":
-            return str(self.core.getModuleWeight(handle))
+            return str(self.ms[handle].weight)
           if name == "user.overflow":
-            return str(self.core.getModuleOverflow(handle))
+            return str(self.ms[handle].overflow)
           if name == "user.throttle_info":
-            return ";".join(map(lambda x: str(x),self.core.getModuleThrottleState(handle)))
+            return ";".join(map(lambda x: str(x),self.ms[handle].throttle_info()))
           return -errno.ENODATA 
         return -errno.ENOENT
       if tokens[0] == "instance":
-        if extension == "ctl" and self.core.validinstancecap(handle):
+        if extension == "ctl" and self.ms.validinstancecap(handle):
           if name == "user.sort_policy":
             return self.core.getInstanceSortPollicy(handle)
           if name == "user.select_policy":
             return self.core.getInstanceSelectPollicy(handle)
-          if name == "user.registered":
-            return "1"
+          if name == "user.unregister":
+            return "0"
       if tokens[0] == "job":
-        if extension == "ctl" and self.core.validjobcap(handle):
+        if extension == "ctl" and self.ms.validjobcap(handle):
           if name == "user.routing_info":
-            return self.core.getJobRoutingInfo(handle)  
-          if name == "user.last_child_submit_info":
+            return self.ws.jobs[handle].routing_info
+          if name == "user.set_child_submit_info":
             return ""
           if name == "user.derive_child_entity":
             return ""
@@ -431,7 +576,7 @@ class MattockFS(fuse.Fuse):
           return -errno.ENODATA
         return  -errno.ENOENT
       if tokens[0] == "newdata":
-        if extension == "dat" and self.core.validnewdatacap(handle):
+        if extension == "dat" and self.ms.validnewdatacap(handle):
           return -errno.ENODATA
         return  -errno.ENOENT
 
@@ -454,7 +599,7 @@ class MattockFS(fuse.Fuse):
           lastpart=tokens[1].split(".")
           if len(lastpart) > 2:
             return -errno.ENOENT
-          if self.core.validcarvpath(lastpart[0]):
+          if self.rep.validcarvpath(lastpart[0]):
             if len(lastpart) == 1:
               return -errno.ENODATA
             if name == "user.path_state":
@@ -465,12 +610,12 @@ class MattockFS(fuse.Fuse):
               return -errno.ENODATA
           return -errno.ENOENT
         if len(tokens) == 3:
-          if not self.core.validcarvpath(tokens[1]):
+          if not self.rep.validcarvpath(tokens[1]):
             return -errno.ENOENT
           lastpart=tokens[2].split(".")
           if len(lastpart) > 2:
             return -errno.ENOENT
-          flattened=self.core.FlattenCarvPath(tokens[1],lastpart[0])
+          flattened=self.rep.FlattenCarvPath(tokens[1],lastpart[0])
           if flattened != None:
             return -errno.ENODATA
           return -errno.ENOENT
@@ -483,14 +628,14 @@ class MattockFS(fuse.Fuse):
       handle = lastpart[0]
       extension = lastpart[1]
       if tokens[0] == "module":
-        if extension == "ctl" and self.core.validModuleName(handle):
+        if extension == "ctl" and self.ms.validmodulename(handle):
           if name == "user.weight":
             ival=0
             try:
               ival = int(val)
             except:
               return -errno.EINVAL
-            self.core.setModuleWeight(lastpart[0],ival)
+            self.ms[lastpart[0]].weight=int(ival)
             return 0
           if name == "user.overflow":
             ival=0
@@ -498,48 +643,48 @@ class MattockFS(fuse.Fuse):
               ival = int(val)
             except:
               return -errno.EINVAL
-            self.core.setModuleOverflow(lastpart[0],ival)
+            self.ms[lastpart[0]].overflow=int(ival)
             return 0
           if name == "user.throttle_info":
             return -errno.EPERM
           return -errno.ENODATA
         return -errno.ENOENT
       if tokens[0] == "instance":
-        if extension == "ctl" and self.core.validinstancecap(handle):
+        if extension == "ctl" and self.ms.validinstancecap(handle):
           if name == "user.sort_policy":
-            if self.core.validSortPolicy(val):
+            if self.ms.validSortPolicy(val):
               self.core.setInstanceSortPollicy(handle,val)
             return 0
           if name == "user.select_policy":
-            if self.core.validSelectPolicy(val):
+            if self.ms.validSelectPolicy(val):
               self.core.setInstanceSelectPollicy(handle,val)
             return 0
-          if name == "user.registered":
-            if val == "0":
-              self.core.unregisterInstance(handle)
+          if name == "user.unregister":
+            if val == "1":
+              self.ms[handle].unregister(handle)
             return 0
           return -errno.ENODATA
         return -errno.ENOENT
       if tokens[0] == "job":
-        if extension == "ctl" and self.core.validjobcap(handle):
+        if extension == "ctl" and self.ms.validjobcap(handle):
           if name == "user.routing_info":
             valtokens=val.split(";")
             if len(valtokens) !=2:
               return -errno.EINVAL
-            if self.core.validModuleName(valtokens[0]):
-              self.core.setJobRoutingInfo(valtokens[0],valtokens[1])
+            if self.ms.validmodulename(valtokens[0]):
+              self.ws.jobs[handle].routing_info = valtokens[1]
             return 0
-          if name == "user.last_child_submit_info":
+          if name == "user.set_child_submit_info":
             valtokens=val.split(";")
             if len(valtokens) !=4:
               return -errno.EINVAL
-            if self.core.validModuleName(valtokens[0]) and self.core.validMimeType(valtokens[2]) and self.core.validExtension(valtokens[3]):
-              self.core.setJobSubmitInfo(valtokens[0],valtokens[1],valtokens[2],valtokens[3])
+            if self.ms.validmodulename(valtokens[0]) and self.core.validMimeType(valtokens[2]) and self.core.validExtension(valtokens[3]):
+              self.ms.jobs[handle].submit_info=valtokens
               return 0
             else:
               return -errno.EINVAL
           if name == "user.derive_child_entity":
-            if self.core.validcarvpath(val):
+            if self.rep.validcarvpath(val):
               self.core.deriveChildEntity(handle,val)
             return 0
           if name == "user.create_mutable_child_entity":
@@ -553,7 +698,7 @@ class MattockFS(fuse.Fuse):
           return -errno.ENODATA
         return -errno.ENOENT
       if tokens[0] == "newdata":
-        if extension == "dat" and self.core.validnewdatacap(handle):
+        if extension == "dat" and self.ms.validnewdatacap(handle):
           return -errno.ENODATA
         return -errno.ENOENT
 
