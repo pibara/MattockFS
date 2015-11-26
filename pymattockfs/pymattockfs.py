@@ -2,7 +2,7 @@
 import fuse
 import stat
 import errno 
-import ranrom
+import random
 import re
 
 fuse.fuse_python_api = (0, 2)
@@ -21,12 +21,6 @@ except ImportError:
 class Repository:
   def __init__(self):
     pass
-  def validcarvpath(self,cp):
-    return True
-  def FlattenCarvPath(self,basecp,subcp):
-    return "8756+1744"
-  def carvpathSize(self,cp):
-    return 2345 
   def full_archive_size(self):
     return 1234567890
 
@@ -35,16 +29,23 @@ class CarvpathBox:
     self.rep=rep
   def getPathState(self,cp):
     return ("INCOMPLETE",1821)
-  def anycast_best(self,modulename,anycast,sort_policy,select_policy);
+  def anycast_best(self,modulename,anycast,sort_policy,select_policy):
     return anycast.keys()[0] #FIXME
   def anycast_set_volume(self,anycast):
     return 1000 #FIXME
   def anycast_best_modules(self,allmodules,moduleset,letter):
-    return (moduleset.modules[moduleset.modules.keys()[0])
+    return (moduleset.modules[moduleset.modules.keys()[0]])
   def throttle_state(self):
     return (10,0,0,0,0,0)
   def getPathThottleInfo(self,cp):
     return (8000000,0,900000000,1689990,12,19000)
+  def validcarvpath(self,cp):
+    return True
+  def flatten(self,basecp,subcp):
+    return "8756+1744"
+  def carvpathSize(self,cp):
+    return 2345
+
 
 
 class MattockFSCore:
@@ -114,7 +115,7 @@ class ModuleState:
     self.instances={}
     self.anycast={}
     self.lastinstanceno=0
-    self lastjobno=0
+    self.lastjobno=0
     self.secret=strongname
     self.weight=100              #rw extended attribute
     self.overflow=10             #rw extended attribute
@@ -138,7 +139,7 @@ class ModuleState:
     return len(self.instances)
   def throttle_info(self):    #read-only extended attribute
     set_size=len(self.anycast)
-    set_volume=anycast_set_volume(anycast)
+    set_volume=self.box.anycast_set_volume(anycast)
     return (set_size,set_volume)
   def anycast_add(self,carvpath,router_state,mime_type,file_extension):
     jobno=self.lastjobno
@@ -149,7 +150,7 @@ class ModuleState:
     self.allmodules.path_module[carvpath]=self.name
   def anycast_pop(self,sort_policy,select_policy="S"):
     if self.name != "loadbalance":
-      best=anycast_best(self.name,anycast,sort_policy)
+      best=self.box.anycast_best(self.name,anycast,sort_policy)
       self.allmodules[best]=self.anycast.pop(best)
       self.allmodules.path_state[carvpath]="pending"
     else:
@@ -172,14 +173,14 @@ class ModulesState:
     self.re_sort = re.compile(r'^[RrOHDdWS]{1,6}$')    
   def __getitem__(self,key):
     if not key in self.modules:
-      strongname = "M" + key,digest_size=32,key=self.secret).hexdigest()
+      strongname = "M" + blake2b("M" +key,digest_size=32,key=self.secret).hexdigest()
       self.modules[key]=ModuleState(key,strongnamei,self)
     return self.modules[key]
   def getinstance(self,handle):
     if handle in self.instances:
       return self.instances[handle]
     return None
-  def getjob(self,handle);
+  def getjob(self,handle):
     if handle in self.jobs:
       return self.jobs[handle]
     return None
@@ -187,18 +188,18 @@ class ModulesState:
     if handle in self.newdata:
       return self.newdata[handle]
     return None
-  def selectmodule(self,select_policy);
+  def selectmodule(self,select_policy):
     moduleset=self.modules.keys()
     if len(moduleset) == 0:
       return None
     if len(moduleset) == 1:
       return moduleset[0]
     for letter in select_policy:
-      moduleset=anycast_best_modules(self,moduleset,letter)
+      moduleset=self.box.anycast_best_modules(self,moduleset,letter)
       if len(moduleset) == 1:
         return moduleset[0]
     return moduleset[0]
-  def validmodulename(self,modulename);
+  def validmodulename(self,modulename):
     if len(modulename) < 2:
       return False
     if len(modulename) > 40:
@@ -223,19 +224,111 @@ class ModulesState:
   def validSortPolicy(self,pol): 
     return bool(self.re_sort.search(pol))
 
-def defaultstat():
+STAT_MODE_DIR = stat.S_IFDIR |stat.S_IRUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH| stat.S_IXOTH
+STAT_MODE_DIR_NOLIST = stat.S_IFDIR | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+STAT_MODE_LINK = stat.S_IFLNK |stat.S_IRUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH| stat.S_IXOTH
+STAT_MODE_FILE = stat.S_IFREG |stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH |stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH
+STAT_MODE_FILE_RO = stat.S_IFREG |stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH
+
+def defaultstat(mode=STAT_MODE_DIR_NOLIST,size=0):
   st = fuse.Stat()
   st.st_blksize= 512
-  st.st_mode = stat.S_IRUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH| stat.S_IXOTH
+  st.st_mode = mode
   st.st_nlink = 1
   st.st_uid = 0
   st.st_gid = 0
-  st.st_size = 0
+  st.st_size = size
   st.st_blocks = 0
   st.st_atime =  0
   st.st_mtime = 0
   st.st_ctime = 0
   return st
+
+class TopDir:
+  def getattr(self):
+    return defaultstat()
+  def opendir(self):
+    return 0
+  def readdir(self):
+    yield fuse.Direntry("mattockfs.ctl")
+    yield fuse.Direntry("data")
+    yield fuse.Direntry("module")
+    yield fuse.Direntry("instance")
+    yield fuse.Direntry("job")
+    yield fuse.Direntry("newdata")
+  def readlink(self):
+    return -errno.EINVAL
+class NoList:
+  def getattr(self):
+    return  defaultstat(STAT_MODE_DIR_NOLIST)
+  def opendir(self):
+    return -errno.EPERM
+  def readlink(self):
+    return -errno.EINVAL
+class TopCtl:
+  def __init__(self,fs):
+    self.fs=fs
+  def getattr(self):
+    return  defaultstat(STAT_MODE_FILE_RO)
+  def opendir(self):
+    return -errno.ENOTDIR
+  def readlink(self):
+    return -errno.EINVAL
+class ModuleCtl:
+  def __init__(self,ms,mod):
+    self.ms=ms
+    self.mod=mod
+  def getattr(self):
+    return  defaultstat(STAT_MODE_FILE_RO)
+  def opendir(self):
+    return -errno.ENOTDIR
+  def readlink(self):
+    return -errno.EINVAL
+class InstanceCtl:
+  def __init__(self,instance):
+    self.instance=instance
+  def getattr(self):
+    return  defaultstat(STAT_MODE_FILE_RO)
+  def opendir(self):
+    return -errno.ENOTDIR
+  def readlink(self):
+    return -errno.EINVAL
+class JobCtl:
+  def __init__(self,job):
+    self.job=job
+  def getattr(self):
+    return  defaultstat(STAT_MODE_FILE_RO)
+  def opendir(self):
+    return -errno.ENOTDIR
+  def readlink(self):
+    return -errno.EINVAL
+class NewDataCtl:
+  def __init__(self,newdata):
+    self.newdata=newdata
+  def getattr(self):
+    return  defaultstat(STAT_MODE_FILE_RO)
+  def opendir(self):
+    return -errno.ENOTDIR
+  def readlink(self):
+    return -errno.EINVAL
+class CarvPathFile:
+  def __init__(self,carvpath,rep):
+    pass
+  def getattr(self):
+    return  defaultstat(STAT_MODE_FILE_RO)
+  def opendir(self):
+    return -errno.ENOTDIR
+  def readlink(self):
+    return -errno.EINVAL
+class CarvPathLink:
+  def __init__(self,link):
+    self.link = "../" + link
+  def getattr(self):
+    return  defaultstat(STAT_MODE_LINK)
+  def opendir(self):
+    return -errno.ENOTDIR
+  def readlink(self):
+    return self.link
 
 class MattockFS(fuse.Fuse):
     def __init__(self,dash_s_do,version,usage):
@@ -244,197 +337,86 @@ class MattockFS(fuse.Fuse):
       self.ms=ModulesState()
       self.rep=Repository()
       self.box=CarvpathBox(self.rep)
-    def getattr(self, path):
-        print "getattr" , path
-        st = defaultstat()
-        normaldirmode = stat.S_IFDIR |stat.S_IRUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH| stat.S_IXOTH
-        nolistdirmode = stat.S_IFDIR | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
-        symlinkmode = stat.S_IFLNK |stat.S_IRUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH| stat.S_IXOTH
-        regfilemode = stat.S_IFREG |stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH
-        rwfilemode = stat.S_IFREG |stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH |stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH
+      self.topdir=TopDir()
+      self.nolistdir=NoList()
+      self.topctl=TopCtl(self)
+    def parsepath(self,path):
         if path == "/":
-          st.st_mode = normaldirmode
-          return st
+          return self.topdir
         tokens=path[1:].split("/")
+        if len(tokens) > 3:
+          return None
         if tokens[0] in ("data","module","instance","job","newdata","mattockfs.ctl"):
+          if len(tokens) >2 and tokens[0] != "data":
+            return None
           if len(tokens) == 1:
             if tokens[0] == "mattockfs.ctl":
-              st.st_mode = regfilemode
-              return st
-            st.st_mode = nolistdirmode
-            return st
+              return self.topctl
+            return self.nolistdir
           if tokens[0] == "data":
+            lastpart=tokens[1].split(".")
+            if len(lastpart) > 2:
+              return None
+            topcp=lastpart[0]
+            if not self.box.validcarvpath(topcp):
+              return None
             if len(tokens) == 2:
-              lastpart=tokens[1].split(".")
+              if len(lastpart) == 2:
+                return CarvPathFile(topcp,self.rep)
               if len(lastpart) > 2:
-                return -errno.ENOENT #More than one dot in filename, not valid for $mp/data/ entries.
-              if self.rep.validcarvpath(lastpart[0]):
-                if len(lastpart) == 2:
-                  st.st_mode = regfilemode
-                  st.st_size = self.rep.carvpathSize(lastpart[0])
-                  print "Returning regular file stat"
-                  return st
-                st.st_mode = nolistdirmode
-                return st
-              return -errno.ENOENT      #Invalid carvpath
-            if len(tokens) == 3 and self.rep.validcarvpath(tokens[1]):
-              lastpart=tokens[2].split(".")
-              if len(lastpart) > 2:
-                return -errno.ENOENT #More than one dot in filename, not valid for $mp/data/<carvpath>/
-              if self.rep.validcarvpath(lastpart[0]):
-                st.st_mode = symlinkmode
-                return st
-              return -errno.ENOENT #Invalid carvpath
-            return -errno.ENOENT #No entities that deep in the data dir.
-          if len(tokens) > 2:
-            return -errno.ENOENT #No entities that deep.
+                  return None
+              return self.nolistdir
+            #must be 3 now
+            lastpart=tokens[2].split(".")
+            if len(lastpart) > 2: 
+              return None
+            link=self.box.flatten(topcp,lastpart[0])
+            if link != None:
+              return CarvPathLink(link)
+            return None
           lastpart=tokens[1].split(".")
           if len(lastpart) !=2:
-            return -errno.ENOENT
+            return None
           handle = lastpart[0]
           extension = lastpart[1]
-          if tokens[0] == "module":
-            if extension == "ctl" and self.ms.validmodulename(handle):
-              st.st_mode = regfilemode
-              return st
-            return -errno.ENOENT
-          if tokens[0] == "instance":
-            if extension == "ctl" and self.ms.validinstancecap(handle):
-              st.st_mode = regfilemode
-              return st
-            return -errno.ENOENT
-          if tokens[0] == "job":
-            if extension == "ctl" and self.ms.validjobcap(handle):
-              st.st_mode = regfilemode
-              return st
-            return -errno.ENOENT
-          if tokens[0] == "newdata":
-            if extension == "dat" and self.ms.validnewdatacap(handle):
-              st.st_mode = rwfilemode
-              st.st_size = self.ms.getnewdata(handle).size
-              return st
-            return -errno.ENOENT
-        else:
+          if extension == "ctl":
+            if tokens[0] == "module":
+              if self.ms.validmodulename(handle):
+                return ModuleCtl(self.ms,handle)
+              return None
+            if tokens[0] == "instance":
+              if self.ms.validinstancecap(handle):
+                return InstanceCtl(self.ms.instances[handle])
+              return None
+            if tokens[0] == "job":
+              if self.ms.validjobcap(handle):
+                return JobCtl(self.ms.jobs[handle])
+              return None
+            return None
+          if extension == "dat" and  tokens[0] == "newdata" and self.ms.validnewdatacap(handle):
+            return NewDataCtl(self.ms.newdata[handle])
+          return None
+        
+    def getattr(self, path):
+        node=self.parsepath(path)
+        if node == None:
           return -errno.ENOENT
-
+        return node.getattr()
     def opendir(self, path):
-        if path == "/":
-          return 0 #Root dir is a regular listable directory.
-        tokens=path[1:].split("/")
-        if not tokens[0] in ("data","module","instance","job","newdata","mattockfs.ctl"):
+        node=self.parsepath(path)
+        if node == None:
           return -errno.ENOENT
-        if len(tokens) == 1:
-          if tokens[0] == "mattockfs.ctl":
-            return -errno.ENOTDIR   #$mp/mattockfs.ctl is a symlink not a dir.
-          return -errno.EPERM #$mp/data , $mp/module, $mp/instance and $mp/job ar unlistable directories
-        if tokens[0] == "data":
-          if len(tokens) == 2:
-            lastpart=tokens[1].split(".")
-            if len(lastpart) > 2:
-              return -errno.ENOENT #More than one dot in filename, not valid for $mp/data/ entries.
-            if self.rep.validcarvpath(lastpart[0]):
-              if len(lastpart) == 2:
-                return -errno.ENOTDIR #$mp/data/<carvpath>.<ext> is a file, not a dir
-              return -errno.EPERM     #$mp/data/<carvpath> is an unlistable dir.
-            return -errno.ENOENT      #Invalid carvpath
-          if len(tokens) == 3 and self.rep.validcarvpath(tokens[1]):
-            lastpart=tokens[2].split(".")
-            if len(lastpart) > 2:
-              return -errno.ENOENT #More than one dot in filename, not valid for $mp/data/<carvpath>/
-            if self.rep.validcarvpath(lastpart[0]):
-              return -errno.ENOTDIR #$mp/data/<carvpath>/<carvpath>[.<ext>] is a symlink, not a dir.
-            return -errno.ENOENT #Invalid carvpath
-          return -errno.ENOENT #No entities that deep in the data dir.
-        if len(tokens) > 2:
-            return -errno.ENOENT #No entities that deep.
-        lastpart=tokens[1].split(".")
-        if len(lastpart) !=2:
-          return -errno.ENOENT
-        handle = lastpart[0]
-        extension = lastpart[1]
-        if tokens[0] == "module":
-          if extension == "ctl" and self.ms.validmodulename(handle):
-             return -errno.ENOTDIR
-          return -errno.ENOENT
-        if tokens[0] == "instance":
-          if extension == "ctl" and self.ms.validinstancecap(handle):
-            return -errno.ENOTDIR
-          return -errno.ENOENT
-        if tokens[0] == "job": 
-          if extension == "ctl" and self.ms.validjobcap(handle):
-            return -errno.ENOTDIR
-          return -errno.ENOENT
-        if tokens[0] == "newdata":
-          if extension == "dat" and self.ms.validnewdatacap(handle):
-            return -errno.ENOTDIR
-          return -errno.ENOENT
-        return -errno.ENOENT
-
+        return node.opendir()
     def readdir(self, path, offset):
-        if path == "/":
-          yield fuse.Direntry("mattockfs.ctl")
-          yield fuse.Direntry("data")
-          yield fuse.Direntry("module")
-          yield fuse.Direntry("instance")         
-          yield fuse.Direntry("job")
-          yield fuse.Direntry("newdata")
-
+        node=self.parsepath(path)
+        if node == None:
+          return -errno.ENOENT
+        return node.readdir()
     def readlink(self,path):
-        if path == "/":
-          return -errno.EINVAL #root dir is no symlink
-        tokens=path[1:].split("/")
-        if len(tokens) == 1 and tokens[0] == "mattockfs.ctl":
-          return "./data/0+" + str(box_full_archive_size()) + ".dd"
-        if len(tokens) == 1:
-          if  tokens[0] in ("data","module","instance","job","newdata"):
-            return -errno.EINVAL #dir not symlink
+        node=self.parsepath(path)
+        if node == None:
           return -errno.ENOENT
-        if tokens[0] == "data":
-          if len(tokens) == 2:
-            lastpart=tokens[1].split(".")
-            if len(lastpart) > 2:
-              return -errno.ENOENT
-            if self.rep.validcarvpath(lastpart[0]):
-              return -errno.EINVAL  #dir or file, not a symlink
-            return -errno.ENOENT
-          if len(tokens) == 3 and self.rep.validcarvpath(tokens[1]):
-            if not self.rep.validcarvpath(tokens[1]):
-              return -errno.ENOENT
-            lastpart=tokens[2].split(".")
-            if len(lastpart) > 2:
-              return -errno.ENOENT
-            ext=""
-            if len(lastpart) == 2:
-              ext = "." + lastpart[1]
-            flattened=self.rep.FlattenCarvPath(tokens[1],lastpart[0])
-            if flattened != None:
-              return "../" + flattened + ext
-            return -errno.ENOENT
-          return -errno.ENOENT
-        if len(tokens) > 2:
-          return -errno.ENOENT
-        lastpart=tokens[1].split(".")
-        if len(lastpart) !=2:
-          return -errno.ENOENT
-        handle = lastpart[0]
-        extension = lastpart[1]
-        if tokens[0] == "module":
-          if extension == "ctl" and self.ms.validmodulename(handle):
-            return "../instance/" + self.ms[handle].register_instance() + ".ctl"
-          return -errno.ENOENT
-        if tokens[0] == "instance":
-          if extension == "ctl" and self.ms.validinstancecap(handle):
-            return "../job/" + self.ms.getinstance(handle).accept_job() + ".ctl"
-          return -errno.ENOENT
-        if tokens[0] == "job":
-          if extension == "ctl" and self.ms.validjobcap(handle):
-            return "../" + self.ms.getjob(handle).carvpath
-          return -errno.ENOENT
-        if tokens[0] == "newdata":
-          if extension == "dat" and self.ms.validnewdatacap(handle):
-            return -errno.ENODATA
-        return -errno.ENOENT      
-
+        return node.readlink()
     def listxattr(self, path,huh):
       print "listxattr", path, huh
       if path == "/":
@@ -455,18 +437,18 @@ class MattockFS(fuse.Fuse):
           lastpart=tokens[1].split(".")
           if len(lastpart) > 2:
             return -errno.ENOENT
-          if self.rep.validcarvpath(lastpart[0]):
+          if self.box.validcarvpath(lastpart[0]):
             if len(lastpart) == 1:
               return []
             return ["user.path_state","user.throttle_info"]
           return -errno.ENOENT
         if len(tokens) == 3:
-          if not self.rep.validcarvpath(tokens[1]):
+          if not self.box.validcarvpath(tokens[1]):
             return -errno.ENOENT
           lastpart=tokens[2].split(".")
           if len(lastpart) > 2:
             return -errno.ENOENT
-          flattened=self.rep.FlattenCarvPath(tokens[1],lastpart[0])
+          flattened=self.box.flatten(tokens[1],lastpart[0])
           if flattened != None:
             return []
           return -errno.ENOENT
@@ -517,7 +499,7 @@ class MattockFS(fuse.Fuse):
           lastpart=tokens[1].split(".")
           if len(lastpart) > 2:
             return -errno.ENOENT
-          if self.rep.validcarvpath(lastpart[0]):
+          if self.box.validcarvpath(lastpart[0]):
             if len(lastpart) == 1:
               return -errno.ENODATA
             if name == "user.path_state":
@@ -528,12 +510,12 @@ class MattockFS(fuse.Fuse):
               return -errno.ENODATA
           return -errno.ENOENT
         if len(tokens) == 3:
-          if not self.rep.validcarvpath(tokens[1]):
+          if not self.box.validcarvpath(tokens[1]):
             return -errno.ENOENT
           lastpart=tokens[2].split(".")
           if len(lastpart) > 2:
             return -errno.ENOENT
-          flattened=self.rep.FlattenCarvPath(tokens[1],lastpart[0])
+          flattened=self.box.flatten(tokens[1],lastpart[0])
           if flattened != None:
             return -errno.ENODATA
           return -errno.ENOENT
@@ -599,7 +581,7 @@ class MattockFS(fuse.Fuse):
           lastpart=tokens[1].split(".")
           if len(lastpart) > 2:
             return -errno.ENOENT
-          if self.rep.validcarvpath(lastpart[0]):
+          if self.box.validcarvpath(lastpart[0]):
             if len(lastpart) == 1:
               return -errno.ENODATA
             if name == "user.path_state":
@@ -610,12 +592,12 @@ class MattockFS(fuse.Fuse):
               return -errno.ENODATA
           return -errno.ENOENT
         if len(tokens) == 3:
-          if not self.rep.validcarvpath(tokens[1]):
+          if not self.box.validcarvpath(tokens[1]):
             return -errno.ENOENT
           lastpart=tokens[2].split(".")
           if len(lastpart) > 2:
             return -errno.ENOENT
-          flattened=self.rep.FlattenCarvPath(tokens[1],lastpart[0])
+          flattened=self.box.flatten(tokens[1],lastpart[0])
           if flattened != None:
             return -errno.ENODATA
           return -errno.ENOENT
@@ -684,7 +666,7 @@ class MattockFS(fuse.Fuse):
             else:
               return -errno.EINVAL
           if name == "user.derive_child_entity":
-            if self.rep.validcarvpath(val):
+            if self.box.validcarvpath(val):
               self.core.deriveChildEntity(handle,val)
             return 0
           if name == "user.create_mutable_child_entity":
