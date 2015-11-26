@@ -4,6 +4,7 @@ import stat
 import errno 
 import random
 import re
+import pycarvpath 
 
 fuse.fuse_python_api = (0, 2)
 
@@ -27,6 +28,8 @@ class Repository:
 class CarvpathBox:
   def __init__(self,rep):
     self.rep=rep
+    self.context=pycarvpath.Context({})
+
   def anycast_best(self,modulename,anycast,sort_policy):
     if len(anycast) > 0:
       return anycast.keys()[0] #FIXME
@@ -59,7 +62,7 @@ class ModuleInstance:
     if self.currentjob != None:
       self.currentjob.commit()
   def unregister(self):
-    module.unregister(self.instancehandle)
+    self.module.unregister(self.instancehandle)
   def accept_job(self):
     if self.currentjob != None:
       self.currentjob.commit()
@@ -472,7 +475,7 @@ class MattockFS(fuse.Fuse):
       self.nolistdir=NoList()
       self.topctl=TopCtl(self.box)
       self.selectre = re.compile(r'^[SVDWC]{1,5}$')
-      self.sortre = re.compile(r'^[RrOHDdWS]{1,6}$')
+      self.sortre = re.compile(r'^(K|[RrOHDdWS]{1,6})$')
     def parsepath(self,path):
         if path == "/":
           return self.topdir
