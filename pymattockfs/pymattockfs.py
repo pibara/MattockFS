@@ -279,6 +279,8 @@ class NoEnt:
     return -errno.ENOENT
   def setxattr(self,name, val):
     return -errno.ENOENT
+  def open(self,flags):
+    return -errno.ENOENT
 class TopDir:
   def getattr(self):
     return defaultstat()
@@ -299,6 +301,8 @@ class TopDir:
     return -errno.ENODATA
   def setxattr(self,name, val):
     return -errno.ENODATA
+  def open(self,flags):
+    return -errno.EPERM
 class NoList:
   def getattr(self):
     return  defaultstat(STAT_MODE_DIR_NOLIST)
@@ -312,6 +316,8 @@ class NoList:
     return -errno.ENODATA
   def setxattr(self,name, val):
     return -errno.ENODATA
+  def open(self,flags):
+    return -errno.EPERM
 class TopCtl:
   def __init__(self,rep):
     self.rep=rep
@@ -327,12 +333,14 @@ class TopCtl:
     if name == "user.throttle_info":
       return ";".join(map(lambda x: str(x),self.rep.getTopThrottleInfo()))
     if name == "user.full_archive":
-      return "data/0+" + str(self.rep.full_archive_size()) + ".raw"
+      return "data/" + str(self.rep.repository.top.topentity) + ".raw"
     return -errno.ENODATA
   def setxattr(self,name, val):
     if name in ("user.throttle_info","user.full_archive"):
       return -errno.EPERM
     return -errno.ENODATA
+  def open(self,flags):
+    return -errno.EPERM
 class ModuleCtl:
   def __init__(self,mod):
     self.mod=mod
@@ -383,6 +391,8 @@ class ModuleCtl:
         self.mod.reset() 
       return 0
     return -errno.ENODATA
+  def open(self,flags):
+    return -errno.EPERM
 class InstanceCtl:
   def __init__(self,instance,sortre,selectre):
     self.instance=instance
@@ -434,6 +444,8 @@ class InstanceCtl:
     if name in ("user.active","user.accept_job"):
        return -errno.EPERM 
     return -errno.ENODATA
+  def open(self,flags):
+    return -errno.EPERM
 class JobCtl:
   def __init__(self,job):
     self.job=job
@@ -473,6 +485,8 @@ class JobCtl:
     if name == "user.job_carvpath":
       return 0
     return -errno.ENODATA
+  def open(self,flags):
+    return -errno.EPERM
 class NewDataCtl:
   def __init__(self,newdata):
     self.newdata=newdata
@@ -488,6 +502,8 @@ class NewDataCtl:
     return -errno.ENODATA
   def setxattr(self,name, val):
     return -errno.ENODATA
+  def open(self,flags):
+    return -errno.EPERM
 class CarvPathFile:
   def __init__(self,carvpath,rep,context,modules):
     self.carvpath=carvpath
@@ -524,6 +540,8 @@ class CarvPathFile:
     if name in ("user.state","user.throttle_info"):
       return -errno.EPERM
     return -errno.ENODATA
+  def open(self,flags):
+    return -errno.EPERM #FIXME: add carvpath to box and return an fd.
 class CarvPathLink:
   def __init__(self,cp,ext):
     if ext == None:
@@ -542,6 +560,8 @@ class CarvPathLink:
     return -errno.ENODATA
   def setxattr(self,name, val):
     return -errno.ENODATA
+  def open(self,flags):
+    return -errno.EPERM
 
 class MattockFS(fuse.Fuse):
     def __init__(self,dash_s_do,version,usage,dd):
@@ -633,12 +653,19 @@ class MattockFS(fuse.Fuse):
       return self.parsepath(path).setxattr(name,val)
     def main(self,args=None):
       fuse.Fuse.main(self, args)
+    def open(self, path, flags):
+      return self.parsepath(path).open(flags)
 
 if __name__ == '__main__':
-    dd="/tmp/mattockfs-demo.dd"
+    dd="/var/mattock/archive/0.dd"
+    isoption=False
     for arg in sys.argv:
-      if "archive_dd" in arg:
+      if isoption and "archive_dd" in arg:
         dd=arg[11:]
+      if arg == "-o":
+        isoption=True
+      else:
+        isoption=False
     mattockfs = MattockFS(version = '%prog ' + '0.1.0',
                usage = 'Mattock filesystem ' + fuse.Fuse.fusage,
                dash_s_do = 'setsingle',dd=dd)

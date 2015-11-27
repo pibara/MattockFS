@@ -193,6 +193,8 @@ class Fragment:
       self.size=a2
   #Casting Fragment to a carvpath string
   def __str__(self):
+    if self.size == 0:
+      return "S0"
     return str(self.offset) + "+" + str(self.size)
   def __hash__(self):
     return hash(str(self))
