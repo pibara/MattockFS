@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/python
 #Copyright (c) 2015, Rob J Meijer.
 #Copyright (c) 2015, University College Dublin
 #All rights reserved.
@@ -34,6 +34,22 @@
 #sub-entities is esential.
 #
 import copy
+import os
+import fcntl
+
+try:
+  from os import posix_fadvise,POSIX_FADV_DONTNEED,POSIX_FADV_NORMAL
+except:
+  try:  
+    from fadvise import posix_fadvise,POSIX_FADV_DONTNEED,POSIX_FADV_NORMAL
+  except:
+    import sys
+    print("")
+    print("\033[93mERROR:\033[0m fadvise module not installed. Please install fadvise python module. Run:")
+    print("")
+    print("    sudo pip install fadvise")
+    print("")
+    sys.exit()
 try:
     from pyblake2 import blake2b
     ohash_algo=blake2b
@@ -52,8 +68,6 @@ try:
     ohash_algo=blake2bp
 except:
     pass
-
-import os
 
 class _Opportunistic_Hash:
   def __init__(self,size):
@@ -846,9 +860,16 @@ class _FadviseFunctor:
     self.fd=fd
   def __call__(self,offset,size,willneed):
     if willneed:
-      os.posix_fadvise(self.fd,offset,size,os.POSIX_FADV_WILLNEED)
+      posix_fadvise(self.fd,offset,size,POSIX_FADV_NORMAL)
     else:
-      os.posix_fadvise(self.fd,offset,size,os.POSIX_FADV_DONTNEED)
+      posix_fadvise(self.fd,offset,size,POSIX_FADV_DONTNEED)
+
+class _RaiiFLock:
+  def __init__(self,fd):
+    self.fd=fd
+    fcntl.flock(self.fd,fcntl.LOCK_EX)
+  def __del__(self):
+    fcntl.flock(self.fd,fcntl.LOCK_UN)
 
 class _Repository:
   def __init__(self,reppath,lpmap,maxfstoken=160):
@@ -856,19 +877,26 @@ class _Repository:
     self.maxfstoken=maxfstoken
     self.fd=os.open(reppath,(os.O_RDWR | os.O_LARGEFILE | os.O_NOATIME | os.O_CREAT))
     cursize=os.lseek(self.fd,0,os.SEEK_END) 
-    os.posix_fadvise(self.fd,0,cursize,os.POSIX_FADV_DONTNEED)
+    posix_fadvise(self.fd,0,cursize,POSIX_FADV_DONTNEED)
     self.top=_Top(lpmap,maxfstoken,cursize)
     fadvise=_FadviseFunctor(self.fd)
     self.box=_Box(lpmap,maxfstoken,fadvise,self.top)
   def __del__(self):
     os.close(self.fd)
+  def _grow(self,newsize):
+    l=_RaiiFLock(self.fd)
+    os.ftruncate(self.fd,newsize)
   def newmutable(self,chunksize):
     chunkoffset=self.top.size
-    os.ftruncate(self.fd,chunkoffset+chunksize) 
+    self._grow(chunkoffset+chunksize) 
     self.top.grow(chunksize)
     cp=str(_Entity(self.lpmap,self.maxfstoken,[Fragment(chunkoffset,chunksize)])) 
     self.box.add_batch(cp)
     return cp
+  def volume(self):
+    if len(self.box.fragmentrefstack) == 0:
+      return 0
+    return self.box.fragmentrefstack[0].totalsize
     
   
 

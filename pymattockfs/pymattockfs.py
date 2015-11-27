@@ -5,6 +5,7 @@ import errno
 import random
 import re
 import pycarvpath 
+import sys
 
 fuse.fuse_python_api = (0, 2)
 
@@ -20,31 +21,84 @@ except ImportError:
     sys.exit()
 
 class Repository:
-  def __init__(self):
-    pass
+  def __init__(self,ddfile,context):
+    self.cpcontext=context
+    self.repository=self.cpcontext.open_repository(ddfile)
   def full_archive_size(self):
-    return 1234567890
-
-class CarvpathBox:
-  def __init__(self,rep):
-    self.rep=rep
-    self.context=pycarvpath.Context({})
-
+    return self.repository.top.size
+  def validcarvpath(self,cp):
+    try:
+      ent=self.cpcontext.parse(cp)
+      rval=self.repository.top.test(ent)
+      return rval
+    except:
+      return False
+  def flatten(self,basecp,subcp):
+    try:
+      ent=self.cpcontext.parse(basecp + "/" + subcp)
+      return str(ent)
+    except:
+      return None
+  def anycast_set_volume(self,anycast):
+    volume=0
+    for jobid in anycast:
+      volume += self.cpcontext.parse(anycast[jobid].carvpath).totalsize
+    return volume 
   def anycast_best(self,modulename,anycast,sort_policy):
     if len(anycast) > 0:
-      return anycast.keys()[0] #FIXME
+      cp2key={}
+      for anycastkey in anycast.keys():
+        cp=anycast[anycastkey].carvpath
+        cp2key[cp]=anycastkey
+      bestcp=self.repository.rep.priority_custompick(sort_policy,intransit=cp2key.keys())  
+      return cp2key[bestcp]
     return None
-  def anycast_set_volume(self,anycast):
-    return 1000 #FIXME
-  def anycast_best_modules(self,allmodules,moduleset,letter):
-    return (moduleset.modules[moduleset.modules.keys()[0]])
-  def validcarvpath(self,cp):
-    return True
-  def flatten(self,basecp,subcp):
-    return "8756+1744"
   def getTopThrottleInfo(self):
-    return (10,0,0,0,0,0)
-
+    totalsize=self.repository.top.size
+    ioa = 0 #FIXME, we should keep track of data that is explicitly read/written
+    normal=self.repository.volume()
+    willneed=0 #FIXME: we should allow the framework to mark chunks as willneed.
+    dontneed=totalsize-willneed-normal
+    return (normal,willneed,dontneed,ioa) 
+  def anycast_best_modules(self,modulesstate,moduleset,letter):
+    fetchvolume=False
+    if letter in "VDC":
+      fetchvolume=True
+    bestmodules=set()
+    bestval=0
+    for module in moduleset.modules.keys():
+      anycast = moduleset.modules[module].anycast
+      overflow = moduleset.modules[module].overflow
+      if len(anycast) > overflow:
+        volume=0
+        if fetchvolume:
+          volume=self.anycast_set_volume(anycast)
+        val=0
+        if letter == "S":
+          val=len(anycast)
+        if letter == "V":
+          val=volume
+        if letter == "D":
+          if volume > 0:
+            val=float(len(anycast))/float(volume)
+          else:
+            if len(anycast) > 0:
+               return 100*len(anycast)
+        if letter == "W":
+          val=modulesstate[module].weight
+        if letter == "C":
+          if volume > 0:
+            val=float(modulesstate[module].weight)*float(len(anycast))/float(volume)
+          else:
+            if len(anycast) > 0:
+              return 100*len(anycast)*modulesstate[module].weight
+        if val > bestval:
+          bestval=val
+          bestmodules=set()
+        if val == bestval:
+          bestmodules.add(module)
+    return bestmodules
+ 
     
 class ModuleInstance:
   def __init__(self,modulename,instancehandle,module):
@@ -86,7 +140,7 @@ class Job:
     self.submit_info=[]
 
 class ModuleState:
-  def __init__(self,modulename,strongname,allmodules,box):
+  def __init__(self,modulename,strongname,allmodules,rep):
     self.name=modulename
     self.instances={}
     self.anycast={}
@@ -96,7 +150,7 @@ class ModuleState:
     self.weight=100              #rw extended attribute
     self.overflow=10             #rw extended attribute
     self.allmodules=allmodules
-    self.box=box
+    self.rep=rep
   def register_instance(self):   #read-only (responsibility accepting) extended attribute.
     instanceno=self.lastinstanceno
     self.lastinstanceno += 1
@@ -117,7 +171,7 @@ class ModuleState:
     return len(self.instances)
   def throttle_info(self):    #read-only extended attribute
     set_size=len(self.anycast)
-    set_volume=self.box.anycast_set_volume(self.anycast)
+    set_volume=self.rep.anycast_set_volume(self.anycast)
     return (set_size,set_volume)
   def anycast_add(self,carvpath,router_state,mime_type,file_extension):   #FIXME: UNTESTED !!!
     jobno=self.lastjobno
@@ -128,7 +182,7 @@ class ModuleState:
     self.allmodules.path_module[carvpath]=self.name
   def anycast_pop(self,sort_policy,select_policy="S"): #FIXME: UNTESTED !!!
     if self.name != "loadbalance":
-      best=self.box.anycast_best(self.name,self.anycast,sort_policy)
+      best=self.rep.anycast_best(self.name,self.anycast,sort_policy)
       if best != None:
         self.allmodules[best]=self.anycast.pop(best)
         self.allmodules.path_state[self.allmodules[best].carvpath]="pending"
@@ -144,8 +198,8 @@ class ModuleState:
       return None 
 
 class ModulesState:
-  def __init__(self,box):
-    self.box=box
+  def __init__(self,rep):
+    self.rep=rep
     self.modules={}
     self.instances={}
     self.jobs={}
@@ -157,7 +211,7 @@ class ModulesState:
   def __getitem__(self,key):
     if not key in self.modules:
       strongname = "M" + blake2b("M" +key,digest_size=32,key=self.rumpelstiltskin).hexdigest()
-      self.modules[key]=ModuleState(key,strongname,self,self.box)
+      self.modules[key]=ModuleState(key,strongname,self,self.rep)
     return self.modules[key]
   def selectmodule(self,select_policy):
     moduleset=self.modules.keys()
@@ -166,7 +220,7 @@ class ModulesState:
     if len(moduleset) == 1:
       return moduleset[0]
     for letter in select_policy:
-      moduleset=self.box.anycast_best_modules(self,moduleset,letter)
+      moduleset=self.rep.anycast_best_modules(self,moduleset,letter) 
       if len(moduleset) == 1:
         return moduleset[0]
     return moduleset[0]
@@ -259,8 +313,8 @@ class NoList:
   def setxattr(self,name, val):
     return -errno.ENODATA
 class TopCtl:
-  def __init__(self,box):
-    self.box=box
+  def __init__(self,rep):
+    self.rep=rep
   def getattr(self):
     return  defaultstat(STAT_MODE_FILE_RO)
   def opendir(self):
@@ -271,9 +325,9 @@ class TopCtl:
     return ["user.throttle_info","user.full_archive"]
   def getxattr(self,name, size):
     if name == "user.throttle_info":
-      return ";".join(map(lambda x: str(x),self.box.getTopThrottleInfo()))
+      return ";".join(map(lambda x: str(x),self.rep.getTopThrottleInfo()))
     if name == "user.full_archive":
-      return "../0+" + str(self.box.rep.full_archive_size())
+      return "data/0+" + str(self.rep.full_archive_size()) + ".raw"
     return -errno.ENODATA
   def setxattr(self,name, val):
     if name in ("user.throttle_info","user.full_archive"):
@@ -305,7 +359,7 @@ class ModuleCtl:
       if size == 0:
         return 82
       else:
-        return "../instance/" + self.mod.register_instance() + ".ctl" 
+        return "instance/" + self.mod.register_instance() + ".ctl" 
     return -errno.ENODATA
   def setxattr(self,name, val):
     if name == "user.weight":
@@ -360,7 +414,7 @@ class InstanceCtl:
         job=self.instance.accept_job()
         if job == None:
           return -errno.ENODATA
-        return "../job/" + job + ".ctl"    
+        return "job/" + job + ".ctl"    
     return -errno.ENODATA
   def setxattr(self,name, val):
     if name == "user.sort_policy":
@@ -435,23 +489,47 @@ class NewDataCtl:
   def setxattr(self,name, val):
     return -errno.ENODATA
 class CarvPathFile:
-  def __init__(self,carvpath,rep):
-    pass
+  def __init__(self,carvpath,rep,context,modules):
+    self.carvpath=carvpath
+    self.rep=rep
+    self.context=context
+    self.modules=modules
   def getattr(self):
-    return  defaultstat(STAT_MODE_FILE_RO)
+    size=self.context.parse(self.carvpath).totalsize
+    return  defaultstat(STAT_MODE_FILE_RO,size)
   def opendir(self):
     return -errno.ENOTDIR
   def readlink(self):
     return -errno.EINVAL
   def listxattr(self):
-    return []
+    return ["user.path_state","user.throttle_info"]
+  def _lookup(self,module):
+    for anycastkey in ms[module].anycast.keys():
+      if ms.modules[modulekey].anycast[anycastkey].carvpath==self.carvpath:
+        job = ms.modules[modulekey].anycast[anycastkey]
+        return (job.mime_type,job.file_extension)
+    return ("","")
   def getxattr(self,name, size):
-    return -errno.ENODATA
+    if name == "user.path_state":
+      if self.carvpath in self.modules.path_module:
+        module=self.modules.path_module[carvpath]
+        state=self.modules.path_state[carvpath]
+        jobmeta=self._lookup(module)
+        ohash=self.modules.box.ohash.ohash
+        return state + ";" + module + ";" + jobmeta[0] + ";" + jobmeta[1] + ";" + ohash.result + ";" + str(ohash.offset)
+      return "non;;;;;"
+    if name == "user.throttle_info":
+      return ";;;" #FIXME, should return fadv info (normal,willneed,dontneed,io_access)
   def setxattr(self,name, val):
+    if name in ("user.state","user.throttle_info"):
+      return -errno.EPERM
     return -errno.ENODATA
 class CarvPathLink:
-  def __init__(self,link):
-    self.link = "../" + link
+  def __init__(self,cp,ext):
+    if ext == None:
+      self.link = "../" + cp
+    else:
+     self.link = "../" + cp + "." + ext
   def getattr(self):
     return  defaultstat(STAT_MODE_LINK)
   def opendir(self):
@@ -466,16 +544,19 @@ class CarvPathLink:
     return -errno.ENODATA
 
 class MattockFS(fuse.Fuse):
-    def __init__(self,dash_s_do,version,usage):
+    def __init__(self,dash_s_do,version,usage,dd):
       super(MattockFS, self).__init__(version=version,usage=usage,dash_s_do=dash_s_do)
-      self.rep=Repository()
-      self.box=CarvpathBox(self.rep)
-      self.ms=ModulesState(self.box)
+      longpathdb ={} #FIXME: persistent or distributed longpath storage is desired.
+      self.context=pycarvpath.Context(longpathdb)
       self.topdir=TopDir()
       self.nolistdir=NoList()
-      self.topctl=TopCtl(self.box)
       self.selectre = re.compile(r'^[SVDWC]{1,5}$')
       self.sortre = re.compile(r'^(K|[RrOHDdWS]{1,6})$')
+      self.archive_dd = dd
+      self.rep=Repository(self.archive_dd,self.context)
+      self.ms=ModulesState(self.rep)
+      self.topctl=TopCtl(self.rep)
+      self.needinit=True
     def parsepath(self,path):
         if path == "/":
           return self.topdir
@@ -494,11 +575,11 @@ class MattockFS(fuse.Fuse):
             if len(lastpart) > 2:
               return NoEnt()
             topcp=lastpart[0]
-            if not self.box.validcarvpath(topcp):
+            if not self.rep.validcarvpath(topcp):
               return NoEnt()
             if len(tokens) == 2:
               if len(lastpart) == 2:
-                return CarvPathFile(topcp,self.rep)
+                return CarvPathFile(topcp,self.rep,self.context,self.ms)
               if len(lastpart) > 2:
                   return NoEnt()
               return self.nolistdir
@@ -506,9 +587,12 @@ class MattockFS(fuse.Fuse):
             lastpart=tokens[2].split(".")
             if len(lastpart) > 2: 
               return NoEnt()
-            link=self.box.flatten(topcp,lastpart[0])
+            ext=None
+            if len(lastpart) == 2:
+              ext=lastpart[1]
+            link=self.rep.flatten(topcp,lastpart[0])
             if link != None:
-              return CarvPathLink(link)
+              return CarvPathLink(link,ext)
             return NoEnt()
           lastpart=tokens[1].split(".")
           if len(lastpart) !=2:
@@ -547,12 +631,22 @@ class MattockFS(fuse.Fuse):
       return self.parsepath(path).getxattr(name,size)
     def setxattr(self, path, name, val, more):
       return self.parsepath(path).setxattr(name,val)
-
+    def main(self,args=None):
+      fuse.Fuse.main(self, args)
 
 if __name__ == '__main__':
+    dd="/tmp/mattockfs-demo.dd"
+    for arg in sys.argv:
+      if "archive_dd" in arg:
+        dd=arg[11:]
     mattockfs = MattockFS(version = '%prog ' + '0.1.0',
                usage = 'Mattock filesystem ' + fuse.Fuse.fusage,
-               dash_s_do = 'setsingle')
+               dash_s_do = 'setsingle',dd=dd)
+    #Seems option parsing is a bit tricky, we add it to the expected options so we don't croke.
+    mattockfs.parser.add_option(mountopt="archive_dd",
+                                metavar="DD",
+                                default=mattockfs.archive_dd,
+                                help="Path of the archive dd file to use [default: %default]")
     mattockfs.parse(errex = 1)
     mattockfs.flags = 0
     mattockfs.multithreaded = 0
