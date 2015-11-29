@@ -6,6 +6,7 @@ import random
 import re
 import pycarvpath 
 import sys
+import copy
 
 fuse.fuse_python_api = (0, 2)
 
@@ -146,15 +147,30 @@ class ModuleInstance:
     return None
 
 class Job:
-  def __init__(self,jobhandle,modulename,carvpath,router_state,mime_type,file_extension):
+  def __init__(self,jobhandle,modulename,carvpath,router_state,mime_type,file_extension,allmodules,provenance=copy.deepcopy(list())):
     self.jobhandle=jobhandle
     self.modulename=modulename
     self.carvpath=carvpath
     self.router_state=router_state
     self.mime_type=mime_type
     self.file_extension=file_extension
-    self.routing_info=""
     self.submit_info=[]
+    self.allmodules=allmodules
+    self.provenance = provenance
+    provenancerecord={}
+    provenancerecord["job"]=jobhandle
+    provenancerecord["module"]=modulename
+    if len(provenance) == 0:
+      provenancerecord["carvpath"]=carvpath
+      provenancerecord["mime_type"]=mime_type
+    self.provenance.append(provenancerecord)
+  def commit(self):
+    if self.jobhandle in self.allmodules.jobs:
+      print "PROVENANCE:",self.provenance
+      del self.allmodules.jobs[self.jobhandle] 
+  def next_hop(self,module,state):
+    self.allmodules[module].anycast_add(self.carvpath,state,self.mime_type,self.file_extension,self.provenance)
+    del self.allmodules.jobs[self.jobhandle]
 
 class ModuleState:
   def __init__(self,modulename,strongname,allmodules,rep):
@@ -194,14 +210,14 @@ class ModuleState:
     jobno=self.lastjobno
     self.lastjobno += 1
     jobhandle = "J" + blake2b("J" + hex(jobno)[2:].zfill(16),digest_size=32,key=self.secret[:64]).hexdigest()
-    self.anycast[jobhandle]=Job(jobhandle,self.name,carvpath,router_state,mime_type,file_extension)
+    self.anycast[jobhandle]=Job(jobhandle,self.name,carvpath,router_state,mime_type,file_extension,self.allmodules,[])
     self.allmodules.path_state[carvpath]="anycast"
     self.allmodules.path_module[carvpath]=self.name
   def get_kickjob(self):
     jobno=self.lastjobno
     self.lastjobno += 1
     jobhandle = "J" + blake2b("J" + hex(jobno)[2:].zfill(16),digest_size=32,key=self.secret[:64]).hexdigest()
-    self.allmodules.jobs[jobhandle]=Job(jobhandle,"kickstart","S0","","application/x-zerosize","empty")
+    self.allmodules.jobs[jobhandle]=Job(jobhandle,"kickstart","S0","","application/x-zerosize","empty",self.allmodules,[])
     return self.allmodules.jobs[jobhandle]
   def anycast_pop(self,sort_policy,select_policy="S"): #FIXME: UNTESTED !!!
     if self.name != "loadbalance":
@@ -482,13 +498,13 @@ class JobCtl:
     return ["user.routing_info","user.derive_child_entity","user.create_mutable_child_entity","user.set_child_submit_info","user.active_child","user.job_carvpath"]
   def getxattr(self,name, size):
     if name == "user.routing_info":
-      return self.job.routing_info
+      return self.job.module_name + ";" + self.job.router_state
     if name == "user.derive_child_entity":
-      return "FIXME"
+      return -errno.EPERM
     if name == "user.create_mutable_child_entity":
-      return "FIXME"
+      return -errno.EPERM
     if name == "user.set_child_submit_info":
-      return "FIXME"
+      return -errno.EPERM
     if name == "user.active_child":
       return "FIXME"
     if name == "user.job_carvpath":
@@ -496,6 +512,10 @@ class JobCtl:
     return -errno.ENODATA
   def setxattr(self,name, val):
     if name == "user.routing_info":
+      if ";" in val:
+        parts=val.split(";")
+        if self.job.allmodules.validmodulename(parts[0]):
+          self.job.next_hop(parts[0],parts[1])
       return 0
     if name == "user.derive_child_entity":
       return 0
