@@ -137,12 +137,12 @@ class ModuleInstance:
   def accept_job(self):
     if self.currentjob != None:
       self.currentjob.commit()
-    self.currentjob=self.module.anycast_pop(self.select_policy,self.sort_policy)
+    if self.sort_policy=="K":
+      self.currentjob=self.module.get_kickjob() 
+    else:
+      self.currentjob=self.module.anycast_pop(self.select_policy,self.sort_policy)
     if self.currentjob != None:
-      jobno=self.lastjobno
-      self.lastjobno += 1
-      jobhandle = "J" + blake2b(hex(jobno)[2:].zfill(16),digest_size=32,key=self.instancehandle).hexdigest()
-      return jobhandle
+      return self.currentjob.jobhandle
     return None
 
 class Job:
@@ -197,6 +197,12 @@ class ModuleState:
     self.anycast[jobhandle]=Job(jobhandle,self.name,carvpath,router_state,mime_type,file_extension)
     self.allmodules.path_state[carvpath]="anycast"
     self.allmodules.path_module[carvpath]=self.name
+  def get_kickjob(self):
+    jobno=self.lastjobno
+    self.lastjobno += 1
+    jobhandle = "J" + blake2b("J" + hex(jobno)[2:].zfill(16),digest_size=32,key=self.secret[:64]).hexdigest()
+    self.allmodules.jobs[jobhandle]=Job(jobhandle,"kickstart","S0","","application/x-zerosize","empty")
+    return self.allmodules.jobs[jobhandle]
   def anycast_pop(self,sort_policy,select_policy="S"): #FIXME: UNTESTED !!!
     if self.name != "loadbalance":
       best=self.rep.anycast_best(self.name,self.anycast,sort_policy)
@@ -224,7 +230,7 @@ class ModulesState:
     self.path_state={} 
     self.path_module={}
     random.seed()
-    self.rumpelstiltskin=''.join(random.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") for _ in range(0,32))
+    self.rumpelstiltskin=''.join(random.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") for _ in range(0,64))
   def __getitem__(self,key):
     if not key in self.modules:
       strongname = "M" + blake2b("M" +key,digest_size=32,key=self.rumpelstiltskin).hexdigest()
@@ -486,7 +492,7 @@ class JobCtl:
     if name == "user.active_child":
       return "FIXME"
     if name == "user.job_carvpath":
-      return "FIXME"
+      return "data/" + self.job.carvpath + "." + self.job.file_extension
     return -errno.ENODATA
   def setxattr(self,name, val):
     if name == "user.routing_info":
@@ -544,13 +550,26 @@ class CarvPathFile:
     return ("","")
   def getxattr(self,name, size):
     if name == "user.path_state":
+      module=""
+      state="none"
+      jobmeta=""
+      offset="0"
+      mimetype=""
+      extension=""
+      hashresult="INCOMPLETE-OPPORTUNISTIC_HASHING"
       if self.carvpath in self.modules.path_module:
-        module=self.modules.path_module[carvpath]
-        state=self.modules.path_state[carvpath]
+        module=self.modules.path_module[self.carvpath]
+        state=self.modules.path_state[self.carvpath]
         jobmeta=self._lookup(module)
-        ohash=self.modules.box.ohash.ohash
-        return state + ";" + module + ";" + jobmeta[0] + ";" + jobmeta[1] + ";" + ohash.result + ";" + str(ohash.offset)
-      return "non;;;;;"
+        mimetype=jobmeta[0]
+        extension=jobmeta[1]
+      if self.carvpath in self.modules.rep.repository.box.ohash:
+        ohash = self.modules.rep.repository.box.ohash[self.carvpath].ohash
+        offset=str(ohash.offset)
+        hashresult=ohash.result
+        if state == "none":
+          state="open"
+      return state + ";" + module + ";" + mimetype + ";" + extension + ";" + hashresult + ";" + offset
     if name == "user.throttle_info":
       return ";;;" #FIXME, should return fadv info (normal,willneed,dontneed,io_access)
   def setxattr(self,name, val):

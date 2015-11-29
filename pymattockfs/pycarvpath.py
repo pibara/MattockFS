@@ -95,7 +95,7 @@ class _Opportunistic_Hash:
         self._h.update(data)
         self.offset += len(data)  
   def read_chunk(self,data,offset):
-    if (not self.isdone) and offset <= self.offset and offser+len(data) > self.offset:
+    if (not self.isdone) and offset <= self.offset and offset+len(data) > self.offset:
       #Fragment overlaps our offset; find the part that we didn't process yet.
       start=self.offset - offset
       datasegment = data[start:]
@@ -104,8 +104,9 @@ class _Opportunistic_Hash:
       if self.offset > 0 and self.offset == self.fullsize:
         self.done()
   def done(self):
-    if not isdone:
+    if not self.isdone:
       self.result=self._h.hexdigest()
+      self.isdone=True
 
 class _OH_Entity:
   def __init__(self,ent):
@@ -171,7 +172,9 @@ class _OH_Entity:
         childoffset+=fragment.size
       if updated:
         #Update our range of interest.
-        self.roi=self.ent_getroi(self.ohash.offset)
+        self.roi=self.ent._getroi(self.ohash.offset)
+      if self.ohash.isdone:
+        print "DEBUG: Completed hash for "+str(self.ent)+" : " + self.ohash.result
   def hashing_offset(self):
     return self.ohash.offset
   def hashing_result(self):
@@ -304,7 +307,6 @@ class _Entity:
           #We are creating an empty zero fragment entity here
           fragments=[]
         else:
-          print a1
           raise TypeError('Entity constructor needs a string or list of fragments '+str(a1))
     self.totalsize=0
     for frag in fragments:
@@ -831,10 +833,10 @@ class _Box:
       else:
         return [remaining,unmerged];
   def lowlevel_writen_data(self,offset,data):
-    for carvpath in keys(self.ohash):
+    for carvpath in self.ohash.keys():
       self.ohash[carvpath].written_parent_chunk(data,offset)
   def lowlevel_read_data(self,offset,data):
-    for carvpath in keys(self.ohash):
+    for carvpath in self.ohash.keys():
       self.ohash[carvpath].read_parent_chunk(data,offset)
   def batch_hashing_isdone(self,carvpath):
     return self.ohash[carvpath].hashing_isdone()
@@ -931,7 +933,9 @@ class _OpenFile:
     result=b''
     for chunk in readent:
       os.lseek(self.fd, chunk.offset, 0)
-      result += os.read(self.fd, chunk.size)
+      datachunk = os.read(self.fd, chunk.size)
+      result += datachunk
+      self.box.lowlevel_read_data(chunk.offset,datachunk)
     return result
 
 #You need one of these per application in order to use pycarvpath.
