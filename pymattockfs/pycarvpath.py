@@ -199,14 +199,20 @@ class Fragment:
   def __hash__(self):
     return hash(str(self))
   def __lt__(self,other):
+    if other == None:
+      return False
     if self.offset != other.offset:
       return self.offset < other.offset
     return self.size < other.size
   def __gt__(self,other):
     return other < self
   def __eq__(self,other):
+    if other == None:
+      return False
     return self.offset == other.offset and self.size == other.size
   def __ne__(self,other):
+    if other == None:
+      return True
     return self.offset != other.offset or self.size != other.size
   def __le__(self,other):
     return not (self > other)
@@ -298,6 +304,7 @@ class _Entity:
           #We are creating an empty zero fragment entity here
           fragments=[]
         else:
+          print a1
           raise TypeError('Entity constructor needs a string or list of fragments '+str(a1))
     self.totalsize=0
     for frag in fragments:
@@ -400,10 +407,16 @@ class _Entity:
     return rval
   #Helper generator function for getting the per-fragment chunks for a subentity.
   #The function yields the parent chunks that fit within the offset/size indicated relative to the parent entity.
-  def _subchunk(self,offset,size):
+  def _subchunk(self,offset,size,truncate):
     #We can't find chunks beyond the parent total size
     if (offset+size) > self.totalsize:
-      raise IndexError('Not within parent range')
+      if truncate:
+        if offset >= self.totalsize:
+          size=0
+        else:
+          size = self.totalsize - offset
+      else:
+        raise IndexError('Not within parent range')
     #We start of at offset 0 of the parent entity whth our initial offset and size. 
     start=0
     startoffset = offset
@@ -434,13 +447,13 @@ class _Entity:
           startoffset=self.totalsize + 1
       start += parentfrag.size 
   #Get the projection of an entity as sub entity of an other entity.
-  def subentity(self,childent):
+  def subentity(self,childent,truncate=False):
     subentity=_Entity(self.longpathmap,self.maxfstoken)
     for childfrag in childent.fragments:
       if childfrag.issparse():
         subentity.unaryplus(childfrag)
       else:
-        for subfrag in self._subchunk(childfrag.offset,childfrag.size):
+        for subfrag in self._subchunk(childfrag.offset,childfrag.size,truncate):
           subentity.unaryplus(subfrag)
     return subentity
   #Python has no operator=, so we use assigtoself
@@ -899,8 +912,27 @@ class _Repository:
     if len(self.box.fragmentrefstack) == 0:
       return 0
     return self.box.fragmentrefstack[0].totalsize
-    
-  
+  def openro(self,cp,entity):
+    return _OpenFile(self.box,cp,True,entity,self.fd)
+
+class _OpenFile:
+  def __init__(self,box,cp,is_ro,entity,fd):
+    self.is_ro = is_ro
+    self.refcount = 1
+    self.cp=cp
+    self.box=box
+    self.box.add_batch(cp)
+    self.entity=entity
+    self.fd=fd
+  def __del__(self):
+    self.box.remove_batch(self.cp) 
+  def read(self,offset,size):
+    readent=self.entity.subentity(_Entity(self.entity.longpathmap,self.entity.maxfstoken,[Fragment(offset,size)]),True)
+    result=b''
+    for chunk in readent:
+      os.lseek(self.fd, chunk.offset, 0)
+      result += os.read(self.fd, chunk.size)
+    return result
 
 #You need one of these per application in order to use pycarvpath.
 class Context:

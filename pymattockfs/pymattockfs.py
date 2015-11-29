@@ -24,6 +24,8 @@ class Repository:
   def __init__(self,ddfile,context):
     self.cpcontext=context
     self.repository=self.cpcontext.open_repository(ddfile)
+    self.openfiles={}
+    self.lastfd=1
   def full_archive_size(self):
     return self.repository.top.size
   def validcarvpath(self,cp):
@@ -98,6 +100,21 @@ class Repository:
         if val == bestval:
           bestmodules.add(module)
     return bestmodules
+  def openro(self,carvpath,path):
+    ent=self.cpcontext.parse(carvpath)
+    if path in self.openfiles:
+      self.openfiles[path].refcount += 1
+    else :
+      ent=self.cpcontext.parse(carvpath)
+      self.openfiles[path]=self.repository.openro(carvpath,ent)
+    return 0
+  def read(self,path,offset,size):
+    return self.openfiles[path].read(offset,size)
+  def close(self,path):
+    self.openfiles[path].refcount -= 1
+    if self.openfiles[path].refcount < 1:
+      del self.openfiles[path]
+    return 0
  
     
 class ModuleInstance:
@@ -540,8 +557,8 @@ class CarvPathFile:
     if name in ("user.state","user.throttle_info"):
       return -errno.EPERM
     return -errno.ENODATA
-  def open(self,flags):
-    return -errno.EPERM #FIXME: add carvpath to box and return an fd.
+  def open(self,flags,path):
+    return self.rep.openro(self.carvpath,path)
 class CarvPathLink:
   def __init__(self,cp,ext):
     if ext == None:
@@ -654,7 +671,11 @@ class MattockFS(fuse.Fuse):
     def main(self,args=None):
       fuse.Fuse.main(self, args)
     def open(self, path, flags):
-      return self.parsepath(path).open(flags)
+      return self.parsepath(path).open(flags,path)
+    def release(self, path, fh):
+      return self.rep.close(path)
+    def read(self, path, size, offset):
+      return self.rep.read(path,offset,size)
 
 if __name__ == '__main__':
     dd="/var/mattock/archive/0.dd"
