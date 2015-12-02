@@ -4,7 +4,9 @@ import stat
 import errno 
 import random
 import re
-import pycarvpath 
+import carvpath 
+import repository
+import opportunistic_hash
 import sys
 import copy
 
@@ -24,7 +26,8 @@ except ImportError:
 class Repository:
   def __init__(self,ddfile,context):
     self.cpcontext=context
-    self.repository=self.cpcontext.open_repository(ddfile)
+    col=opportunistic_hash.OpportunisticHashCollection(context)
+    self.repository=repository.Repository(context,ddfile,col)
     self.openfiles={}
     self.lastfd=1
   def full_archive_size(self):
@@ -498,13 +501,13 @@ class JobCtl:
     return ["user.routing_info","user.derive_child_entity","user.create_mutable_child_entity","user.set_child_submit_info","user.active_child","user.job_carvpath"]
   def getxattr(self,name, size):
     if name == "user.routing_info":
-      return self.job.module_name + ";" + self.job.router_state
+      return self.job.modulename + ";" + self.job.router_state
     if name == "user.derive_child_entity":
-      return -errno.EPERM
+      return "0"
     if name == "user.create_mutable_child_entity":
-      return -errno.EPERM
+      return "0"
     if name == "user.set_child_submit_info":
-      return -errno.EPERM
+      return "0"
     if name == "user.active_child":
       return "FIXME"
     if name == "user.job_carvpath":
@@ -583,8 +586,8 @@ class CarvPathFile:
         jobmeta=self._lookup(module)
         mimetype=jobmeta[0]
         extension=jobmeta[1]
-      if self.carvpath in self.modules.rep.repository.box.ohash:
-        ohash = self.modules.rep.repository.box.ohash[self.carvpath].ohash
+      if self.carvpath in self.modules.rep.repository.stack.ohashcollection.ohash:
+        ohash = self.modules.rep.repository.stack.ohashcollection.ohash[self.carvpath].ohash
         offset=str(ohash.offset)
         hashresult=ohash.result
         if state == "none":
@@ -623,7 +626,7 @@ class MattockFS(fuse.Fuse):
     def __init__(self,dash_s_do,version,usage,dd):
       super(MattockFS, self).__init__(version=version,usage=usage,dash_s_do=dash_s_do)
       longpathdb ={} #FIXME: persistent or distributed longpath storage is desired.
-      self.context=pycarvpath.Context(longpathdb)
+      self.context=carvpath.Context(longpathdb)
       self.topdir=TopDir()
       self.nolistdir=NoList()
       self.selectre = re.compile(r'^[SVDWC]{1,5}$')

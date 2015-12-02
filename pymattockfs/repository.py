@@ -28,10 +28,11 @@
 #(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 #SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
 #
-import carvpath
 import copy
 import os
 import fcntl
+import carvpath
+import refcount_stack
 
 try:
   from os import posix_fadvise,POSIX_FADV_DONTNEED,POSIX_FADV_NORMAL
@@ -63,16 +64,36 @@ class _RaiiFLock:
   def __del__(self):
     fcntl.flock(self.fd,fcntl.LOCK_UN)
 
+class _OpenFile:
+  def __init__(self,stack,cp,is_ro,entity,fd):
+    self.is_ro = is_ro
+    self.refcount = 1
+    self.cp=cp
+    self.stack=stack
+    self.stack.add_carvpath(cp)
+    self.entity=entity
+    self.fd=fd
+  def __del__(self):
+    self.stack.remove_carvpath(self.cp)
+  def read(self,offset,size):
+    readent=self.entity.subentity(_Entity(self.entity.longpathmap,self.entity.maxfstoken,[carvpath.Fragment(offset,size)]),True)
+    result=b''
+    for chunk in readent:
+      os.lseek(self.fd, chunk.offset, 0)
+      datachunk = os.read(self.fd, chunk.size)
+      result += datachunk
+      self.stack.lowlevel_read_data(chunk.offset,datachunk)
+    return result
+
 class Repository:
-  def __init__(self,reppath,lpmap,maxfstoken=160):
-    self.lpmap=lpmap
-    self.maxfstoken=maxfstoken
+  def __init__(self,context,reppath,col):
+    self.context=context
     self.fd=os.open(reppath,(os.O_RDWR | os.O_LARGEFILE | os.O_NOATIME | os.O_CREAT))
     cursize=os.lseek(self.fd,0,os.SEEK_END) 
     posix_fadvise(self.fd,0,cursize,POSIX_FADV_DONTNEED)
-    self.top=_Top(lpmap,maxfstoken,cursize)
+    self.top=self.context.make_top(cursize)
     fadvise=_FadviseFunctor(self.fd)
-    self.box=_Box(lpmap,maxfstoken,fadvise,self.top)
+    self.stack=refcount_stack.CarvpathRefcountStack(self.context,fadvise,col)
   def __del__(self):
     os.close(self.fd)
   def _grow(self,newsize):
@@ -82,37 +103,22 @@ class Repository:
     chunkoffset=self.top.size
     self._grow(chunkoffset+chunksize) 
     self.top.grow(chunksize)
-    cp=str(_Entity(self.lpmap,self.maxfstoken,[Fragment(chunkoffset,chunksize)])) 
-    self.box.add_batch(cp)
+    cp=str(carvpath._Entity(self.context.longpathmap,self.context.maxfstoken,[carvpath.Fragment(chunkoffset,chunksize)])) 
+    self.stack.add_carvpath(cp)
     return cp
   def volume(self):
-    if len(self.box.fragmentrefstack) == 0:
+    if len(self.stack.fragmentrefstack) == 0:
       return 0
-    return self.box.fragmentrefstack[0].totalsize
+    return self.stack.fragmentrefstack[0].totalsize
   def openro(self,cp,entity):
-    return _OpenFile(self.box,cp,True,entity,self.fd)
-
-class _OpenFile:
-  def __init__(self,box,cp,is_ro,entity,fd):
-    self.is_ro = is_ro
-    self.refcount = 1
-    self.cp=cp
-    self.box=box
-    self.box.add_batch(cp)
-    self.entity=entity
-    self.fd=fd
-  def __del__(self):
-    self.box.remove_batch(self.cp) 
-  def read(self,offset,size):
-    readent=self.entity.subentity(_Entity(self.entity.longpathmap,self.entity.maxfstoken,[Fragment(offset,size)]),True)
-    result=b''
-    for chunk in readent:
-      os.lseek(self.fd, chunk.offset, 0)
-      datachunk = os.read(self.fd, chunk.size)
-      result += datachunk
-      self.box.lowlevel_read_data(chunk.offset,datachunk)
-    return result
+    return _OpenFile(self.stack,cp,True,entity,self.fd)
 
 if __name__ == "__main__":
-  print "Ned to write some tests here"
-   
+  import carvpath
+  import opportunistic_hash
+  context=carvpath.Context({},160)
+  col=opportunistic_hash.OpportunisticHashCollection(context)
+  rep=Repository(context,"/var/mattock/archive/0.dd",col)
+  entity=context.parse("1234+5678")
+  f1=rep.openro("1234+5678",entity)
+  print rep.volume() 

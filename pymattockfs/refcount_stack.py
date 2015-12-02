@@ -55,7 +55,7 @@ class CarvpathRefcountStack:
     self.content=dict() #Dictionary with all entities in the box.
     self.entityrefcount=dict() #Entity refcount for handling multiple instances of the exact same entity.
     self.fragmentrefstack=[] #A stack of fragments with different refcounts for keeping reference counts on fragments.
-    self.fragmentrefstack.append(context.empty()) #At least one empty entity on the stack
+    self.fragmentrefstack.append(self.context.empty()) #At least one empty entity on the stack
   def __str__(self):
     rval=""
     for index in range(0,len(self.fragmentrefstack)):
@@ -74,7 +74,7 @@ class CarvpathRefcountStack:
       ent=self.content[carvpath]
       return [context.empty(),ent]
     else:
-      ent=context.parse(carvpath)
+      ent=self.context.parse(carvpath)
       self.ohashcollection.add_carvpath(carvpath)
       ent.stripsparse()
       self.content[carvpath]=ent
