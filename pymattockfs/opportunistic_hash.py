@@ -29,7 +29,6 @@
 #SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
 #
 import copy
-import pycarvpath
 
 try:
     from pyblake2 import blake2b
@@ -94,8 +93,10 @@ class _OH_Entity:
     self.ent=copy.deepcopy(ent)
     self.ohash=_Opportunistic_Hash(self.ent.totalsize)
     self.roi=ent._getroi(0)
+    print self.roi
   def  written_parent_chunk(self,data,parentoffset):
     parentfragsize=len(data)
+    print parentoffset,parentfragsize,self.roi
     #Quick range of interest check.
     if parentoffset < self.roi[1] and (parentoffset+parentfragsize) > self.roi[0]:
       childoffset=0
@@ -126,13 +127,17 @@ class _OH_Entity:
         self.roi=self.ent._getroi(self.ohash.offset)
   def  read_parent_chunk(self,data,parentoffset):
     parentfragsize=len(data)
+    print parentoffset,parentfragsize,self.roi
     #Quick range of interest check.
     if (not self.ohash.isdone) and parentoffset < self.roi[1] and (parentoffset+parentfragsize) > self.roi[0]:
       childoffset=0
       working=False
       updated=False
+      print "inrange"
       for fragment in self.ent.fragments:
+        print "FRAG",fragment.offset,fragment.size
         if (not fragment.issparse()) and parentoffset >= fragment.offset and parentoffset < fragment.offset + fragment.size:
+          print "frag ",fragment.offset,fragment.size
           working=True
           realstart = fragment.offset
           realend = fragment.offset+fragment.size
@@ -164,16 +169,15 @@ class _OH_Entity:
     return self.ohash.isdone
       
 class OpportunisticHashCollection:
-  def __init__(self,lpmap,maxfstoken):
-    self.longpathmap=lpmap
-    self.maxfstoken=maxfstoken
+  def __init__(self,carvpathcontext):
+    self.context=carvpathcontext
     self.ohash=dict()
   def add_carvpath(self,carvpath):
-    ent=_Entity(self.longpathmap,self.maxfstoken,carvpath)
+    ent=self.context.parse(carvpath)
     self.ohash[carvpath]=_OH_Entity(ent)
   def remove_carvpath(self,carvpath):
     del self.ohash[carvpath]   
-  def lowlevel_writen_data(self,offset,data):
+  def lowlevel_written_data(self,offset,data):
     for carvpath in self.ohash.keys():
       self.ohash[carvpath].written_parent_chunk(data,offset)
   def lowlevel_read_data(self,offset,data):
@@ -187,4 +191,24 @@ class OpportunisticHashCollection:
     return self.ohash[carvpath].hashing_offset()
 
 if __name__ == "__main__":
-  print "Yet to write tests here."
+  import carvpath
+  context=carvpath.Context({},160)
+  ohc=OpportunisticHashCollection(context)
+  ohc.add_carvpath("10+5")
+  ohc.add_carvpath("13+5")
+  print
+  print "Bad stuff"
+  ohc.lowlevel_written_data(0,b"Bad stuff")
+  print ohc.hashing_isdone("10+5"), ohc.hashing_isdone("13+5")
+  print ohc.hashing_offset("10+5"), ohc.hashing_offset("13+5") 
+  print
+  print "Good stuff part 1"
+  ohc.lowlevel_read_data(9,b"Good")
+  print ohc.hashing_isdone("10+5"), ohc.hashing_isdone("13+5")
+  print ohc.hashing_offset("10+5"), ohc.hashing_offset("13+5")
+  print
+  print "Good stuff part 2"
+  ohc.lowlevel_read_data(12,b"d stuff")
+  print ohc.hashing_isdone("10+5"), ohc.hashing_isdone("13+5")
+  print ohc.hashing_offset("10+5"), ohc.hashing_offset("13+5")
+  print ohc.hashing_value("10+5"), ohc.hashing_value("13+5")
