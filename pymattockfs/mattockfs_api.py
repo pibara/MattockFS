@@ -65,17 +65,9 @@ class Context:
         yield job
   def fs_throttle_info(self):
 
-  def fs_full_archive(self):
-
   def module_set_weight(self,weight):
 
   def module_set_overflow(self,weight):
-
-  def module_instance_count(self):
-
-  def module_instance_count(self):
-
-  def module_do_reset(self):
 
   def anycast_throttle_info(self,peermodule):
 
@@ -90,5 +82,11 @@ if __name__ == '__main__':
     f.write("HARHAR")
   job.childsubmit("harmodule","router-state-14:11","x-mattock/harhar","har")
   job.done()
-    
-    
+  context2=Context("/export/home/rob/dissertation/mattock-dissertation/pymattockfs/mnt","harmodule")
+  context2.module_set_weight(7)
+  context2.module_set_overflow(3)
+  job2=context2.poll_job()
+
+  job2.childcarvpath("123+1000"}
+  job2.childsubmit("barmod","router-state-9:4","x-mattock/silly-sparse","sparse")
+  job.forward("bazmod","router-state:18:6")
