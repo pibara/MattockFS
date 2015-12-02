@@ -556,7 +556,7 @@ class Context:
   def make_top(self,size=0):
     return _Top(self.longpathmap,self.maxfstoken,size)
   def empty(self):
-    return _Entity(self.longpathmap,self.maxfstoken,size)
+    return _Entity(self.longpathmap,self.maxfstoken)
   #NOTE: This method should only be used in forensic filesystem or forensic framework implementations.
   #Open a raw repository file and make it accessible through a _Repository interface.
   #def open_repository(self,rawdatapath):

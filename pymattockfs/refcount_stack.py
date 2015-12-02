@@ -29,8 +29,6 @@
 #SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
 #
 
-import carvpath
-
 def _defaultlt(al1,al2):
   for index in range(0,len(al1)):
     if al1[index] < al2[index]:
@@ -98,7 +96,7 @@ class CarvpathRefcountStack:
       del self.entityrefcount[carvpath]
       self.ohashcollection.remove_carvpath(carvpath)
       r= self._stackdiminish(len(self.fragmentrefstack)-1,ent)
-      unmerged=r[0]
+      unmerged=r
       for fragment in unmerged:
         self.fadvise(fragment.offset,fragment.size,False) 
       return
@@ -205,7 +203,7 @@ class CarvpathRefcountStack:
       customsrt.append(entity)
     return customsrt
   def priority_custompick(self,params,ltfunction=_defaultlt,intransit=None,reverse=False):
-    for entity in self._priority_customsort(self,params,ltfunction,intransit,reverse):
+    for entity in self._priority_customsort(params,ltfunction,intransit,reverse):
       return entity #A bit nasty but safes needles itterations.
   def _stackextend(self,level,entity):
     if not (level < len(self.fragmentrefstack)):
@@ -218,25 +216,56 @@ class CarvpathRefcountStack:
       self._stackextend(level+1,unmerged)  
     return [merged,unmerged]
   def _stackdiminish(self,level,entity):
+    #Start with unmerging at thiss level
     ent=self.fragmentrefstack[level]
     res=ent.unmerge(entity)
     unmerged=res[1]
     remaining=res[0]
+    #If unmerging resulted in depletion of this level, remove level from stack.
     if len(self.fragmentrefstack[level].fragments) == 0:
       self.fragmentrefstack.pop(level)
+    #If there are additional fragments to unmerge, look at processing these
     if len(remaining.fragments) > 0:
+      #Should not happen at llevel zero.
       if level == 0:
-        raise RuntimeError("Data remaining after _stackdiminish at level 0")    
-      res2=self._stackdiminish(level-1,remaining)
-      unmerged.merge(res2[1])
-      return [res2[1],unmerged]
+        raise RuntimeError("Data remaining after _stackdiminish at level 0")
+      #Unmerge at one level lower and anything below that.
+      return self._stackdiminish(level-1,remaining)
     else:
       if level == 0:
-        return [unmerged,remaining]
+        return unmerged
       else:
-        return [remaining,unmerged];
+        return []
 
 
 if __name__ == "__main__":
-  print "Need to write some tests here"
-   
+  class FakeFadviseFunctor:
+    def __call__(self,offset,size,willneed):
+      if willneed:
+        print "FakeFadviseFunctor: ", offset,size,"NORMAL"
+      else:
+        print "FakeFadviseFunctor: ", offset,size,"DONTNEED"
+  import carvpath
+  import opportunistic_hash
+  fadvise=FakeFadviseFunctor()
+  context=carvpath.Context({},160)
+  col=opportunistic_hash.OpportunisticHashCollection(context) 
+  stack=CarvpathRefcountStack(context,fadvise,col)
+  stack.add_carvpath("0+1700_S1000_1750+1000")
+  print str(stack)
+  stack.add_carvpath("1500+1000")
+  print str(stack)
+  stack.add_carvpath("50+2650")
+  print str(stack)
+  stack.add_carvpath("2200+2200")
+  print str(stack)
+  #rval=stack.priority_custompick("S",intransit=["1500+1000","2200+2200"])
+  #print "Picked ",rval
+  stack.remove_carvpath("1500+1000")
+  print str(stack)
+  stack.remove_carvpath("2200+2200")
+  print str(stack)
+  stack.remove_carvpath("0+1700_S1000_1750+1000")
+  print str(stack)
+  stack.remove_carvpath("50+2650")
+  print str(stack)
