@@ -1,5 +1,6 @@
 #!/usr/bin/python
 import fuse
+import anycast
 import stat
 import errno 
 import random
@@ -11,281 +12,6 @@ import sys
 import copy
 
 fuse.fuse_python_api = (0, 2)
-
-try:
-    from pyblake2 import blake2b
-except ImportError:
-    import sys
-    print("")
-    print("\033[93mERROR:\033[0m Pyblake2 module not installed. Please install blake2 python module. Run:")
-    print("")
-    print("    sudo pip install pyblake2")
-    print("")
-    sys.exit()
-
-class Repository:
-  def __init__(self,ddfile,context):
-    self.cpcontext=context
-    col=opportunistic_hash.OpportunisticHashCollection(context)
-    self.repository=repository.Repository(context,ddfile,col)
-    self.openfiles={}
-    self.lastfd=1
-  def full_archive_size(self):
-    return self.repository.top.size
-  def validcarvpath(self,cp):
-    try:
-      ent=self.cpcontext.parse(cp)
-      rval=self.repository.top.test(ent)
-      return rval
-    except:
-      return False
-  def flatten(self,basecp,subcp):
-    try:
-      ent=self.cpcontext.parse(basecp + "/" + subcp)
-      return str(ent)
-    except:
-      return None
-  def anycast_set_volume(self,anycast):
-    volume=0
-    for jobid in anycast:
-      volume += self.cpcontext.parse(anycast[jobid].carvpath).totalsize
-    return volume 
-  def anycast_best(self,modulename,anycast,sort_policy):
-    if len(anycast) > 0:
-      cp2key={}
-      for anycastkey in anycast.keys():
-        cp=anycast[anycastkey].carvpath
-        cp2key[cp]=anycastkey
-      bestcp=self.repository.rep.priority_custompick(sort_policy,intransit=cp2key.keys())  
-      return cp2key[bestcp]
-    return None
-  def getTopThrottleInfo(self):
-    totalsize=self.repository.top.size
-    ioa = 0 #FIXME, we should keep track of data that is explicitly read/written
-    normal=self.repository.volume()
-    willneed=0 #FIXME: we should allow the framework to mark chunks as willneed.
-    dontneed=totalsize-willneed-normal
-    return (normal,willneed,dontneed,ioa) 
-  def anycast_best_modules(self,modulesstate,moduleset,letter):
-    fetchvolume=False
-    if letter in "VDC":
-      fetchvolume=True
-    bestmodules=set()
-    bestval=0
-    for module in moduleset.modules.keys():
-      anycast = moduleset.modules[module].anycast
-      overflow = moduleset.modules[module].overflow
-      if len(anycast) > overflow:
-        volume=0
-        if fetchvolume:
-          volume=self.anycast_set_volume(anycast)
-        val=0
-        if letter == "S":
-          val=len(anycast)
-        if letter == "V":
-          val=volume
-        if letter == "D":
-          if volume > 0:
-            val=float(len(anycast))/float(volume)
-          else:
-            if len(anycast) > 0:
-               return 100*len(anycast)
-        if letter == "W":
-          val=modulesstate[module].weight
-        if letter == "C":
-          if volume > 0:
-            val=float(modulesstate[module].weight)*float(len(anycast))/float(volume)
-          else:
-            if len(anycast) > 0:
-              return 100*len(anycast)*modulesstate[module].weight
-        if val > bestval:
-          bestval=val
-          bestmodules=set()
-        if val == bestval:
-          bestmodules.add(module)
-    return bestmodules
-  def openro(self,carvpath,path):
-    ent=self.cpcontext.parse(carvpath)
-    if path in self.openfiles:
-      self.openfiles[path].refcount += 1
-    else :
-      ent=self.cpcontext.parse(carvpath)
-      self.openfiles[path]=self.repository.openro(carvpath,ent)
-    return 0
-  def read(self,path,offset,size):
-    return self.openfiles[path].read(offset,size)
-  def close(self,path):
-    self.openfiles[path].refcount -= 1
-    if self.openfiles[path].refcount < 1:
-      del self.openfiles[path]
-    return 0
- 
-    
-class ModuleInstance:
-  def __init__(self,modulename,instancehandle,module):
-    self.module=module
-    self.modulename=modulename
-    self.instancehandle=instancehandle
-    self.lastjobno=0
-    self.currentjob=None
-    self.currentjobhandle=None
-    self.select_policy="S"
-    self.sort_policy="HrdS"
-  def active(self):
-    return self.currentjob != None
-  def teardown(self):
-    if self.currentjob != None:
-      self.currentjob.commit()
-  def unregister(self):
-    self.module.unregister(self.instancehandle)
-  def accept_job(self):
-    if self.currentjob != None:
-      self.currentjob.commit()
-    if self.sort_policy=="K":
-      self.currentjob=self.module.get_kickjob() 
-    else:
-      self.currentjob=self.module.anycast_pop(self.select_policy,self.sort_policy)
-    if self.currentjob != None:
-      return self.currentjob.jobhandle
-    return None
-
-class Job:
-  def __init__(self,jobhandle,modulename,carvpath,router_state,mime_type,file_extension,allmodules,provenance=copy.deepcopy(list())):
-    self.jobhandle=jobhandle
-    self.modulename=modulename
-    self.carvpath=carvpath
-    self.router_state=router_state
-    self.mime_type=mime_type
-    self.file_extension=file_extension
-    self.submit_info=[]
-    self.allmodules=allmodules
-    self.provenance = provenance
-    provenancerecord={}
-    provenancerecord["job"]=jobhandle
-    provenancerecord["module"]=modulename
-    if len(provenance) == 0:
-      provenancerecord["carvpath"]=carvpath
-      provenancerecord["mime_type"]=mime_type
-    self.provenance.append(provenancerecord)
-  def commit(self):
-    if self.jobhandle in self.allmodules.jobs:
-      print "PROVENANCE:",self.provenance
-      del self.allmodules.jobs[self.jobhandle] 
-  def next_hop(self,module,state):
-    self.allmodules[module].anycast_add(self.carvpath,state,self.mime_type,self.file_extension,self.provenance)
-    del self.allmodules.jobs[self.jobhandle]
-
-class ModuleState:
-  def __init__(self,modulename,strongname,allmodules,rep):
-    self.name=modulename
-    self.instances={}
-    self.anycast={}
-    self.lastinstanceno=0
-    self.lastjobno=0
-    self.secret=strongname
-    self.weight=100              #rw extended attribute
-    self.overflow=10             #rw extended attribute
-    self.allmodules=allmodules
-    self.rep=rep
-  def register_instance(self):   #read-only (responsibility accepting) extended attribute.
-    instanceno=self.lastinstanceno
-    self.lastinstanceno += 1
-    rval = "I" + blake2b("I" + hex(instanceno)[2:].zfill(16),digest_size=32,key=self.secret[:64]).hexdigest()
-    self.instances[rval]=ModuleInstance(self.name,rval,self)
-    self.allmodules.instances[rval]=self.instances[rval]
-    return rval
-  def unregister(self,handle):
-    if handle in self.instances:
-      self.instances[handle].teardown()
-      del self.instances[handle]
-      del self.allmodules.instances[handle]
-  def reset(self):             #writable extended attribute (setting to one results in reset)
-    handles=self.instances.keys()
-    for handle in handles:
-      self.unregister(handle)
-  def instance_count(self):   #read-only extended attribute
-    return len(self.instances)
-  def throttle_info(self):    #read-only extended attribute
-    set_size=len(self.anycast)
-    set_volume=self.rep.anycast_set_volume(self.anycast)
-    return (set_size,set_volume)
-  def anycast_add(self,carvpath,router_state,mime_type,file_extension):   #FIXME: UNTESTED !!!
-    jobno=self.lastjobno
-    self.lastjobno += 1
-    jobhandle = "J" + blake2b("J" + hex(jobno)[2:].zfill(16),digest_size=32,key=self.secret[:64]).hexdigest()
-    self.anycast[jobhandle]=Job(jobhandle,self.name,carvpath,router_state,mime_type,file_extension,self.allmodules,[])
-    self.allmodules.path_state[carvpath]="anycast"
-    self.allmodules.path_module[carvpath]=self.name
-  def get_kickjob(self):
-    jobno=self.lastjobno
-    self.lastjobno += 1
-    jobhandle = "J" + blake2b("J" + hex(jobno)[2:].zfill(16),digest_size=32,key=self.secret[:64]).hexdigest()
-    self.allmodules.jobs[jobhandle]=Job(jobhandle,"kickstart","S0","","application/x-zerosize","empty",self.allmodules,[])
-    return self.allmodules.jobs[jobhandle]
-  def anycast_pop(self,sort_policy,select_policy="S"): #FIXME: UNTESTED !!!
-    if self.name != "loadbalance":
-      best=self.rep.anycast_best(self.name,self.anycast,sort_policy)
-      if best != None:
-        self.allmodules[best]=self.anycast.pop(best)
-        self.allmodules.path_state[self.allmodules[best].carvpath]="pending"
-        self.allmodules.path_module[self.allmodules[best].carvpath]=self.name
-        return self.allmodules[best]
-    else:
-      best=self.allmodules.selectmodule(select_policy)
-      if best != None:
-        best=anycast_pop(sort_policy,select_policy)
-        self.allmodules.path_state[best.carvpath]="migrating"
-        self.allmodules.path_module[best.carvpath]=self.name
-        return best
-      return None 
-
-class ModulesState:
-  def __init__(self,rep):
-    self.rep=rep
-    self.modules={}
-    self.instances={}
-    self.jobs={}
-    self.newdata={}
-    self.path_state={} 
-    self.path_module={}
-    random.seed()
-    self.rumpelstiltskin=''.join(random.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") for _ in range(0,64))
-  def __getitem__(self,key):
-    if not key in self.modules:
-      strongname = "M" + blake2b("M" +key,digest_size=32,key=self.rumpelstiltskin).hexdigest()
-      self.modules[key]=ModuleState(key,strongname,self,self.rep)
-    return self.modules[key]
-  def selectmodule(self,select_policy):
-    moduleset=self.modules.keys()
-    if len(moduleset) == 0:
-      return None
-    if len(moduleset) == 1:
-      return moduleset[0]
-    for letter in select_policy:
-      moduleset=self.rep.anycast_best_modules(self,moduleset,letter) 
-      if len(moduleset) == 1:
-        return moduleset[0]
-    return moduleset[0]
-  def validmodulename(self,modulename):
-    if len(modulename) < 2:
-      return False
-    if len(modulename) > 40:
-      return False
-    if not modulename.isalpha() and  modulename.islower():
-      return False
-    return True
-  def validinstancecap(self,handle):
-    if handle in self.instances:
-      return True
-    return False
-  def validjobcap(self,handle):
-    if handle in self.jobs:
-      return True
-    return False  
-  def validnewdatacap(self,handle):
-    if handle in self.newdata:
-      return True
-    return False
 
 STAT_MODE_DIR = stat.S_IFDIR |stat.S_IRUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH| stat.S_IXOTH
 STAT_MODE_DIR_NOLIST = stat.S_IFDIR | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
@@ -375,7 +101,7 @@ class TopCtl:
     if name == "user.throttle_info":
       return ";".join(map(lambda x: str(x),self.rep.getTopThrottleInfo()))
     if name == "user.full_archive":
-      return "data/" + str(self.rep.repository.top.topentity) + ".raw"
+      return "data/" + str(self.rep.top.topentity) + ".raw"
     return -errno.ENODATA
   def setxattr(self,name, val):
     if name in ("user.throttle_info","user.full_archive"):
@@ -586,8 +312,8 @@ class CarvPathFile:
         jobmeta=self._lookup(module)
         mimetype=jobmeta[0]
         extension=jobmeta[1]
-      if self.carvpath in self.modules.rep.repository.stack.ohashcollection.ohash:
-        ohash = self.modules.rep.repository.stack.ohashcollection.ohash[self.carvpath].ohash
+      if self.carvpath in self.modules.rep.stack.ohashcollection.ohash:
+        ohash = self.modules.rep.stack.ohashcollection.ohash[self.carvpath].ohash
         offset=str(ohash.offset)
         hashresult=ohash.result
         if state == "none":
@@ -632,8 +358,8 @@ class MattockFS(fuse.Fuse):
       self.selectre = re.compile(r'^[SVDWC]{1,5}$')
       self.sortre = re.compile(r'^(K|[RrOHDdWS]{1,6})$')
       self.archive_dd = dd
-      self.rep=Repository(self.archive_dd,self.context)
-      self.ms=ModulesState(self.rep)
+      self.rep=repository.Repository(self.archive_dd,self.context)
+      self.ms=anycast.ModulesState(self.rep)
       self.topctl=TopCtl(self.rep)
       self.needinit=True
     def parsepath(self,path):

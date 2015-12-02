@@ -33,6 +33,7 @@ import os
 import fcntl
 import carvpath
 import refcount_stack
+import opportunistic_hash
 
 try:
   from os import posix_fadvise,POSIX_FADV_DONTNEED,POSIX_FADV_NORMAL
@@ -86,8 +87,11 @@ class _OpenFile:
     return result
 
 class Repository:
-  def __init__(self,context,reppath,col):
+  def __init__(self,reppath,context):
     self.context=context
+    col=opportunistic_hash.OpportunisticHashCollection(context)
+    self.openfiles={}
+    self.lastfd=1
     self.fd=os.open(reppath,(os.O_RDWR | os.O_LARGEFILE | os.O_NOATIME | os.O_CREAT))
     cursize=os.lseek(self.fd,0,os.SEEK_END) 
     posix_fadvise(self.fd,0,cursize,POSIX_FADV_DONTNEED)
@@ -112,6 +116,95 @@ class Repository:
     return self.stack.fragmentrefstack[0].totalsize
   def openro(self,cp,entity):
     return _OpenFile(self.stack,cp,True,entity,self.fd)
+  def full_archive_size(self):
+    return self.top.size
+  def validcarvpath(self,cp):
+    try:
+      ent=self.context.parse(cp)
+      rval=self.top.test(ent)
+      return rval
+    except:
+      return False
+  def flatten(self,basecp,subcp):
+    try:
+      ent=self.context.parse(basecp + "/" + subcp)
+      return str(ent)
+    except:
+      return None
+  def anycast_set_volume(self,anycast):
+    volume=0
+    for jobid in anycast:
+      volume += self.context.parse(anycast[jobid].carvpath).totalsize
+    return volume
+  def anycast_best(self,modulename,anycast,sort_policy):
+    if len(anycast) > 0:
+      cp2key={}
+      for anycastkey in anycast.keys():
+        cp=anycast[anycastkey].carvpath
+        cp2key[cp]=anycastkey
+      bestcp=self.rep.priority_custompick(sort_policy,intransit=cp2key.keys())           
+      return cp2key[bestcp]
+    return None
+  def getTopThrottleInfo(self):
+    totalsize=self.top.size
+    ioa = 0 #FIXME, we should keep track of data that is explicitly read/written
+    normal=self.volume()
+    willneed=0 #FIXME: we should allow the framework to mark chunks as willneed.
+    dontneed=totalsize-willneed-normal
+    return (normal,willneed,dontneed,ioa)
+  def anycast_best_modules(self,modulesstate,moduleset,letter):
+    fetchvolume=False
+    if letter in "VDC":
+      fetchvolume=True
+    bestmodules=set()
+    bestval=0
+    for module in moduleset.modules.keys():
+      anycast = moduleset.modules[module].anycast
+      overflow = moduleset.modules[module].overflow
+      if len(anycast) > overflow:
+        volume=0
+        if fetchvolume:
+          volume=self.anycast_set_volume(anycast)
+        val=0
+        if letter == "S":
+          val=len(anycast)
+        if letter == "V":
+          val=volume
+        if letter == "D":
+          if volume > 0:
+            val=float(len(anycast))/float(volume)
+          else:
+            if len(anycast) > 0:
+               return 100*len(anycast)
+        if letter == "W":
+          val=modulesstate[module].weight
+        if letter == "C":
+          if volume > 0:
+            val=float(modulesstate[module].weight)*float(len(anycast))/float(volume)
+          else:
+            if len(anycast) > 0:
+              return 100*len(anycast)*modulesstate[module].weight
+        if val > bestval:
+          bestval=val
+          bestmodules=set()
+        if val == bestval:
+          bestmodules.add(module)
+    return bestmodules
+  def openro(self,carvpath,path):
+    ent=self.context.parse(carvpath)
+    if path in self.openfiles:
+      self.openfiles[path].refcount += 1
+    else :
+      ent=self.context.parse(carvpath)
+      self.openfiles[path]=self.openro(carvpath,ent)
+    return 0
+  def read(self,path,offset,size):
+    return self.openfiles[path].read(offset,size)
+  def close(self,path):
+    self.openfiles[path].refcount -= 1
+    if self.openfiles[path].refcount < 1:
+      del self.openfiles[path]
+    return 0
 
 if __name__ == "__main__":
   import carvpath
