@@ -59,10 +59,11 @@ class _Opportunistic_Hash:
   def sparse(self,length):
     _h.update(bytearray(length).decode())
   def written_chunk(self,data,offset):
+    print "_Opportunistic_Hash::written_chunk",offset,len(data)
     if offset < self.offset or self.isdone:
       self._h=ohash_algo(digest_size=32) #restart, we are no longer done, things are getting written.
       self.offset=0
-      self.isdone=false
+      self.isdone=False
       self.result="INCOMPLETE-OPPORTUNISTIC_HASHING"
     if (offset > self.offset):
       #There is a gap!
@@ -75,12 +76,14 @@ class _Opportunistic_Hash:
         self._h.update(data)
         self.offset += len(data)  
   def read_chunk(self,data,offset):
+    print "_Opportunistic_Hash::read_chunk",offset,len(data),"("+data+")"
     if (not self.isdone) and offset <= self.offset and offset+len(data) > self.offset:
       #Fragment overlaps our offset; find the part that we didn't process yet.
       start=self.offset - offset
       datasegment = data[start:]
       self._h.update(datasegment)
       self.offset += len(datasegment)
+      print self.offset,self.fullsize
       if self.offset > 0 and self.offset == self.fullsize:
         self.done()
   def done(self):
@@ -92,75 +95,78 @@ class _OH_Entity:
   def __init__(self,ent):
     self.ent=copy.deepcopy(ent)
     self.ohash=_Opportunistic_Hash(self.ent.totalsize)
-    self.roi=ent._getroi(0)
-    print self.roi
+    self.roi=ent.getroi(0)
+    self.startroi=ent.getroi(0)
   def  written_parent_chunk(self,data,parentoffset):
     parentfragsize=len(data)
-    print parentoffset,parentfragsize,self.roi
-    #Quick range of interest check.
-    if parentoffset < self.roi[1] and (parentoffset+parentfragsize) > self.roi[0]:
-      childoffset=0
-      working=False
-      updated=False
+    parentendoffset = parentoffset+parentfragsize-1
+    #Quick range of interest check. Only check if there is any overlap between the range off interest and the parent chunk.
+    if (not self.ohash.isdone) and parentoffset <= self.startroi[1] and parentendoffset <= self.startroi[0]:
+      childoffset=0 #Start of with a child offset of zero.
+      working=False #This marks if we are in the progress of working on the hash.
+      updated=False #This indicates that the hash has been updated in this read_parent_chunk invocation.
       for fragment in self.ent.fragments:
-        if (not fragment.issparse()) and parentoffset >= fragment.offset and parentoffset < fragment.offset + fragment.size:
-          working=True
-          realstart = fragment.offset 
-          realend = fragment.offset+fragment.size
-          if parentoffset > realstart:
-            realstart = parentoffset
-          if (parentoffset + parentfragsize) < realend:
-            realend=parentoffset + parentfragsize
-          if realend > realstart:
-           relrealstart = realstart-parentoffset
-           relrealend = realend-parentoffset
-           self.ohash.written_chunk(data[relrealstart:relrealend],childoffset+realstart-fragment.offset)  
-          updated=True
+        #First look at real fragments.
+        if not fragment.issparse():
+          lastbyte = fragment.offset + fragment.size -1
+          #Check if there is at least some overlap of the fragment and the parent chunk.
+          if lastbyte >= parentoffset and fragment.offset <= parentendoffset:
+            reducedparentstart=parentoffset
+            if fragment.offset > reducedparentstart:
+              reducedparentstart=fragment.offset
+            reducedparentend=parentendoffset
+            if lastbyte < reducedparentend:
+              reducedparentend=lastbyte
+            reducedparentsize=reducedparentend+1-reducedparentstart
+            inchildoffset = childoffset + reducedparentstart - fragment.offset
+            inparentoffset = reducedparentstart - parentoffset
+            self.ohash.written_chunk(data[inparentoffset:inparentoffset+reducedparentsize],inchildoffset)
+            working=True
+            updated=True
+          else:
+            working=False
         else:
           if working and fragment.issparse():
             self.ohash.sparse(fragment.size)
-          else:
-            working=False
         childoffset+=fragment.size
       if updated:
         #Update our range of interest.
-        self.roi=self.ent._getroi(self.ohash.offset)
+        self.roi=self.ent.getroi(self.ohash.offset)
   def  read_parent_chunk(self,data,parentoffset):
     parentfragsize=len(data)
-    print parentoffset,parentfragsize,self.roi
-    #Quick range of interest check.
-    if (not self.ohash.isdone) and parentoffset < self.roi[1] and (parentoffset+parentfragsize) > self.roi[0]:
-      childoffset=0
-      working=False
-      updated=False
-      print "inrange"
+    parentendoffset = parentoffset+parentfragsize-1
+    #Quick range of interest check. Only check if hahing is needed and start of interest is contained in parent frag.
+    if (not self.ohash.isdone) and parentoffset <= self.roi[0] and parentendoffset >= self.roi[0]:
+      childoffset=0 #Start of with a child offset of zero.
+      working=False #This marks if we are in the progress of working on the hash.
+      updated=False #This indicates that the hash has been updated in this read_parent_chunk invocation.
       for fragment in self.ent.fragments:
-        print "FRAG",fragment.offset,fragment.size
-        if (not fragment.issparse()) and parentoffset >= fragment.offset and parentoffset < fragment.offset + fragment.size:
-          print "frag ",fragment.offset,fragment.size
-          working=True
-          realstart = fragment.offset
-          realend = fragment.offset+fragment.size
-          if parentoffset > realstart:
-            realstart = parentoffset
-          if (parentoffset + parentfragsize) < realend:
-            realend=parentoffset + parentfragsize
-          if realend > realstart:
-           relrealstart = realstart-parentoffset
-           relrealend = realend-parentoffset
-           self.ohash.read_chunk(data[relrealstart:relrealend],childoffset+realstart-fragment.offset)
-          updated=True
+        #First look at real fragments.
+        if not fragment.issparse():
+          lastbyte = fragment.offset + fragment.size -1
+          #Check if there is at least some overlap of the fragment and the parent chunk.
+          if lastbyte >= parentoffset and fragment.offset <= parentendoffset:
+            reducedparentstart=parentoffset
+            if fragment.offset > reducedparentstart:
+              reducedparentstart=fragment.offset
+            reducedparentend=parentendoffset
+            if lastbyte < reducedparentend:
+              reducedparentend=lastbyte
+            reducedparentsize=reducedparentend+1-reducedparentstart
+            inchildoffset = childoffset + reducedparentstart - fragment.offset
+            inparentoffset = reducedparentstart - parentoffset
+            self.ohash.read_chunk(data[inparentoffset:inparentoffset+reducedparentsize],inchildoffset)
+            working=True
+            updated=True
+          else:
+            working=False
         else:
           if working and fragment.issparse():
             self.ohash.sparse(fragment.size)
-          else:
-            working=False
         childoffset+=fragment.size
       if updated:
         #Update our range of interest.
-        self.roi=self.ent._getroi(self.ohash.offset)
-      if self.ohash.isdone:
-        print "DEBUG: Completed hash for "+str(self.ent)+" : " + self.ohash.result
+        self.roi=self.ent.getroi(self.ohash.offset)
   def hashing_offset(self):
     return self.ohash.offset
   def hashing_result(self):
@@ -194,21 +200,24 @@ if __name__ == "__main__":
   import carvpath
   context=carvpath.Context({},160)
   ohc=OpportunisticHashCollection(context)
-  ohc.add_carvpath("10+5")
-  ohc.add_carvpath("13+5")
+  ohc.add_carvpath("10+5") #10,11,12,13,14
+  ohc.add_carvpath("13+5") #         13,14,15,16,17
   print
   print "Bad stuff"
-  ohc.lowlevel_written_data(0,b"Bad stuff")
+  ohc.lowlevel_written_data(0,b"Bad stuff") #0..8
   print ohc.hashing_isdone("10+5"), ohc.hashing_isdone("13+5")
   print ohc.hashing_offset("10+5"), ohc.hashing_offset("13+5") 
   print
-  print "Good stuff part 1"
-  ohc.lowlevel_read_data(9,b"Good")
+  print "Good stuff part 1 (Good)"
+  ohc.lowlevel_read_data(9,b"Good") #9 .. 12
   print ohc.hashing_isdone("10+5"), ohc.hashing_isdone("13+5")
   print ohc.hashing_offset("10+5"), ohc.hashing_offset("13+5")
   print
-  print "Good stuff part 2"
-  ohc.lowlevel_read_data(12,b"d stuff")
+  print "Spoil a bit"
+  ohc.lowlevel_written_data(10,b"o")
+  print
+  print "Good stuff part 2 (d stuff)"
+  ohc.lowlevel_read_data(12,b"d stuff") # 12 .. 18
   print ohc.hashing_isdone("10+5"), ohc.hashing_isdone("13+5")
   print ohc.hashing_offset("10+5"), ohc.hashing_offset("13+5")
   print ohc.hashing_value("10+5"), ohc.hashing_value("13+5")
