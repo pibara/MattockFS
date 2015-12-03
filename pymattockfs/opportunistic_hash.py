@@ -59,7 +59,6 @@ class _Opportunistic_Hash:
   def sparse(self,length):
     _h.update(bytearray(length).decode())
   def written_chunk(self,data,offset):
-    print "_Opportunistic_Hash::written_chunk",offset,len(data)
     if offset < self.offset or self.isdone:
       self._h=ohash_algo(digest_size=32) #restart, we are no longer done, things are getting written.
       self.offset=0
@@ -76,14 +75,12 @@ class _Opportunistic_Hash:
         self._h.update(data)
         self.offset += len(data)  
   def read_chunk(self,data,offset):
-    print "_Opportunistic_Hash::read_chunk",offset,len(data),"("+data+")"
     if (not self.isdone) and offset <= self.offset and offset+len(data) > self.offset:
       #Fragment overlaps our offset; find the part that we didn't process yet.
       start=self.offset - offset
       datasegment = data[start:]
       self._h.update(datasegment)
       self.offset += len(datasegment)
-      print self.offset,self.fullsize
       if self.offset > 0 and self.offset == self.fullsize:
         self.done()
   def done(self):

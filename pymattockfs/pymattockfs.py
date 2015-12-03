@@ -10,22 +10,25 @@ import repository
 import opportunistic_hash
 import sys
 import copy
+import os
 
 fuse.fuse_python_api = (0, 2)
 
+#A few constant values for common inode types.
 STAT_MODE_DIR = stat.S_IFDIR |stat.S_IRUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH| stat.S_IXOTH
 STAT_MODE_DIR_NOLIST = stat.S_IFDIR | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
 STAT_MODE_LINK = stat.S_IFLNK |stat.S_IRUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH| stat.S_IXOTH
-STAT_MODE_FILE = stat.S_IFREG |stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH |stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH
+STAT_MODE_FILE = stat.S_IFREG |stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH | stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH
 STAT_MODE_FILE_RO = stat.S_IFREG |stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH
 
+#Generate a decent stat object.
 def defaultstat(mode=STAT_MODE_DIR_NOLIST,size=0):
   st = fuse.Stat()
   st.st_blksize= 512
   st.st_mode = mode
   st.st_nlink = 1
-  st.st_uid = 0
-  st.st_gid = 0
+  st.st_uid = os.geteuid()
+  st.st_gid = os.getegid()
   st.st_size = size
   st.st_blocks = 0
   st.st_atime =  0
@@ -220,16 +223,18 @@ class JobCtl:
   def readlink(self):
     return -errno.EINVAL
   def listxattr(self):
-    return ["user.routing_info","user.derive_child_entity","user.create_mutable_child_entity","user.set_child_submit_info","user.job_carvpath"]
+    return ["user.routing_info","user.submit_child","user.create_mutable","user.frozen_mutable","user.mutable","user.job_carvpath"]
   def getxattr(self,name, size):
     if name == "user.routing_info":
       return self.job.modulename + ";" + self.job.router_state
-    if name == "user.derive_child_entity":
-      return "0"
-    if name == "user.create_mutable_child_entity":
-      return "0"
-    if name == "user.set_child_submit_info":
-      return "0"
+    if name == "user.submit_child":
+      return ""
+    if name == "user.create_mutable":
+      return ""
+    if name == "user.mutable":
+      return self.job.get_mutable()
+    if name == "user.frozen_mutable":
+      return self.job.get_frozen_mutable()
     if name == "user.job_carvpath":
       return "data/" + self.job.carvpath + "." + self.job.file_extension
     return -errno.ENODATA
@@ -240,22 +245,30 @@ class JobCtl:
         if self.job.allmodules.validmodulename(parts[0]):
           self.job.next_hop(parts[0],parts[1])
       return 0
-    if name == "user.derive_child_entity":
+    if name == "user.submit_child":
+      parts = val.split(";")
+      if len(parts) == 5:
+        #carvpath,nexthop,routerstate,mime,ext
+        job.submit_child(parts[0],parts[1],parts[2],parts[3],parts[4])
       return 0
-    if name == "user.create_mutable_child_entity":
+    if name == "user.create_mutable":
+      job.create_mutable(int(val))
       return 0
-    if name == "user.set_child_submit_info":
-      return 0
+    if name == "user.frozen_mutable":
+      return -errno.EPERM
     if name == "user.job_carvpath":
-      return 0
+      return "data/" + job.carvpath + "." + job.file_extension
     return -errno.ENODATA
   def open(self,flags):
     return -errno.EPERM
 class NewDataCtl:
-  def __init__(self,newdata):
-    self.newdata=newdata
+  def __init__(self,carvpath,rep,context):
+    self.rep=rep
+    self.carvpath=carvpath
+    self.context=context
   def getattr(self):
-    return  defaultstat(STAT_MODE_FILE_RO)
+    size=self.context.parse(self.carvpath).totalsize
+    return  defaultstat(STAT_MODE_FILE_RO,size)
   def opendir(self):
     return -errno.ENOTDIR
   def readlink(self):
@@ -267,7 +280,7 @@ class NewDataCtl:
   def setxattr(self,name, val):
     return -errno.ENODATA
   def open(self,flags):
-    return -errno.EPERM
+    return self.rep.openrw(self.carvpath,path) 
 class CarvPathFile:
   def __init__(self,carvpath,rep,context,modules):
     self.carvpath=carvpath
@@ -283,36 +296,17 @@ class CarvPathFile:
     return -errno.EINVAL
   def listxattr(self):
     return ["user.path_state","user.throttle_info"]
-  def _lookup(self,module):
-    for anycastkey in ms[module].anycast.keys():
-      if ms.modules[modulekey].anycast[anycastkey].carvpath==self.carvpath:
-        job = ms.modules[modulekey].anycast[anycastkey]
-        return (job.mime_type,job.file_extension)
-    return ("","")
   def getxattr(self,name, size):
     if name == "user.path_state":
-      module=""
-      state="none"
-      jobmeta=""
       offset="0"
-      mimetype=""
-      extension=""
-      hashresult="INCOMPLETE-OPPORTUNISTIC_HASHING"
-      if self.carvpath in self.modules.path_module:
-        module=self.modules.path_module[self.carvpath]
-        state=self.modules.path_state[self.carvpath]
-        jobmeta=self._lookup(module)
-        mimetype=jobmeta[0]
-        extension=jobmeta[1]
+      hashresult=""
       if self.carvpath in self.modules.rep.stack.ohashcollection.ohash:
         ohash = self.modules.rep.stack.ohashcollection.ohash[self.carvpath].ohash
         offset=str(ohash.offset)
         hashresult=ohash.result
-        if state == "none":
-          state="open"
-      return state + ";" + module + ";" + mimetype + ";" + extension + ";" + hashresult + ";" + offset
+      return hashresult + ";" + offset
     if name == "user.throttle_info":
-      return ";;;" #FIXME, should return fadv info (normal,willneed,dontneed,io_access)
+      return ";".join(map(lambda x: str(x),self.modules.rep.stack.carvpath_throttle_info(self.carvpath)))
   def setxattr(self,name, val):
     if name in ("user.state","user.throttle_info"):
       return -errno.EPERM
@@ -341,9 +335,9 @@ class CarvPathLink:
     return -errno.EPERM
 
 class MattockFS(fuse.Fuse):
-    def __init__(self,dash_s_do,version,usage,dd):
+    def __init__(self,dash_s_do,version,usage,dd,lpdb):
       super(MattockFS, self).__init__(version=version,usage=usage,dash_s_do=dash_s_do)
-      longpathdb ={} #FIXME: persistent or distributed longpath storage is desired.
+      longpathdb =lpdb 
       self.context=carvpath.Context(longpathdb)
       self.topdir=TopDir()
       self.nolistdir=NoList()
@@ -451,7 +445,7 @@ if __name__ == '__main__':
           isoption=False
     mattockfs = MattockFS(version = '%prog ' + '0.1.0',
                usage = 'Mattock filesystem ' + fuse.Fuse.fusage,
-               dash_s_do = 'setsingle',dd=dd)
+               dash_s_do = 'setsingle',dd=dd,lpdb={})
     #Seems option parsing is a bit tricky, we add it to the expected options so we don't croke.
     mattockfs.parser.add_option(mountopt="archive_dd",
                                 metavar="DD",

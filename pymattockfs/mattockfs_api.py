@@ -56,22 +56,36 @@ class Job:
 
 class Context:
   def __init__(self,mountpoint,module,initial_sort_policy=None):
+    self.selectre = re.compile(r'^[SVDWC]{1,5}$')
+    self.sortre = re.compile(r'^(K|[RrOHDdWS]{1,6})$')    
     self.mountpoint=mountpoint
     self.main_ctl=xattr.xattr(self.mountpoint + "/mattockfs.ctl")
     self.module_ctl=xattr.xattr(self.mountpoint + "/module/" + module + ".ctl")
     self.instance_ctl=None
     path=self.module_ctl["user.register_instance"]
-    print path
     self.instance_ctl = xattr.xattr(self.mountpoint + "/" + path)
     if not initial_sort_policy == None:
-      self.instance_ctl["user.sort_policy"] = initial_sort_policy
+      self.set_sort_policy(initial_sort_policy)
+      ok=bool(self.sortre.search(initial_sort_policy))
+      if ok:
+        self.instance_ctl["user.sort_policy"] = initial_sort_policy
+      else:
+        raise RuntimeError("Invalid sort policy string")      
   def __del__(self):
     if self.instance_ctl != None:
       self.instance_ctl["user.unregister"]="1"
   def set_sort_policy(self,policy):
-    self.instance_ctl["user.sort_policy"]=policy
+    ok=bool(self.sortre.search(policy))
+    if ok:
+      self.instance_ctl["user.sort_policy"] = policy
+    else:
+      raise RuntimeError("Invalid sort policy string")
   def set_select_policy(self,pollicy):
-    self.instance_ctl["user.select_policy"]=pollicy
+    ok=bool(self.selectre.search(policy))
+    if ok:
+      self.instance_ctl["user.select_policy"] = policy
+    else:
+      raise RuntimeError("Invalid select policy string")
   def poll_job(self):
     job=self.instance_ctl["user.accept_job"]
     if job == "":

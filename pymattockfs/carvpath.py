@@ -368,6 +368,11 @@ class _Entity:
   def overlaps(self,entity):
     test=lambda a,b: a and b
     return _fragapply(self,entity,test)
+  def overlap_size(self,entity):
+    size1=self.totalsize + entity.totalsize
+    tent=copy.deepcopy(entity)
+    tent.merge(self)
+    return size1 - tent.totalsize
   def density(self,entity):
     t=lambda a,b: a and b
     r=_fragapply(self,entity,[t])

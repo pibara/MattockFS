@@ -77,13 +77,13 @@ class _OpenFile:
   def __del__(self):
     self.stack.remove_carvpath(self.cp)
   def read(self,offset,size):
-    readent=self.entity.subentity(_Entity(self.entity.longpathmap,self.entity.maxfstoken,[carvpath.Fragment(offset,size)]),True)
+    readent=self.entity.subentity(carvpath._Entity(self.entity.longpathmap,self.entity.maxfstoken,[carvpath.Fragment(offset,size)]),True)
     result=b''
     for chunk in readent:
       os.lseek(self.fd, chunk.offset, 0)
       datachunk = os.read(self.fd, chunk.size)
       result += datachunk
-      self.stack.lowlevel_read_data(chunk.offset,datachunk)
+      self.stack.ohashcollection.lowlevel_read_data(chunk.offset,datachunk)
     return result
 
 class Repository:
@@ -114,8 +114,6 @@ class Repository:
     if len(self.stack.fragmentrefstack) == 0:
       return 0
     return self.stack.fragmentrefstack[0].totalsize
-  def openro(self,cp,entity):
-    return _OpenFile(self.stack,cp,True,entity,self.fd)
   def full_archive_size(self):
     return self.top.size
   def validcarvpath(self,cp):
@@ -194,7 +192,7 @@ class Repository:
       self.openfiles[path].refcount += 1
     else :
       ent=self.context.parse(carvpath)
-      self.openfiles[path]=self.openro(carvpath,ent)
+      self.openfiles[path]=_OpenFile(self.stack,carvpath,True,ent,self.fd)
     return 0
   def read(self,path,offset,size):
     return self.openfiles[path].read(offset,size)

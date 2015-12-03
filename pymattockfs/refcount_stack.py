@@ -56,6 +56,13 @@ class CarvpathRefcountStack:
     self.entityrefcount=dict() #Entity refcount for handling multiple instances of the exact same entity.
     self.fragmentrefstack=[] #A stack of fragments with different refcounts for keeping reference counts on fragments.
     self.fragmentrefstack.append(self.context.empty()) #At least one empty entity on the stack
+  def carvpath_throttle_info(self,carvpath):
+    ent=self.context.parse(carvpath)
+    totalsize=ent.totalsize
+    if len(self.fragmentrefstack) == 0:
+       return [0,ent.totalsize]
+    overlapsize=ent.overlap_size(self.fragmentrefstack[0])
+    return [overlapsize,totalsize-overlapsize]    
   def __str__(self):
     rval=""
     for index in range(0,len(self.fragmentrefstack)):
@@ -207,7 +214,7 @@ class CarvpathRefcountStack:
       return entity #A bit nasty but safes needles itterations.
   def _stackextend(self,level,entity):
     if not (level < len(self.fragmentrefstack)):
-      self.fragmentrefstack.append(context.empty())
+      self.fragmentrefstack.append(self.context.empty())
     ent=self.fragmentrefstack[level]
     res=ent.merge(entity)
     merged=res[1]
