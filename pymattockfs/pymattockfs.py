@@ -173,7 +173,7 @@ class InstanceCtl:
   def readlink(self):
     return -errno.EINVAL
   def listxattr(self):
-    return ["user.sort_policy","user.select_policy","user.unregister","user.active","user.accept_job"]
+    return ["user.sort_policy","user.select_policy","user.unregister","user.accept_job"]
   def getxattr(self,name, size):
     if name == "user.sort_policy":
       return self.instance.sort_policy
@@ -181,10 +181,6 @@ class InstanceCtl:
       return self.instance.select_policy
     if name == "user.unregister":
       return "0"
-    if name == "user.active":
-      if self.instance.active():
-        return "1"
-      return "0" 
     if name == "user.accept_job":
       if size == 0:
         return 77
@@ -209,7 +205,7 @@ class InstanceCtl:
       if val == "1":
         self.instance.unregister()
       return 0
-    if name in ("user.active","user.accept_job"):
+    if name == "user.accept_job":
        return -errno.EPERM 
     return -errno.ENODATA
   def open(self,flags):
@@ -224,7 +220,7 @@ class JobCtl:
   def readlink(self):
     return -errno.EINVAL
   def listxattr(self):
-    return ["user.routing_info","user.derive_child_entity","user.create_mutable_child_entity","user.set_child_submit_info","user.active_child","user.job_carvpath"]
+    return ["user.routing_info","user.derive_child_entity","user.create_mutable_child_entity","user.set_child_submit_info","user.job_carvpath"]
   def getxattr(self,name, size):
     if name == "user.routing_info":
       return self.job.modulename + ";" + self.job.router_state
@@ -234,8 +230,6 @@ class JobCtl:
       return "0"
     if name == "user.set_child_submit_info":
       return "0"
-    if name == "user.active_child":
-      return "FIXME"
     if name == "user.job_carvpath":
       return "data/" + self.job.carvpath + "." + self.job.file_extension
     return -errno.ENODATA
@@ -251,8 +245,6 @@ class JobCtl:
     if name == "user.create_mutable_child_entity":
       return 0
     if name == "user.set_child_submit_info":
-      return 0
-    if name == "user.active_child":
       return 0
     if name == "user.job_carvpath":
       return 0

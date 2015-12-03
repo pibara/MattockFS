@@ -147,11 +147,9 @@ class Repository:
     return None
   def getTopThrottleInfo(self):
     totalsize=self.top.size
-    ioa = 0 #FIXME, we should keep track of data that is explicitly read/written
     normal=self.volume()
-    willneed=0 #FIXME: we should allow the framework to mark chunks as willneed.
-    dontneed=totalsize-willneed-normal
-    return (normal,willneed,dontneed,ioa)
+    dontneed=totalsize-normal
+    return (normal,dontneed)
   def anycast_best_modules(self,modulesstate,moduleset,letter):
     fetchvolume=False
     if letter in "VDC":
