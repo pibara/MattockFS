@@ -1,6 +1,41 @@
 #!/usr/bin/python
+#Copyright (c) 2015, Rob J Meijer.
+#Copyright (c) 2015, University College Dublin
+#All rights reserved.
+#
+#Redistribution and use in source and binary forms, with or without
+#modification, are permitted provided that the following conditions are met:
+#1. Redistributions of source code must retain the above copyright
+#   notice, this list of conditions and the following disclaimer.
+#2. Redistributions in binary form must reproduce the above copyright
+#   notice, this list of conditions and the following disclaimer in the
+#   documentation and/or other materials provided with the distribution.
+#3. All advertising materials mentioning features or use of this software
+#   must display the following acknowledgement:
+#   This product includes software developed by the <organization>.
+#4. Neither the name of the <organization> nor the
+#   names of its contributors may be used to endorse or promote products
+#   derived from this software without specific prior written permission.
+#
+#THIS SOFTWARE IS PROVIDED BY <COPYRIGHT HOLDER> ''AS IS'' AND ANY
+#EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+#WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+#DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDER> BE LIABLE FOR ANY
+#DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+#(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+#LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+#ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+#(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+#SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
+#
+#This file contains an in-memory implementation of the base anycast functionality.
+#Note that this implementation uses sorting algoritms for picking the highest priority 
+#jobs from anycast sets (we replaced priority queues with sortable sets).
+#An eventual implementation should provide either a journal or a persistency measure and
+#should optimize the picking algoritm so it doesn't need to sort large sets.
 import random
 import copy
+import provenance_log
 
 try:
     from pyblake2 import blake2b
@@ -13,6 +48,7 @@ except ImportError:
     print("")
     sys.exit()
 
+#In-file-system representation of a module instance.
 class ModuleInstance:
   def __init__(self,modulename,instancehandle,module):
     self.module=module
@@ -45,8 +81,9 @@ class ModuleInstance:
       return self.currentjob.jobhandle
     return None
 
+#The core of the anycast funcionality is the concept of a job.
 class Job:
-  def __init__(self,jobhandle,modulename,carvpath,router_state,mime_type,file_extension,allmodules,provenance=copy.deepcopy(list())):
+  def __init__(self,jobhandle,modulename,carvpath,router_state,mime_type,file_extension,allmodules,provenance=None):
     self.jobhandle=jobhandle
     self.modulename=modulename
     self.carvpath=carvpath
@@ -55,23 +92,20 @@ class Job:
     self.file_extension=file_extension
     self.submit_info=[]
     self.allmodules=allmodules
-    self.provenance = provenance
     self.mno = 1
-    provenancerecord={}
-    provenancerecord["job"]=jobhandle
-    provenancerecord["module"]=modulename
-    if len(provenance) == 0:
-      provenancerecord["carvpath"]=carvpath
-      provenancerecord["mime_type"]=mime_type
-    self.provenance.append(provenancerecord)
+    if provenance == None:
+      self.provenance= provenance_log.ProvenanceLog(jobhandle,modulename,carvpath,mime_type)
+    else:
+      self.provenance = provenance
+      self.provenance(jobhandle,modulename)
     self.mutablehandle=None
   def __del__(self):
     if self.mutablehandle:
       carvpath=self.get_frozen_mutable()
+      #FIXME, we need better logging.
       print "WARNING: Orphaned mutable: " + carvpath
   def commit(self):
     if self.jobhandle in self.allmodules.jobs:
-      print "PROVENANCE:",self.provenance
       del self.allmodules.jobs[self.jobhandle] 
   def next_hop(self,module,state):
     self.allmodules[module].anycast_add(self.carvpath,state,self.mime_type,self.file_extension,self.provenance)
@@ -91,16 +125,10 @@ class Job:
       return carvpath
     return None
   def submit_child(self,carvpath,nexthop,routerstate,mimetype,extension):
-    provenance=list()
-    provenancerecord={}
-    provenancerecord["job"]=self.jobhandle
-    provenancerecord["module"]=self.modulename
-    provenancerecord["carvpath"]=carvpath
-    provenancerecord["parent_carvpath"]=self.carvpath
-    provenancerecord["mime_type"]=mimetype
-    provenance.append(provenancerecord)  
+    provenance=provenance_log.ProvenanceLog(self.jobhandle,self.modulename,carvpath,mimetype,self.carvpath)
     self.allmodules[nexthop].anycast_add(self.carvpath,routerstate,self.mime_type,self.file_extension,self.provenance) 
 
+#The state shared by all module instances of a specific type. Also used when no instances are pressent.
 class ModuleState:
   def __init__(self,modulename,strongname,allmodules,rep):
     self.name=modulename
@@ -145,12 +173,11 @@ class ModuleState:
     jobno=self.lastjobno
     self.lastjobno += 1
     jobhandle = "J" + blake2b("J" + hex(jobno)[2:].zfill(16),digest_size=32,key=self.secret[:64]).hexdigest()
-    self.allmodules.jobs[jobhandle]=Job(jobhandle,"kickstart","S0","","application/x-zerosize","empty",self.allmodules,[])
+    self.allmodules.jobs[jobhandle]=Job(jobhandle,"kickstart","S0","","application/x-zerosize","empty",self.allmodules)
     return self.allmodules.jobs[jobhandle]
-  def anycast_pop(self,sort_policy,select_policy="S"): #FIXME: UNTESTED !!!
+  def anycast_pop(self,sort_policy,select_policy="S"):
     if self.name != "loadbalance":
       best=self.rep.anycast_best(self.name,self.anycast,sort_policy)
-      print "best=",best
       if best != None and best in self.anycast:
         job = self.anycast.pop(best)
         self.allmodules.jobs[best]=job
@@ -166,6 +193,7 @@ class ModuleState:
         return best
       return None 
 
+#State shared between different modules and a central coordination point.
 class ModulesState:
   def __init__(self,rep):
     self.rep=rep

@@ -28,25 +28,17 @@
 #(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 #SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
 #
+#This file is a place holder for a future provenance loging facility.
+#
+class ProvenanceLog:
+  def __init__(self,jobid,module,carvpath,mimetype,parentcp=None):
+    self.log=[]
+    rec={"job" : jobid,"module" : module, "carvpath" : carvpath,"mime" : mimetype}
+    if parentcp != None:
+      rec["parent"] = parentcp
+    self.log.append(rec)
+  def __del__(self):
+    print "PROVENANCE: ", self.log
+  def __call__(self,jobid,module):
+    self.log.append({"jobid": jobid,"module" : module})
 
-import xattr
-mountpoint="/home/larissa/src/mattock-dissertation/pymattockfs/mnt"
-modulectl=xattr.xattr(mountpoint + "/module/kickstart.ctl")
-modulectl["user.reset"]="1"
-instance=modulectl["user.register_instance"]
-print instance
-instancectl=xattr.xattr(mountpoint + "/" + instance)
-instancectl["user.sort_policy"]="K"
-job=instancectl["user.accept_job"]
-print job
-jobctl=xattr.xattr(mountpoint + "/" + job)
-jobctl["user.create_mutable"] = "1234500"
-newdata=jobctl["user.mutable"]
-print newdata
-with open(mountpoint + "/" + newdata,"r+") as f:
-    f.seek(0)
-    f.write("harhar")
-    f.seek(1234000)
-    f.write("HARHAR")
-frozen=jobctl["user.frozen_mutable"]
-print frozen

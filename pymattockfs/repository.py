@@ -213,10 +213,8 @@ class Repository:
       return self.openfiles[path].read(offset,size)
     return -errno.EIO
   def write(self,path,offset,data):
-    print "READ"
     if path in self.openfiles:
       return self.openfiles[path].write(offset,data)
-    print "IOE"
     return -errno.EIO
   def flush(self):
     return os.fsync(self.fd)

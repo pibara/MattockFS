@@ -28,25 +28,17 @@
 #(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 #SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
 #
-
-import xattr
-mountpoint="/home/larissa/src/mattock-dissertation/pymattockfs/mnt"
-modulectl=xattr.xattr(mountpoint + "/module/kickstart.ctl")
-modulectl["user.reset"]="1"
-instance=modulectl["user.register_instance"]
-print instance
-instancectl=xattr.xattr(mountpoint + "/" + instance)
-instancectl["user.sort_policy"]="K"
-job=instancectl["user.accept_job"]
-print job
-jobctl=xattr.xattr(mountpoint + "/" + job)
-jobctl["user.create_mutable"] = "1234500"
-newdata=jobctl["user.mutable"]
-print newdata
-with open(mountpoint + "/" + newdata,"r+") as f:
-    f.seek(0)
-    f.write("harhar")
-    f.seek(1234000)
-    f.write("HARHAR")
-frozen=jobctl["user.frozen_mutable"]
-print frozen
+#This is a placeholder that implements an in-memory key/value store. This should
+#be replaced with a solution that uses a journal and/or a distributed key/value store.
+#
+class LongPathMap:
+  def __init__(self):
+    self.dic={}
+  def __getitem__(self,i):
+    return self.dic[i]
+  def __setitem__(self,i,val):
+    self.dic[i]=val
+  def __contains__(self,key):
+    if key in self.dic:
+      return True
+    return False
