@@ -58,10 +58,15 @@ class CarvpathRefcountStack:
     self.fragmentrefstack.append(self.context.empty()) #At least one empty entity on the stack
   def carvpath_throttle_info(self,carvpath):
     ent=self.context.parse(carvpath)
-    totalsize=ent.totalsize
-    if len(self.fragmentrefstack) == 0:
-       return [0,ent.totalsize]
-    overlapsize=ent.overlap_size(self.fragmentrefstack[0])
+    totalsize=ent.totalsize #FIXME: need to account for sparse.
+    if len(self.fragmentrefstack) > 0: 
+       totalsize += self.fragmentrefstack[0].totalsize
+    if ent.totalsize == 0 or len(self.fragmentrefstack)==0 or self.fragmentrefstack[0].totalsize ==0:
+      overlapsize = 0
+    else:
+      if len(self.fragmentrefstack) == 0:
+        return [0,ent.totalsize]
+      overlapsize=ent.overlap_size(self.fragmentrefstack[0])
     return [overlapsize,totalsize-overlapsize]    
   def __str__(self):
     rval=""
@@ -79,7 +84,7 @@ class CarvpathRefcountStack:
     if carvpath in self.entityrefcount.keys():
       self.entityrefcount[carvpath] += 1
       ent=self.content[carvpath]
-      return [context.empty(),ent]
+      return [self.context.empty(),ent]
     else:
       ent=self.context.parse(carvpath)
       self.ohashcollection.add_carvpath(carvpath)

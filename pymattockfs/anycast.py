@@ -23,13 +23,18 @@ class ModuleInstance:
     self.currentjobhandle=None
     self.select_policy="S"
     self.sort_policy="HrdS"
-  def active(self):
-    return self.currentjob != None
+    self.valid=True
   def teardown(self):
     if self.currentjob != None:
       self.currentjob.commit()
+      self.currentjob = None
+    if self.valid:
+      self.module.unregister(self.instancehandle)
+      self.valid=False
+  def __del__(self):
+    self.teardown()
   def unregister(self):
-    self.module.unregister(self.instancehandle)
+    self.teardown()
   def accept_job(self):
     if self.currentjob != None:
       self.currentjob.commit()
@@ -52,6 +57,7 @@ class Job:
     self.submit_info=[]
     self.allmodules=allmodules
     self.provenance = provenance
+    self.mno = 1
     provenancerecord={}
     provenancerecord["job"]=jobhandle
     provenancerecord["module"]=modulename
@@ -59,6 +65,11 @@ class Job:
       provenancerecord["carvpath"]=carvpath
       provenancerecord["mime_type"]=mime_type
     self.provenance.append(provenancerecord)
+    self.mutablehandle=None
+  def __del__(self):
+    if self.mutablehandle:
+      carvpath=self.get_frozen_mutable()
+      print "WARNING: Orphaned mutable: " + carvpath
   def commit(self):
     if self.jobhandle in self.allmodules.jobs:
       print "PROVENANCE:",self.provenance
@@ -66,6 +77,30 @@ class Job:
   def next_hop(self,module,state):
     self.allmodules[module].anycast_add(self.carvpath,state,self.mime_type,self.file_extension,self.provenance)
     del self.allmodules.jobs[self.jobhandle]
+  def create_mutable(self,msize):
+    mno=self.mno
+    self.mno += 1
+    self.mutablehandle = "M" + blake2b("M" + hex(mno)[2:].zfill(16),digest_size=32,key=self.jobhandle[:64]).hexdigest()
+    self.allmodules.newdata[self.mutablehandle]=self.allmodules.rep.newmutable(msize)
+  def get_mutable(self):
+    return self.mutablehandle
+  def get_frozen_mutable(self):
+    if self.mutablehandle != None and self.mutablehandle in self.allmodules.newdata:
+      carvpath=self.allmodules.newdata[self.mutablehandle]
+      del self.allmodules.newdata[self.mutablehandle]
+      self.mutablehandle=None
+      return carvpath
+    return None
+  def submit_child(self,carvpath,nexthop,routerstate,mimetype,extension):
+    provenance=list()
+    provenancerecord={}
+    provenancerecord["job"]=self.jobhandle
+    provenancerecord["module"]=self.modulename
+    provenancerecord["carvpath"]=carvpath
+    provenancerecord["parent_carvpath"]=self.carvpath
+    provenancerecord["mime_type"]=mimetype
+    provenance.append(provenancerecord)  
+    self.allmodules[nexthop].anycast_add(self.carvpath,state,self.mime_type,self.file_extension,self.provenance) 
 
 class ModuleState:
   def __init__(self,modulename,strongname,allmodules,rep):
@@ -88,7 +123,6 @@ class ModuleState:
     return rval
   def unregister(self,handle):
     if handle in self.instances:
-      self.instances[handle].teardown()
       del self.instances[handle]
       del self.allmodules.instances[handle]
   def reset(self):             #writable extended attribute (setting to one results in reset)

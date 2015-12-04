@@ -28,6 +28,7 @@
 #(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 #SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
 #
+import errno
 import copy
 import os
 import fcntl
@@ -80,11 +81,24 @@ class _OpenFile:
     readent=self.entity.subentity(carvpath._Entity(self.entity.longpathmap,self.entity.maxfstoken,[carvpath.Fragment(offset,size)]),True)
     result=b''
     for chunk in readent:
+      #FIXME: Check to make this attomic
       os.lseek(self.fd, chunk.offset, 0)
       datachunk = os.read(self.fd, chunk.size)
       result += datachunk
       self.stack.ohashcollection.lowlevel_read_data(chunk.offset,datachunk)
     return result
+  def write(self,offset,data):
+    size=len(data)
+    writeent=self.entity.subentity(carvpath._Entity(self.entity.longpathmap,self.entity.maxfstoken,[carvpath.Fragment(offset,size)]),True)
+    dataindex=0
+    for chunk in writeent:
+      chunkdata=data[dataindex:dataindex+chunk.size]
+      dataindex += chunk.size
+      #FIXME: Check to make this attomic
+      os.lseek(self.fd, chunk.offset, 0)
+      os.write(self.fd,chunkdata)
+      self.stack.ohashcollection.lowlevel_written_data(chunk.offset,chunkdata)
+    return size
 
 class Repository:
   def __init__(self,reppath,context):
@@ -186,21 +200,32 @@ class Repository:
         if val == bestval:
           bestmodules.add(module)
     return bestmodules
-  def openro(self,carvpath,path):
+  def open(self,carvpath,path,readonly=True):
     ent=self.context.parse(carvpath)
     if path in self.openfiles:
       self.openfiles[path].refcount += 1
     else :
       ent=self.context.parse(carvpath)
-      self.openfiles[path]=_OpenFile(self.stack,carvpath,True,ent,self.fd)
+      self.openfiles[path]=_OpenFile(self.stack,carvpath,readonly,ent,self.fd)
     return 0
   def read(self,path,offset,size):
-    return self.openfiles[path].read(offset,size)
+    if path in self.openfiles: 
+      return self.openfiles[path].read(offset,size)
+    return -errno.EIO
+  def write(self,path,offset,data):
+    print "READ"
+    if path in self.openfiles:
+      return self.openfiles[path].write(offset,data)
+    print "IOE"
+    return -errno.EIO
+  def flush(self):
+    return os.fsync(self.fd)
   def close(self,path):
     self.openfiles[path].refcount -= 1
     if self.openfiles[path].refcount < 1:
       del self.openfiles[path]
     return 0
+    
 
 if __name__ == "__main__":
   import carvpath

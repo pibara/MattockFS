@@ -50,7 +50,7 @@ class NoEnt:
     return -errno.ENOENT
   def setxattr(self,name, val):
     return -errno.ENOENT
-  def open(self,flags):
+  def open(self,flags,path):
     return -errno.ENOENT
 class TopDir:
   def getattr(self):
@@ -72,7 +72,7 @@ class TopDir:
     return -errno.ENODATA
   def setxattr(self,name, val):
     return -errno.ENODATA
-  def open(self,flags):
+  def open(self,flags,path):
     return -errno.EPERM
 class NoList:
   def getattr(self):
@@ -87,7 +87,7 @@ class NoList:
     return -errno.ENODATA
   def setxattr(self,name, val):
     return -errno.ENODATA
-  def open(self,flags):
+  def open(self,flags,path):
     return -errno.EPERM
 class TopCtl:
   def __init__(self,rep):
@@ -110,7 +110,7 @@ class TopCtl:
     if name in ("user.throttle_info","user.full_archive"):
       return -errno.EPERM
     return -errno.ENODATA
-  def open(self,flags):
+  def open(self,flags,path):
     return -errno.EPERM
 class ModuleCtl:
   def __init__(self,mod):
@@ -162,7 +162,7 @@ class ModuleCtl:
         self.mod.reset() 
       return 0
     return -errno.ENODATA
-  def open(self,flags):
+  def open(self,flags,path):
     return -errno.EPERM
 class InstanceCtl:
   def __init__(self,instance,sortre,selectre):
@@ -211,7 +211,7 @@ class InstanceCtl:
     if name == "user.accept_job":
        return -errno.EPERM 
     return -errno.ENODATA
-  def open(self,flags):
+  def open(self,flags,path):
     return -errno.EPERM
 class JobCtl:
   def __init__(self,job):
@@ -232,9 +232,14 @@ class JobCtl:
     if name == "user.create_mutable":
       return ""
     if name == "user.mutable":
-      return self.job.get_mutable()
+      rval= self.job.get_mutable()
+      if rval == None:
+        return ""
+      return "newdata/" + rval + ".dat"
     if name == "user.frozen_mutable":
-      return self.job.get_frozen_mutable()
+      if size == 0:
+        return 81
+      return "data/" + self.job.get_frozen_mutable() + ".dat"
     if name == "user.job_carvpath":
       return "data/" + self.job.carvpath + "." + self.job.file_extension
     return -errno.ENODATA
@@ -252,14 +257,14 @@ class JobCtl:
         job.submit_child(parts[0],parts[1],parts[2],parts[3],parts[4])
       return 0
     if name == "user.create_mutable":
-      job.create_mutable(int(val))
+      self.job.create_mutable(int(val))
       return 0
     if name == "user.frozen_mutable":
       return -errno.EPERM
     if name == "user.job_carvpath":
       return "data/" + job.carvpath + "." + job.file_extension
     return -errno.ENODATA
-  def open(self,flags):
+  def open(self,flags,path):
     return -errno.EPERM
 class NewDataCtl:
   def __init__(self,carvpath,rep,context):
@@ -279,8 +284,8 @@ class NewDataCtl:
     return -errno.ENODATA
   def setxattr(self,name, val):
     return -errno.ENODATA
-  def open(self,flags):
-    return self.rep.openrw(self.carvpath,path) 
+  def open(self,flags,path):
+    return self.rep.open(self.carvpath,path,readonly=False) 
 class CarvPathFile:
   def __init__(self,carvpath,rep,context,modules):
     self.carvpath=carvpath
@@ -312,7 +317,7 @@ class CarvPathFile:
       return -errno.EPERM
     return -errno.ENODATA
   def open(self,flags,path):
-    return self.rep.openro(self.carvpath,path)
+    return self.rep.open(self.carvpath,path)
 class CarvPathLink:
   def __init__(self,cp,ext):
     if ext == None:
@@ -331,7 +336,7 @@ class CarvPathLink:
     return -errno.ENODATA
   def setxattr(self,name, val):
     return -errno.ENODATA
-  def open(self,flags):
+  def open(self,flags,path):
     return -errno.EPERM
 
 class MattockFS(fuse.Fuse):
@@ -404,16 +409,22 @@ class MattockFS(fuse.Fuse):
                 return JobCtl(self.ms.jobs[handle])
               return NoEnt()
             return NoEnt()
-          if extension == "dat" and  tokens[0] == "newdata" and self.ms.validnewdatacap(handle):
-            return NewDataCtl(self.ms.newdata[handle])
+          if extension == "dat" and  tokens[0] == "newdata":
+            print self.ms.newdata
+            if self.ms.validnewdatacap(handle):
+              return NewDataCtl(self.ms.newdata[handle],self.rep,self.context)
           return NoEnt()
         return NoEnt()
     def getattr(self, path):
       return self.parsepath(path).getattr()
+    def setattr(self,path,hmm):
+      return 0
     def opendir(self, path):
       return self.parsepath(path).opendir()
     def readdir(self, path, offset):
       return self.parsepath(path).readdir()
+    def releasedir(self,path):
+      return 0
     def readlink(self,path):
       return self.parsepath(path).readlink()
     def listxattr(self, path,huh):
@@ -425,11 +436,29 @@ class MattockFS(fuse.Fuse):
     def main(self,args=None):
       fuse.Fuse.main(self, args)
     def open(self, path, flags):
-      return self.parsepath(path).open(flags,path)
+      print "OPEN:",path,flags
+      rval = self.parsepath(path).open(flags,path)
+      print rval
+      return rval
     def release(self, path, fh):
       return self.rep.close(path)
     def read(self, path, size, offset):
       return self.rep.read(path,offset,size)
+    def write(self,path,data,offset):
+      print "WRITE:",path,data,offset
+      rval= self.rep.write(path,offset,data)
+      print "WRITE rval:",rval
+      return rval
+    def truncate(self,path,len,fh=None):
+      return -errno.EPERM
+    def flush(self,path):
+      self.rep.flush()
+    def __getattr__(self, name): 
+      def method(*args):
+        print("tried to handle unknown method " + name)
+        if args:
+          print("it had arguments: " + str(args))
+      return method
 
 if __name__ == '__main__':
     dd="/var/mattock/archive/0.dd"
