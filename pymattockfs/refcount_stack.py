@@ -43,7 +43,8 @@ class _CustomSortable:
     self.ltfunction=ltfunction
     self.arglist=[]
     for somemap in arglist:
-      self.arglist.append(somemap[carvpath])
+      if carvpath in somemap:
+        self.arglist.append(somemap[carvpath])
   def __lt__(self,other):
     return self.ltfunction(self.arglist,other.arglist)
 
@@ -191,7 +192,8 @@ class CarvpathRefcountStack:
             else:
               if letter == "S":
                 for carvpath in startset:
-                  smap[carvpath]=self.content[carvpath].totalsize
+                  if carvpath in self.content:
+                    smap[carvpath]=self.content[carvpath].totalsize
                 arglist.append(smap)
               else:
                 if letter == "W":

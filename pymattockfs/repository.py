@@ -154,7 +154,7 @@ class Repository:
       for anycastkey in anycast.keys():
         cp=anycast[anycastkey].carvpath
         cp2key[cp]=anycastkey
-      bestcp=self.rep.priority_custompick(sort_policy,intransit=cp2key.keys())           
+      bestcp=self.stack.priority_custompick(sort_policy,intransit=cp2key.keys()) 
       return cp2key[bestcp]
     return None
   def getTopThrottleInfo(self):

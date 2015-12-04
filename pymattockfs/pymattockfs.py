@@ -254,7 +254,7 @@ class JobCtl:
       parts = val.split(";")
       if len(parts) == 5:
         #carvpath,nexthop,routerstate,mime,ext
-        job.submit_child(parts[0],parts[1],parts[2],parts[3],parts[4])
+        self.job.submit_child(parts[0],parts[1],parts[2],parts[3],parts[4])
       return 0
     if name == "user.create_mutable":
       self.job.create_mutable(int(val))
@@ -262,7 +262,7 @@ class JobCtl:
     if name == "user.frozen_mutable":
       return -errno.EPERM
     if name == "user.job_carvpath":
-      return "data/" + job.carvpath + "." + job.file_extension
+      return "data/" + self.job.carvpath + "." + self.job.file_extension
     return -errno.ENODATA
   def open(self,flags,path):
     return -errno.EPERM
@@ -453,12 +453,12 @@ class MattockFS(fuse.Fuse):
       return -errno.EPERM
     def flush(self,path):
       self.rep.flush()
-    def __getattr__(self, name): 
-      def method(*args):
-        print("tried to handle unknown method " + name)
-        if args:
-          print("it had arguments: " + str(args))
-      return method
+    #def __getattr__(self, name): 
+    #  def method(*args):
+    #    print("tried to handle unknown method " + name)
+    #    if args:
+    #      print("it had arguments: " + str(args))
+    #  return method
 
 if __name__ == '__main__':
     dd="/var/mattock/archive/0.dd"

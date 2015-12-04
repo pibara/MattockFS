@@ -12,9 +12,11 @@ print job
 jobctl=xattr.xattr(mountpoint + "/" + job)
 jobctl["user.create_mutable"] = "1234500"
 newdata=jobctl["user.mutable"]
-with open(mountpoint + "/" + newdata,"ab") as f:
-    f.seek(0,0)
-    f.write("harhar")
-    f.seek(0,1234000)
-    f.write("HARHAR")
 print newdata
+with open(mountpoint + "/" + newdata,"r+") as f:
+    f.seek(0)
+    f.write("harhar")
+    f.seek(1234000)
+    f.write("HARHAR")
+frozen=jobctl["user.frozen_mutable"]
+print frozen

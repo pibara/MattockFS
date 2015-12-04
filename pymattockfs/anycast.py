@@ -20,7 +20,6 @@ class ModuleInstance:
     self.instancehandle=instancehandle
     self.lastjobno=0
     self.currentjob=None
-    self.currentjobhandle=None
     self.select_policy="S"
     self.sort_policy="HrdS"
     self.valid=True
@@ -100,7 +99,7 @@ class Job:
     provenancerecord["parent_carvpath"]=self.carvpath
     provenancerecord["mime_type"]=mimetype
     provenance.append(provenancerecord)  
-    self.allmodules[nexthop].anycast_add(self.carvpath,state,self.mime_type,self.file_extension,self.provenance) 
+    self.allmodules[nexthop].anycast_add(self.carvpath,routerstate,self.mime_type,self.file_extension,self.provenance) 
 
 class ModuleState:
   def __init__(self,modulename,strongname,allmodules,rep):
@@ -135,11 +134,11 @@ class ModuleState:
     set_size=len(self.anycast)
     set_volume=self.rep.anycast_set_volume(self.anycast)
     return (set_size,set_volume)
-  def anycast_add(self,carvpath,router_state,mime_type,file_extension):   #FIXME: UNTESTED !!!
+  def anycast_add(self,carvpath,router_state,mime_type,file_extension,provenance):
     jobno=self.lastjobno
     self.lastjobno += 1
     jobhandle = "J" + blake2b("J" + hex(jobno)[2:].zfill(16),digest_size=32,key=self.secret[:64]).hexdigest()
-    self.anycast[jobhandle]=Job(jobhandle,self.name,carvpath,router_state,mime_type,file_extension,self.allmodules,[])
+    self.anycast[jobhandle]=Job(jobhandle,self.name,carvpath,router_state,mime_type,file_extension,self.allmodules,provenance)
     self.allmodules.path_state[carvpath]="anycast"
     self.allmodules.path_module[carvpath]=self.name
   def get_kickjob(self):
@@ -151,11 +150,13 @@ class ModuleState:
   def anycast_pop(self,sort_policy,select_policy="S"): #FIXME: UNTESTED !!!
     if self.name != "loadbalance":
       best=self.rep.anycast_best(self.name,self.anycast,sort_policy)
-      if best != None:
-        self.allmodules[best]=self.anycast.pop(best)
-        self.allmodules.path_state[self.allmodules[best].carvpath]="pending"
-        self.allmodules.path_module[self.allmodules[best].carvpath]=self.name
-        return self.allmodules[best]
+      print "best=",best
+      if best != None and best in self.anycast:
+        job = self.anycast.pop(best)
+        self.allmodules.jobs[best]=job
+        self.allmodules.path_state[job.carvpath]="pending"
+        self.allmodules.path_module[job.carvpath]=self.name
+        return job
     else:
       best=self.allmodules.selectmodule(select_policy)
       if best != None:
