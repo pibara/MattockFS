@@ -121,8 +121,9 @@ class NoList:
   def open(self,flags,path):
     return -errno.EPERM
 class TopCtl:
-  def __init__(self,rep):
+  def __init__(self,rep,context):
     self.rep=rep
+    self.context=context
   def getattr(self):
     return  defaultstat(STAT_MODE_FILE_RO)
   def opendir(self):
@@ -130,16 +131,24 @@ class TopCtl:
   def readlink(self):
     return -errno.EINVAL
   def listxattr(self):
-    return ["user.throttle_info","user.full_archive"]
+    return ["user.throttle_info","user.full_archive","user.add_longpath"]
   def getxattr(self,name, size):
     if name == "user.throttle_info":
       return ";".join(map(lambda x: str(x),self.rep.getTopThrottleInfo()))
     if name == "user.full_archive":
       return "data/" + str(self.rep.top.topentity) + ".raw"
+    if name == "user.add_longpath":
+      return ""
     return -errno.ENODATA
   def setxattr(self,name, val):
     if name in ("user.throttle_info","user.full_archive"):
       return -errno.EPERM
+    if name == "user.add_longpath":
+      try:
+        short=str(self.context.parse(val))
+      except:
+        pass
+      return 0
     return -errno.ENODATA
   def open(self,flags,path):
     return -errno.EPERM
@@ -373,8 +382,8 @@ class CarvPathLink:
 class MattockFS(fuse.Fuse):
     def __init__(self,dash_s_do,version,usage,dd,lpdb):
       super(MattockFS, self).__init__(version=version,usage=usage,dash_s_do=dash_s_do)
-      longpathdb =lpdb 
-      self.context=carvpath.Context(longpathdb)
+      self.longpathdb =lpdb 
+      self.context=carvpath.Context(self.longpathdb)
       self.topdir=TopDir()
       self.nolistdir=NoList()
       self.selectre = re.compile(r'^[SVDWC]{1,5}$')
@@ -382,7 +391,7 @@ class MattockFS(fuse.Fuse):
       self.archive_dd = dd
       self.rep=repository.Repository(self.archive_dd,self.context)
       self.ms=anycast.ModulesState(self.rep)
-      self.topctl=TopCtl(self.rep)
+      self.topctl=TopCtl(self.rep,self.context)
       self.needinit=True
     def parsepath(self,path):
         if path == "/":
