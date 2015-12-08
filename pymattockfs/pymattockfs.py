@@ -340,6 +340,8 @@ class CarvPathFile:
   def readlink(self):
     return -errno.EINVAL
   def listxattr(self):
+    if self.carvpath[0] == "D":
+      return ["user.path_state","user.throttle_info","user.longpath"]
     return ["user.path_state","user.throttle_info"]
   def getxattr(self,name, size):
     if name == "user.path_state":
@@ -352,8 +354,15 @@ class CarvPathFile:
       return hashresult + ";" + offset
     if name == "user.throttle_info":
       return ";".join(map(lambda x: str(x),self.modules.rep.stack.carvpath_throttle_info(self.carvpath)))
+    if name == "user.longpath":
+      if self.carvpath[0] == "D":
+        if self.carvpath in self.context.longpathmap:
+          return self.context.longpathmap[carvpath]
+        return "INVALID"
+      else:
+        return  self.carvpath
   def setxattr(self,name, val):
-    if name in ("user.state","user.throttle_info"):
+    if name in ("user.state","user.throttle_info","user.longpath"):
       return -errno.EPERM
     return -errno.ENODATA
   def open(self,flags,path):

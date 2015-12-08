@@ -229,8 +229,7 @@ if __name__ == "__main__":
   import carvpath
   import opportunistic_hash
   context=carvpath.Context({},160)
-  col=opportunistic_hash.OpportunisticHashCollection(context)
-  rep=Repository(context,"/var/mattock/archive/0.dd",col)
+  rep=Repository("/var/mattock/archive/0.dd",context)
   entity=context.parse("1234+5678")
-  f1=rep.openro("1234+5678",entity)
+  f1=rep.open("1234+5678","/data/1234+5678.dat",True)
   print rep.volume() 
