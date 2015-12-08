@@ -33,8 +33,10 @@
 #
 import xattr
 import os
+import os.path
 import re
 from time import sleep
+import carvpath
 
 class CarvPathFile:
   def __init__(self,mp,cp):
@@ -81,12 +83,30 @@ class Job:
       self.ctl["user.routing_info"] = nextmodule + ";" + routerstate
       self.isdone = True
 
+class FsLongPathMap:
+  def __init__(self,main_ctl,mp):
+    self.main_ctl=main_ctl
+    self.cpdir = mp + "/data/"
+  def __getitem__(self,key):
+    filepath = self.cpdir + key + ".dat"
+    if os.path.isfile(filepath):
+      ctl=xattr.xattr(filepath)
+      return ctl["user.longpath"]
+    else:
+      raise IndexError("Inknown longpath digest")
+  def __setitem__(self,key,val):
+    self.main_ctl["user.add_longpath"] = val
+  def __contains__(self,key):
+    filepath = self.cpdir + key + ".dat"
+
+
 class Context:
   def __init__(self,mountpoint,module,initial_sort_policy=None):
     self.selectre = re.compile(r'^[SVDWC]{1,5}$')
     self.sortre = re.compile(r'^(K|[RrOHDdWS]{1,6})$')    
     self.mountpoint=mountpoint
     self.main_ctl=xattr.xattr(self.mountpoint + "/mattockfs.ctl")
+    self.carcpathcontext=carvpath.Context(FsLongPathMap(self.main_ctl,self.mountpoint))
     self.module_ctl=xattr.xattr(self.mountpoint + "/module/" + module + ".ctl")
     self.instance_ctl=None
     path=self.module_ctl["user.register_instance"]
@@ -97,7 +117,7 @@ class Context:
       if ok:
         self.instance_ctl["user.sort_policy"] = initial_sort_policy
       else:
-        raise RuntimeError("Invalid sort policy string")      
+        raise RuntimeError("Invalid sort policy string")
   def __del__(self):
     if self.instance_ctl != None:
       self.instance_ctl["user.unregister"]="1"
@@ -144,46 +164,60 @@ class Context:
 
 if __name__ == '__main__':
   mountpoint="/home/larissa/src/mattock-dissertation/pymattockfs/mnt"
-  #mountpoint="/export/home/rob/dissertation/mattock-dissertation/pymattockfs/mnt"
+  print "Regestering kickstart module and setting \"K\" sort policy"
   context=Context(mountpoint,"kickstart","K")
-  print context.fs_throttle_info()
+  print "Fetching global throttle info"
+  print " * ", context.fs_throttle_info()
+  print "Accepting our first job"
   job=context.poll_job()
-  print job.carvpath.carvpath
-  print job.carvpath.path_state()
-  print job.carvpath.throttle_info()
-  print context.module_instance_count()
+  print " * carvpath      = ", job.carvpath.carvpath
+  print " * path_state    = ",job.carvpath.path_state()
+  print " * throttle_info = ",job.carvpath.throttle_info()
+  print " * instance_count= ",context.module_instance_count()
+  print "Creating new mutable entity within job context"
   kickfile=job.childdata(1234567)
-  print kickfile
+  print " * file =", kickfile
+  print "Writing to mutable file"
   with open(kickfile,"r+") as f:
     f.seek(0)
     f.write("harhar")
     f.seek(1234560)
     f.write("HARHAR")
+  print "Freezing mutable file"
   frozen=job.frozen_childdata()
-  print frozen
+  print " * Carvpath =", frozen
+  print "Submitting child carvpath to harmodule"
   job.childsubmit(frozen,"harmodule","t1:l11","x-mattock/harhar","har")
-  print "debug 1"
+  print "Marking parent job as done"
   job.done()
-  print "debug 2"
-  print context.anycast_throttle_info("harmodule")
-  print "debug 3"
+  print 
+  print "Checking throttle info for harmodule"
+  print " * throttle info = ",context.anycast_throttle_info("harmodule")
+  print "Register as harmodule"
   context2=Context(mountpoint,"harmodule")
-  print "debug 4"
+  print "Setting weight and overflow for harmodule"
   context2.module_set_weight(7)
-  print "debug 5"
   context2.module_set_overflow(3)
-  print "debug 6"
+  print "There should be one job, poll it"
   job2=context2.poll_job()
   if job2 == None:
     print "ERROR, polling the harmodule returned None"
   else:
-    print "debug 7"
-    print job2.carvpath.carvpath
-    print "debug 8"
-    print job2.carvpath.path_state()
-    print "debug 9"
-    print job2.carvpath.throttle_info()
-    print "debug 10"
+    print "Fetched job"
+    print " * carvpath      = ",job2.carvpath.carvpath
+    print " * path_state    =",job2.carvpath.path_state()
+    print " * throttle_info =", job2.carvpath.throttle_info()
+    print "Submit sub-carvpath 123+1000 as child entity to barmod"
     job2.childsubmit("123+1000","barmod","t9:l4","x-mattock/silly-sparse","sparse")
-  print "debug 11"
+  print "Forward parent entity to bazmod" 
   job2.forward("bazmod","t18:l6")
+  print 
+  print "Doing nothing as barmod"
+  context3=Context(mountpoint,"barmod")
+  job3 = context3.poll_job()
+  job3.done
+  print 
+  print "Doing nothing as bazmod"
+  context4=Context(mountpoint,"bazmod")
+  job4 = context4.poll_job()
+  job4.done

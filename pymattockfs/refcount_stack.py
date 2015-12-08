@@ -82,6 +82,7 @@ class CarvpathRefcountStack:
   # 1) An entity with all fragments that went from zero to one reference count.(can be used for fadvise purposes)
   # 2) An entity with all fragments already in the box before add was invoked (can be used for opportunistic hashing purposes).
   def add_carvpath(self,carvpath):
+    print "ADD CARVPATH : ",carvpath
     if carvpath in self.entityrefcount.keys():
       self.entityrefcount[carvpath] += 1
       ent=self.content[carvpath]
@@ -96,11 +97,12 @@ class CarvpathRefcountStack:
       merged=r[0]
       for fragment in merged:
         self.fadvise(fragment.offset,fragment.size,True)
-      return
+    return
   #Remove an existing entity from the box. Returns two entities:
   # 1) An entity with all fragments that went from one to zero refcount (can be used for fadvise purposes).
   # 2) An entity with all fragments still remaining in the box. 
   def remove_carvpath(self,carvpath):
+    print "REMOVE CARVPATH : ",carvpath
     if not carvpath in self.entityrefcount.keys():
       raise IndexError("Carvpath "+carvpath+" not found in box.")    
     self.entityrefcount[carvpath] -= 1
@@ -112,7 +114,7 @@ class CarvpathRefcountStack:
       unmerged=r
       for fragment in unmerged:
         self.fadvise(fragment.offset,fragment.size,False) 
-      return
+    return
   #Request a list of entities that overlap from the box that overlap (for opportunistic hashing purposes).
   def _overlaps(self,offset,size):
     ent=context.empty()
