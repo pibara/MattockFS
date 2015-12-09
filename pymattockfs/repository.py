@@ -55,10 +55,8 @@ class _FadviseFunctor:
     self.fd=fd
   def __call__(self,offset,size,willneed):
     if willneed:
-      print "posix_fadvise(fd,"+str(offset)+","+str(size)+",POSIX_FADV_NORMAL)"
       posix_fadvise(self.fd,offset,size,POSIX_FADV_NORMAL)
     else:
-      print "posix_fadvise(fd,"+str(offset)+","+str(size)+",POSIX_FADV_DONTNEED)"            
       posix_fadvise(self.fd,offset,size,POSIX_FADV_DONTNEED)
 
 class _RaiiFLock:
@@ -70,7 +68,6 @@ class _RaiiFLock:
 
 class _OpenFile:
   def __init__(self,stack,cp,is_ro,entity,fd):
-    print "_Openfile",cp
     self.is_ro = is_ro
     self.refcount = 1
     self.cp=cp
@@ -79,7 +76,6 @@ class _OpenFile:
     self.entity=entity
     self.fd=fd
   def __del__(self):
-    print "delete _Openfile",self.cp
     self.stack.remove_carvpath(self.cp)
   def read(self,offset,size):
     readent=self.entity.subentity(carvpath._Entity(self.entity.longpathmap,self.entity.maxfstoken,[carvpath.Fragment(offset,size)]),True)
@@ -126,8 +122,6 @@ class Repository:
     self._grow(chunkoffset+chunksize) 
     self.top.grow(chunksize)
     cp=str(carvpath._Entity(self.context.longpathmap,self.context.maxfstoken,[carvpath.Fragment(chunkoffset,chunksize)])) 
-    print "New mutable",cp
-    self.stack.add_carvpath(cp)
     return cp
   def volume(self):
     if len(self.stack.fragmentrefstack) == 0:

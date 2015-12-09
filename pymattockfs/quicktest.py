@@ -30,7 +30,8 @@
 #
 
 import xattr
-mountpoint="/home/larissa/src/mattock-dissertation/pymattockfs/mnt"
+#mountpoint="/home/larissa/src/mattock-dissertation/pymattockfs/mnt"
+mountpoint="/home/rob/mattock-dissertation/pymattockfs/mnt"
 modulectl=xattr.xattr(mountpoint + "/module/kickstart.ctl")
 modulectl["user.reset"]="1"
 instance=modulectl["user.register_instance"]

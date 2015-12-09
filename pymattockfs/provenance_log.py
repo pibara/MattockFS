@@ -30,14 +30,21 @@
 #
 #This file is a place holder for a future provenance loging facility.
 #
+import time
 class ProvenanceLog:
-  def __init__(self,jobid,module,carvpath,mimetype,parentcp=None):
+  def __init__(self,jobid,module,carvpath,mimetype,parentcp=None,parentjob=None):
     self.log=[]
     rec={"job" : jobid,"module" : module, "carvpath" : carvpath,"mime" : mimetype}
+    rec["time"]=time.time()
     if parentcp != None:
-      rec["parent"] = parentcp
+      rec["parent_carvpath"] = parentcp
+    if parentjob!=None:
+      rec["parent_job"]=parentjob
     self.log.append(rec)
   def __del__(self):
+    rec={}
+    rec["time"]=time.time()
+    self.log.append(rec)
     print "PROVENANCE: ", self.log
   def __call__(self,jobid,module):
     self.log.append({"jobid": jobid,"module" : module})

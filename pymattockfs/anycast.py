@@ -81,9 +81,31 @@ class ModuleInstance:
       return self.currentjob.jobhandle
     return None
 
+class Frozen:
+  def __init__(self,stack,carvpath):
+    self.stack=stack
+    self.carvpath=carvpath
+    self.stack.add_carvpath(self.carvpath)
+  def __del__(self):
+    self.stack.remove_carvpath(self.carvpath)
+
+class Mutable:
+  def __init__(self,allmodules,msize,secret,sequence):
+    self.mutablehandle = "M" + blake2b("M" + hex(sequence)[2:].zfill(16),digest_size=32,key=secret).hexdigest()
+    self.carvpath=allmodules.rep.newmutable(msize)
+    self.lookup=allmodules.newdata
+    self.lookup[self.mutablehandle]=self.carvpath
+    self.stack=allmodules.rep.stack
+    self.stack.add_carvpath(self.carvpath)
+  def __del__(self):
+    self.stack.remove_carvpath(self.carvpath)
+    del self.lookup[self.mutablehandle]
+    
+
 #The core of the anycast funcionality is the concept of a job.
 class Job:
   def __init__(self,jobhandle,modulename,carvpath,router_state,mime_type,file_extension,allmodules,provenance=None):
+    print "NEW JOB",carvpath,jobhandle
     self.jobhandle=jobhandle
     self.modulename=modulename
     self.carvpath=carvpath
@@ -93,14 +115,16 @@ class Job:
     self.submit_info=[]
     self.allmodules=allmodules
     self.mno = 1
+    self.mutable=None
+    self.frozen=None
     if provenance == None:
       self.provenance= provenance_log.ProvenanceLog(jobhandle,modulename,carvpath,mime_type)
     else:
       self.provenance = provenance
       self.provenance(jobhandle,modulename)
-    self.mutablehandle=None
   def __del__(self):
-    if self.mutablehandle:
+    print "DEL JOB",self.carvpath,self.jobhandle
+    if self.mutable != None:
       carvpath=self.get_frozen_mutable()
       #FIXME, we need better logging.
       print "WARNING: Orphaned mutable: " + carvpath
@@ -113,20 +137,23 @@ class Job:
   def create_mutable(self,msize):
     mno=self.mno
     self.mno += 1
-    self.mutablehandle = "M" + blake2b("M" + hex(mno)[2:].zfill(16),digest_size=32,key=self.jobhandle[:64]).hexdigest()
-    self.allmodules.newdata[self.mutablehandle]=self.allmodules.rep.newmutable(msize)
+    self.mutable=Mutable(self.allmodules,msize,self.jobhandle[:64],mno)
   def get_mutable(self):
-    return self.mutablehandle
+    if self.mutable != None:
+      return self.mutable.mutablehandle
+    return None
   def get_frozen_mutable(self):
-    if self.mutablehandle != None and self.mutablehandle in self.allmodules.newdata:
-      carvpath=self.allmodules.newdata[self.mutablehandle]
-      del self.allmodules.newdata[self.mutablehandle]
-      self.mutablehandle=None
+    if self.mutable != None:
+      carvpath=self.mutable.carvpath
+      self.frozen=Frozen(self.allmodules.rep.stack,carvpath)
+      self.mutable=None
       return carvpath
+    if self.frozen != None:
+      return self.frozen.carvpath
     return None
   def submit_child(self,carvpath,nexthop,routerstate,mimetype,extension):
     provenance=provenance_log.ProvenanceLog(self.jobhandle,self.modulename,carvpath,mimetype,self.carvpath)
-    self.allmodules[nexthop].anycast_add(self.carvpath,routerstate,self.mime_type,self.file_extension,self.provenance) 
+    self.allmodules[nexthop].anycast_add(self.carvpath,routerstate,self.mime_type,self.file_extension,provenance) 
 
 #The state shared by all module instances of a specific type. Also used when no instances are pressent.
 class ModuleState:

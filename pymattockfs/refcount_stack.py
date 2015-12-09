@@ -82,7 +82,6 @@ class CarvpathRefcountStack:
   # 1) An entity with all fragments that went from zero to one reference count.(can be used for fadvise purposes)
   # 2) An entity with all fragments already in the box before add was invoked (can be used for opportunistic hashing purposes).
   def add_carvpath(self,carvpath):
-    print "ADD CARVPATH : ",carvpath
     if carvpath in self.entityrefcount.keys():
       self.entityrefcount[carvpath] += 1
       ent=self.content[carvpath]
@@ -102,7 +101,6 @@ class CarvpathRefcountStack:
   # 1) An entity with all fragments that went from one to zero refcount (can be used for fadvise purposes).
   # 2) An entity with all fragments still remaining in the box. 
   def remove_carvpath(self,carvpath):
-    print "REMOVE CARVPATH : ",carvpath
     if not carvpath in self.entityrefcount.keys():
       raise IndexError("Carvpath "+carvpath+" not found in box.")    
     self.entityrefcount[carvpath] -= 1
