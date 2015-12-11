@@ -54,7 +54,6 @@ class ModuleInstance:
     self.module=module
     self.modulename=modulename
     self.instancehandle=instancehandle
-    self.lastjobno=0
     self.currentjob=None
     self.select_policy="S"
     self.sort_policy="HrdS"
@@ -81,6 +80,19 @@ class ModuleInstance:
       return self.currentjob.jobhandle
     return None
 
+class CapabilityGenerator:
+  def __init__(self):
+    self.sequence=0
+    random.seed()
+    self.genesiscap="C" +''.join(random.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") for _ in range(0,64))
+  def __call__(self,parentcap=None):
+    if parentcap == None:
+      parentcap=self.genesiscap
+    curseq=self.sequence
+    self.sequence += 1
+    return "C" + blake2b("C" + hex(curseq)[2:].zfill(16),digest_size=32,key=parentcap[1:65]).hexdigest()
+    
+
 class Frozen:
   def __init__(self,stack,carvpath):
     self.stack=stack
@@ -90,8 +102,8 @@ class Frozen:
     self.stack.remove_carvpath(self.carvpath)
 
 class Mutable:
-  def __init__(self,allmodules,msize,secret,sequence):
-    self.mutablehandle = "M" + blake2b("M" + hex(sequence)[2:].zfill(16),digest_size=32,key=secret).hexdigest()
+  def __init__(self,allmodules,msize,secret):
+    self.mutablehandle = allmodules.capgen(secret)
     self.carvpath=allmodules.rep.newmutable(msize)
     self.lookup=allmodules.newdata
     self.lookup[self.mutablehandle]=self.carvpath
@@ -105,7 +117,6 @@ class Mutable:
 #The core of the anycast funcionality is the concept of a job.
 class Job:
   def __init__(self,jobhandle,modulename,carvpath,router_state,mime_type,file_extension,allmodules,provenance=None):
-    print "NEW JOB",carvpath,jobhandle
     self.jobhandle=jobhandle
     self.modulename=modulename
     self.carvpath=carvpath
@@ -114,16 +125,14 @@ class Job:
     self.file_extension=file_extension
     self.submit_info=[]
     self.allmodules=allmodules
-    self.mno = 1
     self.mutable=None
     self.frozen=None
     if provenance == None:
-      self.provenance= provenance_log.ProvenanceLog(jobhandle,modulename,carvpath,mime_type)
+      self.provenance= provenance_log.ProvenanceLog(jobhandle,modulename,carvpath,mime_type,journal=self.allmodules.journal,provenance_log=allmodules.provenance_log)
     else:
       self.provenance = provenance
       self.provenance(jobhandle,modulename)
   def __del__(self):
-    print "DEL JOB",self.carvpath,self.jobhandle
     if self.mutable != None:
       carvpath=self.get_frozen_mutable()
       #FIXME, we need better logging.
@@ -135,9 +144,7 @@ class Job:
     self.allmodules[module].anycast_add(self.carvpath,state,self.mime_type,self.file_extension,self.provenance)
     del self.allmodules.jobs[self.jobhandle]
   def create_mutable(self,msize):
-    mno=self.mno
-    self.mno += 1
-    self.mutable=Mutable(self.allmodules,msize,self.jobhandle[:64],mno)
+    self.mutable=Mutable(self.allmodules,msize,self.jobhandle[:64])
   def get_mutable(self):
     if self.mutable != None:
       return self.mutable.mutablehandle
@@ -152,26 +159,24 @@ class Job:
       return self.frozen.carvpath
     return None
   def submit_child(self,carvpath,nexthop,routerstate,mimetype,extension):
-    provenance=provenance_log.ProvenanceLog(self.jobhandle,self.modulename,carvpath,mimetype,self.carvpath)
+    carvpath=carvpath.split("data/")[-1].split(".")[0]
+    provenance=provenance_log.ProvenanceLog(self.jobhandle,self.modulename,carvpath,mimetype,self.carvpath,journal=self.allmodules.journal,provenance_log=self.allmodules.provenance_log)
     self.allmodules[nexthop].anycast_add(self.carvpath,routerstate,self.mime_type,self.file_extension,provenance) 
 
 #The state shared by all module instances of a specific type. Also used when no instances are pressent.
 class ModuleState:
-  def __init__(self,modulename,strongname,allmodules,rep):
+  def __init__(self,modulename,capgen,allmodules,rep):
     self.name=modulename
     self.instances={}
     self.anycast={}
-    self.lastinstanceno=0
-    self.lastjobno=0
-    self.secret=strongname
+    self.secret=capgen()
+    self.capgen=capgen
     self.weight=100              #rw extended attribute
     self.overflow=10             #rw extended attribute
     self.allmodules=allmodules
     self.rep=rep
   def register_instance(self):   #read-only (responsibility accepting) extended attribute.
-    instanceno=self.lastinstanceno
-    self.lastinstanceno += 1
-    rval = "I" + blake2b("I" + hex(instanceno)[2:].zfill(16),digest_size=32,key=self.secret[:64]).hexdigest()
+    rval=self.capgen(self.secret)
     self.instances[rval]=ModuleInstance(self.name,rval,self)
     self.allmodules.instances[rval]=self.instances[rval]
     return rval
@@ -190,52 +195,39 @@ class ModuleState:
     set_volume=self.rep.anycast_set_volume(self.anycast)
     return (set_size,set_volume)
   def anycast_add(self,carvpath,router_state,mime_type,file_extension,provenance):
-    jobno=self.lastjobno
-    self.lastjobno += 1
-    jobhandle = "J" + blake2b("J" + hex(jobno)[2:].zfill(16),digest_size=32,key=self.secret[:64]).hexdigest()
+    jobhandle = self.capgen(self.secret)
     self.anycast[jobhandle]=Job(jobhandle,self.name,carvpath,router_state,mime_type,file_extension,self.allmodules,provenance)
-    self.allmodules.path_state[carvpath]="anycast"
-    self.allmodules.path_module[carvpath]=self.name
   def get_kickjob(self):
-    jobno=self.lastjobno
-    self.lastjobno += 1
-    jobhandle = "J" + blake2b("J" + hex(jobno)[2:].zfill(16),digest_size=32,key=self.secret[:64]).hexdigest()
-    self.allmodules.jobs[jobhandle]=Job(jobhandle,"kickstart","S0","","application/x-zerosize","empty",self.allmodules)
-    return self.allmodules.jobs[jobhandle]
+    self.anycast_add("S0","","application/x-zerosize","empty",None)
+    return self.anycast_pop("S")
   def anycast_pop(self,sort_policy,select_policy="S"):
     if self.name != "loadbalance":
       best=self.rep.anycast_best(self.name,self.anycast,sort_policy)
       if best != None and best in self.anycast:
         job = self.anycast.pop(best)
         self.allmodules.jobs[best]=job
-        self.allmodules.path_state[job.carvpath]="pending"
-        self.allmodules.path_module[job.carvpath]=self.name
         return job
     else:
       best=self.allmodules.selectmodule(select_policy)
       if best != None:
         best=anycast_pop(sort_policy,select_policy)
-        self.allmodules.path_state[best.carvpath]="migrating"
-        self.allmodules.path_module[best.carvpath]=self.name
         return best
       return None 
 
 #State shared between different modules and a central coordination point.
 class ModulesState:
-  def __init__(self,rep):
+  def __init__(self,rep,journal,provenance):
     self.rep=rep
     self.modules={}
     self.instances={}
     self.jobs={}
     self.newdata={}
-    self.path_state={} 
-    self.path_module={}
-    random.seed()
-    self.rumpelstiltskin=''.join(random.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") for _ in range(0,64))
+    self.capgen=CapabilityGenerator()
+    self.journal=open(journal, "a",0)
+    self.provenance_log=open(provenance, "a",0)
   def __getitem__(self,key):
     if not key in self.modules:
-      strongname = "M" + blake2b("M" +key,digest_size=32,key=self.rumpelstiltskin).hexdigest()
-      self.modules[key]=ModuleState(key,strongname,self,self.rep)
+      self.modules[key]=ModuleState(key,self.capgen,self,self.rep)
     return self.modules[key]
   def selectmodule(self,select_policy):
     moduleset=self.modules.keys()

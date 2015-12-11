@@ -1,0 +1,19 @@
+In order to run pymattockfs, you should first do the following.
+
+* Create a user named 'mattockfs' part of the 'fuse' group and owning /var/mattock
+
+  sudo useradd mattockfs -g fuse -d /var/mattock -m
+
+After that, you may start the file-system and make it run as the new user:
+
+  sudo su mattockfs -c './pymattockfs.py -o allow_other'
+
+Or if you suspect there to be bugs (MattockFS is currently still in alpha testing):
+ 
+  sudo su mattockfs -c './pymattockfs.py -o allow_other -f'
+
+The file-system will be mounted under /var/mattock/mnt/0 and can be unmounted using:
+
+  sudo su mattockfs -c 'fusermount -u /var/mattock/mnt/0'
+
+

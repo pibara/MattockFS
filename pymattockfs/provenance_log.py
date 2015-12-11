@@ -31,9 +31,12 @@
 #This file is a place holder for a future provenance loging facility.
 #
 import time
+import json
 class ProvenanceLog:
-  def __init__(self,jobid,module,carvpath,mimetype,parentcp=None,parentjob=None):
+  def __init__(self,jobid,module,carvpath,mimetype,parentcp=None,parentjob=None,journal=None,provenance_log=None):
     self.log=[]
+    self.journal=journal
+    self.provenance=provenance_log
     rec={"job" : jobid,"module" : module, "carvpath" : carvpath,"mime" : mimetype}
     rec["time"]=time.time()
     if parentcp != None:
@@ -41,11 +44,15 @@ class ProvenanceLog:
     if parentjob!=None:
       rec["parent_job"]=parentjob
     self.log.append(rec)
+    self.journal.write("NEW:cp="+carvpath+":firstjob="+jobid+":module="+module+":parent="+str(parentcp)+":type="+mimetype+"\n")
   def __del__(self):
     rec={}
     rec["time"]=time.time()
     self.log.append(rec)
-    print "PROVENANCE: ", self.log
+    self.journal.write("FNL:cp="+self.log[0]["carvpath"]+":firstjob"+self.log[0]["job"]+"\n")
+    self.provenance.write(json.dumps(self.log))
+    self.provenance.write("\n")
   def __call__(self,jobid,module):
     self.log.append({"jobid": jobid,"module" : module})
+    self.journal.write("UPD:cp="+self.log[0]["carvpath"]+":firstjob"+self.log[0]["job"]+":module="+module+"\n")
 

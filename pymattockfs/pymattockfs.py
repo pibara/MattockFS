@@ -85,7 +85,7 @@ class NoEnt:
     return -errno.ENOENT
 class TopDir:
   def getattr(self):
-    return defaultstat()
+    return defaultstat(STAT_MODE_DIR)
   def opendir(self):
     return 0
   def readdir(self):
@@ -389,7 +389,7 @@ class CarvPathLink:
     return -errno.EPERM
 
 class MattockFS(fuse.Fuse):
-    def __init__(self,dash_s_do,version,usage,dd,lpdb):
+    def __init__(self,dash_s_do,version,usage,dd,lpdb,journal,provenance_log,ohash_log):
       super(MattockFS, self).__init__(version=version,usage=usage,dash_s_do=dash_s_do)
       self.longpathdb =lpdb 
       self.context=carvpath.Context(self.longpathdb)
@@ -398,8 +398,8 @@ class MattockFS(fuse.Fuse):
       self.selectre = re.compile(r'^[SVDWC]{1,5}$')
       self.sortre = re.compile(r'^(K|[RrOHDdWS]{1,6})$')
       self.archive_dd = dd
-      self.rep=repository.Repository(self.archive_dd,self.context)
-      self.ms=anycast.ModulesState(self.rep)
+      self.rep=repository.Repository(self.archive_dd,self.context,ohash_log)
+      self.ms=anycast.ModulesState(self.rep,journal,provenance_log)
       self.topctl=TopCtl(self.rep,self.context)
       self.needinit=True
     def parsepath(self,path):
@@ -505,25 +505,35 @@ class MattockFS(fuse.Fuse):
     #  return method
 
 if __name__ == '__main__':
-    dd="/var/mattock/archive/0.dd"
-    isoption=False
-    for arg in sys.argv:
-      if isoption and "archive_dd=" in arg:
-        dd=arg[11:]
-        isoption=False
-      else:
-        if arg == "-o":
-          isoption=True
-        else:
-          isoption=False
+    mattockdir="/var/mattock"
+    if not os.path.isdir(mattockdir):
+      print "ERROR: ", mattockdir, "should exist and be owned by the mattockfs user"
+      sys.exit()
+    for subdir in ["archive","log","mnt"]:
+      sd=mattockdir + "/" + subdir
+      if not os.path.isdir(sd):
+        try:
+          os.mkdir(sd)
+        except:
+          print "ERROR: Can't create missing",sd,";", mattockdir, "should be owned by the mattockfs user"
+          sys.exit()
+    mattockitem="0"
+    mp=mattockdir + "/mnt/" + mattockitem
+    if not os.path.isdir(mp):
+      try:
+        os.mkdir(mp)
+      except:
+        print "ERROR: Can't create missing",mp,";", mattockdir+"/mnt should be owned by the mattockfs user"
+        sys.exit()
+    dd = mattockdir + "/archive/" + mattockitem + ".dd"
+    journal = mattockdir + "/log/" + mattockitem + ".journal"
+    provenance_log = mattockdir + "/log/" + mattockitem + ".provenance"
+    ohash_log = mattockdir + "/log/" + mattockitem + ".ohash"
+    mp=mattockdir + "/mnt/" + mattockitem
+    sys.argv.append(mp)
     mattockfs = MattockFS(version = '%prog ' + '0.1.0',
                usage = 'Mattock filesystem ' + fuse.Fuse.fusage,
-               dash_s_do = 'setsingle',dd=dd,lpdb=longpathmap.LongPathMap)
-    #Seems option parsing is a bit tricky, we add it to the expected options so we don't croke.
-    mattockfs.parser.add_option(mountopt="archive_dd",
-                                metavar="DD",
-                                default=mattockfs.archive_dd,
-                                help="Path of the archive dd file to use [default: %default]")
+               dash_s_do = 'setsingle',dd=dd,lpdb=longpathmap.LongPathMap,journal=journal,provenance_log=provenance_log,ohash_log=ohash_log)
     mattockfs.parse(errex = 1)
     mattockfs.flags = 0
     mattockfs.multithreaded = 0

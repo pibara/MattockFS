@@ -89,7 +89,8 @@ class _Opportunistic_Hash:
       self.isdone=True
 
 class _OH_Entity:
-  def __init__(self,ent):
+  def __init__(self,ent,log):
+    self.log=log
     self.ent=copy.deepcopy(ent)
     self.ohash=_Opportunistic_Hash(self.ent.totalsize)
     self.roi=ent.getroi(0)
@@ -129,6 +130,8 @@ class _OH_Entity:
       if updated:
         #Update our range of interest.
         self.roi=self.ent.getroi(self.ohash.offset)
+        if self.ohash.isdone:
+          self.log.write(str(self.ent) + ":" + self.ohash.result + "\n")
   def  read_parent_chunk(self,data,parentoffset):
     parentfragsize=len(data)
     parentendoffset = parentoffset+parentfragsize-1
@@ -164,6 +167,8 @@ class _OH_Entity:
       if updated:
         #Update our range of interest.
         self.roi=self.ent.getroi(self.ohash.offset)
+        if self.ohash.isdone:
+          self.log.write(str(self.ent) + ":" + self.ohash.result + "\n")
   def hashing_offset(self):
     return self.ohash.offset
   def hashing_result(self):
@@ -172,12 +177,13 @@ class _OH_Entity:
     return self.ohash.isdone
       
 class OpportunisticHashCollection:
-  def __init__(self,carvpathcontext):
+  def __init__(self,carvpathcontext,ohash_log):
     self.context=carvpathcontext
     self.ohash=dict()
+    self.log=open(ohash_log,"a",0)
   def add_carvpath(self,carvpath):
     ent=self.context.parse(carvpath)
-    self.ohash[carvpath]=_OH_Entity(ent)
+    self.ohash[carvpath]=_OH_Entity(ent,self.log)
   def remove_carvpath(self,carvpath):
     del self.ohash[carvpath]   
   def lowlevel_written_data(self,offset,data):

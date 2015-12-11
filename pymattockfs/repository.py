@@ -101,9 +101,9 @@ class _OpenFile:
     return size
 
 class Repository:
-  def __init__(self,reppath,context):
+  def __init__(self,reppath,context,ohash_log):
     self.context=context
-    col=opportunistic_hash.OpportunisticHashCollection(context)
+    col=opportunistic_hash.OpportunisticHashCollection(context,ohash_log)
     self.openfiles={}
     self.lastfd=1
     self.fd=os.open(reppath,(os.O_RDWR | os.O_LARGEFILE | os.O_NOATIME | os.O_CREAT))

@@ -163,7 +163,7 @@ class Context:
     return {"set_size" : int(st[0]), "set_volume" : int(st[1])}
 
 if __name__ == '__main__':
-  mountpoint="/home/rob/mattock-dissertation/pymattockfs/mnt"
+  mountpoint="/var/mattock/mnt/0"
   print "Regestering kickstart module and setting \"K\" sort policy"
   context=Context(mountpoint,"kickstart","K")
   print "Fetching global throttle info"

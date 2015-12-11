@@ -30,8 +30,7 @@
 #
 
 import xattr
-#mountpoint="/home/larissa/src/mattock-dissertation/pymattockfs/mnt"
-mountpoint="/home/rob/mattock-dissertation/pymattockfs/mnt"
+mountpoint="/var/mattock/mnt/0"
 modulectl=xattr.xattr(mountpoint + "/module/kickstart.ctl")
 modulectl["user.reset"]="1"
 instance=modulectl["user.register_instance"]
@@ -51,3 +50,4 @@ with open(mountpoint + "/" + newdata,"r+") as f:
     f.write("HARHAR")
 frozen=jobctl["user.frozen_mutable"]
 print frozen
+
