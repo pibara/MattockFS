@@ -610,8 +610,10 @@ class _Test:
       print("OK : "+str(a))
 
 if __name__ == "__main__":
-  context=Context({})
-  t=_Test({},160)
+  import longpathmap
+  lpmap=longpathmap.LongPathMap()
+  context=Context(lpmap)
+  t=_Test(lpmap,160)
   t.testflatten(context,"0+0","S0");
   t.testflatten(context,"S0","S0");
   t.testflatten(context,"0+0/0+0","S0");

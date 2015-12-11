@@ -31,14 +31,13 @@
 #This is a placeholder that implements an in-memory key/value store. This should
 #be replaced with a solution that uses a journal and/or a distributed key/value store.
 #
+import redis
 class LongPathMap:
   def __init__(self):
-    self.dic={}
+    self.redis=redis.StrictRedis()
   def __getitem__(self,i):
-    return self.dic[i]
+    return self.redis.get(i)
   def __setitem__(self,i,val):
-    self.dic[i]=val
+    self.redis.set(i,val)
   def __contains__(self,key):
-    if key in self.dic:
-      return True
-    return False
+    return self.redis.exists(key)
