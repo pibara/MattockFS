@@ -49,10 +49,10 @@ class ProvenanceLog:
     rec={}
     rec["time"]=time.time()
     self.log.append(rec)
-    self.journal.write("FNL:cp="+self.log[0]["carvpath"]+":firstjob"+self.log[0]["job"]+"\n")
+    self.journal.write("FNL:cp="+self.log[0]["carvpath"]+":firstjob="+self.log[0]["job"]+"\n")
     self.provenance.write(json.dumps(self.log))
     self.provenance.write("\n")
   def __call__(self,jobid,module):
     self.log.append({"jobid": jobid,"module" : module})
-    self.journal.write("UPD:cp="+self.log[0]["carvpath"]+":firstjob"+self.log[0]["job"]+":module="+module+"\n")
+    self.journal.write("UPD:cp="+self.log[0]["carvpath"]+":firstjob="+self.log[0]["job"]+":module="+module+"\n")
 
