@@ -101,7 +101,7 @@ class _OpenFile:
     return size
 
 class Repository:
-  def __init__(self,reppath,context,ohash_log):
+  def __init__(self,reppath,context,ohash_log,refcount_log):
     self.context=context
     col=opportunistic_hash.OpportunisticHashCollection(context,ohash_log)
     self.openfiles={}
@@ -111,7 +111,7 @@ class Repository:
     posix_fadvise(self.fd,0,cursize,POSIX_FADV_DONTNEED)
     self.top=self.context.make_top(cursize)
     fadvise=_FadviseFunctor(self.fd)
-    self.stack=refcount_stack.CarvpathRefcountStack(self.context,fadvise,col)
+    self.stack=refcount_stack.CarvpathRefcountStack(self.context,fadvise,col,refcount_log)
   def __del__(self):
     os.close(self.fd)
   def _grow(self,newsize):

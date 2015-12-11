@@ -28,6 +28,7 @@
 #(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 #SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
 #
+import time
 
 def _defaultlt(al1,al2):
   for index in range(0,len(al1)):
@@ -49,7 +50,7 @@ class _CustomSortable:
     return self.ltfunction(self.arglist,other.arglist)
 
 class CarvpathRefcountStack:
-  def __init__(self,carvpathcontext,fadvise,ohashcollection):
+  def __init__(self,carvpathcontext,fadvise,ohashcollection,refcount_log):
     self.context=carvpathcontext
     self.fadvise=fadvise
     self.ohashcollection=ohashcollection
@@ -57,6 +58,7 @@ class CarvpathRefcountStack:
     self.entityrefcount=dict() #Entity refcount for handling multiple instances of the exact same entity.
     self.fragmentrefstack=[] #A stack of fragments with different refcounts for keeping reference counts on fragments.
     self.fragmentrefstack.append(self.context.empty()) #At least one empty entity on the stack
+    self.log=open(refcount_log,"a",0)
   def carvpath_throttle_info(self,carvpath):
     ent=self.context.parse(carvpath)
     totalsize=ent.totalsize #FIXME: need to account for sparse.
@@ -96,6 +98,7 @@ class CarvpathRefcountStack:
       merged=r[0]
       for fragment in merged:
         self.fadvise(fragment.offset,fragment.size,True)
+      self.log.write(str(time.time())+":+:"+str(merged)+"\n")
     return
   #Remove an existing entity from the box. Returns two entities:
   # 1) An entity with all fragments that went from one to zero refcount (can be used for fadvise purposes).
@@ -111,7 +114,8 @@ class CarvpathRefcountStack:
       r= self._stackdiminish(len(self.fragmentrefstack)-1,ent)
       unmerged=r
       for fragment in unmerged:
-        self.fadvise(fragment.offset,fragment.size,False) 
+        self.fadvise(fragment.offset,fragment.size,False)
+      self.log.write(str(time.time())+":-:"+str(unmerged)+"\n")
     return
   #Request a list of entities that overlap from the box that overlap (for opportunistic hashing purposes).
   def _overlaps(self,offset,size):

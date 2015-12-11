@@ -33,21 +33,7 @@ import os
 import fcntl
 
 try:
-  from os import posix_fadvise,POSIX_FADV_DONTNEED,POSIX_FADV_NORMAL
-except:
-  try:  
-    from fadvise import posix_fadvise,POSIX_FADV_DONTNEED,POSIX_FADV_NORMAL
-  except:
-    import sys
-    print("")
-    print("\033[93mERROR:\033[0m fadvise module not installed. Please install fadvise python module. Run:")
-    print("")
-    print("    sudo pip install fadvise")
-    print("")
-    sys.exit()
-try:
     from pyblake2 import blake2b
-    ohash_algo=blake2b
 except ImportError:
     import sys
     print("")
@@ -56,13 +42,6 @@ except ImportError:
     print("    sudo pip install pyblake2")
     print("")
     sys.exit()
-try:
-    #When this was written, pyblake2 didn't implement blake2bp yet. Hopefully it does in the future so the
-    #Python implementation can be close to as fast as, and compatible with, the C++ implementation.
-    from pyblake2 import blake2bp
-    ohash_algo=blake2bp
-except:
-    pass
 
 #A fragent represents a contiguous section of a higher level data entity.
 class Fragment:

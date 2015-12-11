@@ -389,7 +389,7 @@ class CarvPathLink:
     return -errno.EPERM
 
 class MattockFS(fuse.Fuse):
-    def __init__(self,dash_s_do,version,usage,dd,lpdb,journal,provenance_log,ohash_log):
+    def __init__(self,dash_s_do,version,usage,dd,lpdb,journal,provenance_log,ohash_log,refcount_log):
       super(MattockFS, self).__init__(version=version,usage=usage,dash_s_do=dash_s_do)
       self.longpathdb =lpdb 
       self.context=carvpath.Context(self.longpathdb)
@@ -398,7 +398,7 @@ class MattockFS(fuse.Fuse):
       self.selectre = re.compile(r'^[SVDWC]{1,5}$')
       self.sortre = re.compile(r'^(K|[RrOHDdWS]{1,6})$')
       self.archive_dd = dd
-      self.rep=repository.Repository(self.archive_dd,self.context,ohash_log)
+      self.rep=repository.Repository(self.archive_dd,self.context,ohash_log,refcount_log)
       self.ms=anycast.ModulesState(self.rep,journal,provenance_log)
       self.topctl=TopCtl(self.rep,self.context)
       self.needinit=True
@@ -529,11 +529,18 @@ if __name__ == '__main__':
     journal = mattockdir + "/log/" + mattockitem + ".journal"
     provenance_log = mattockdir + "/log/" + mattockitem + ".provenance"
     ohash_log = mattockdir + "/log/" + mattockitem + ".ohash"
+    refcount_log = mattockdir + "/log/" + mattockitem + ".refcount"
     mp=mattockdir + "/mnt/" + mattockitem
     sys.argv.append(mp)
-    mattockfs = MattockFS(version = '%prog ' + '0.1.0',
+    mattockfs = MattockFS(version = '%prog ' + '0.3.0',
                usage = 'Mattock filesystem ' + fuse.Fuse.fusage,
-               dash_s_do = 'setsingle',dd=dd,lpdb=longpathmap.LongPathMap,journal=journal,provenance_log=provenance_log,ohash_log=ohash_log)
+               dash_s_do = 'setsingle',
+               dd=dd,
+               lpdb=longpathmap.LongPathMap,
+               journal=journal,
+               provenance_log=provenance_log,
+               ohash_log=ohash_log,
+               refcount_log=refcount_log)
     mattockfs.parse(errex = 1)
     mattockfs.flags = 0
     mattockfs.multithreaded = 0
