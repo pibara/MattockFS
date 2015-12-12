@@ -161,7 +161,7 @@ class Job:
   def submit_child(self,carvpath,nexthop,routerstate,mimetype,extension):
     carvpath=carvpath.split("data/")[-1].split(".")[0]
     provenance=provenance_log.ProvenanceLog(self.jobhandle,self.modulename,carvpath,mimetype,self.carvpath,journal=self.allmodules.journal,provenance_log=self.allmodules.provenance_log)
-    self.allmodules[nexthop].anycast_add(self.carvpath,routerstate,self.mime_type,self.file_extension,provenance) 
+    self.allmodules[nexthop].anycast_add(carvpath,routerstate,self.mime_type,self.file_extension,provenance) 
 
 #The state shared by all module instances of a specific type. Also used when no instances are pressent.
 class ModuleState:

@@ -61,16 +61,13 @@ class CarvpathRefcountStack:
     self.log=open(refcount_log,"a",0)
   def carvpath_throttle_info(self,carvpath):
     ent=self.context.parse(carvpath)
-    totalsize=ent.totalsize #FIXME: need to account for sparse.
-    if len(self.fragmentrefstack) > 0: 
-       totalsize += self.fragmentrefstack[0].totalsize
     if ent.totalsize == 0 or len(self.fragmentrefstack)==0 or self.fragmentrefstack[0].totalsize ==0:
       overlapsize = 0
     else:
       if len(self.fragmentrefstack) == 0:
         return [0,ent.totalsize]
       overlapsize=ent.overlap_size(self.fragmentrefstack[0])
-    return [overlapsize,totalsize-overlapsize]    
+    return [overlapsize,ent.totalsize-overlapsize]    
   def __str__(self):
     rval=""
     for index in range(0,len(self.fragmentrefstack)):

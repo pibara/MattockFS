@@ -145,6 +145,7 @@ class Repository:
   def anycast_set_volume(self,anycast):
     volume=0
     for jobid in anycast:
+      cp = anycast[jobid].carvpath
       volume += self.context.parse(anycast[jobid].carvpath).totalsize
     return volume
   def anycast_best(self,modulename,anycast,sort_policy):

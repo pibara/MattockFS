@@ -131,24 +131,16 @@ class TopCtl:
   def readlink(self):
     return -errno.EINVAL
   def listxattr(self):
-    return ["user.throttle_info","user.full_archive","user.add_longpath"]
+    return ["user.throttle_info","user.full_archive"]
   def getxattr(self,name, size):
     if name == "user.throttle_info":
       return ";".join(map(lambda x: str(x),self.rep.getTopThrottleInfo()))
     if name == "user.full_archive":
       return "data/" + str(self.rep.top.topentity) + ".raw"
-    if name == "user.add_longpath":
-      return ""
     return -errno.ENODATA
   def setxattr(self,name, val):
     if name in ("user.throttle_info","user.full_archive"):
       return -errno.EPERM
-    if name == "user.add_longpath":
-      try:
-        short=str(self.context.parse(val))
-      except:
-        pass
-      return 0
     return -errno.ENODATA
   def open(self,flags,path):
     return -errno.EPERM
