@@ -213,12 +213,12 @@ if __name__ == '__main__':
   job2.forward("bazmod","t18:l6")
   print 
   print "Doing nothing as barmod"
-  context3=Context(mountpoint,"barmod")
-  job3 = context3.poll_job()
-  print " * routing_info : ", job3.router_state
-  job3.done
-  print 
-  print "Doing nothing as bazmod"
-  context4=Context(mountpoint,"bazmod")
-  job4 = context4.poll_job()
-  job4.done
+#  context3=Context(mountpoint,"barmod")
+#  job3 = context3.poll_job()
+#  print " * routing_info : ", job3.router_state
+#  job3.done
+#  print 
+#  print "Doing nothing as bazmod"
+#  context4=Context(mountpoint,"bazmod")
+#  job4 = context4.poll_job()
+#  job4.done

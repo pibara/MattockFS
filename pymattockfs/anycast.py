@@ -36,6 +36,7 @@
 import random
 import copy
 import provenance_log
+import json 
 
 try:
     from pyblake2 import blake2b
@@ -223,12 +224,41 @@ class ModulesState:
     self.jobs={}
     self.newdata={}
     self.capgen=CapabilityGenerator()
-    self.journal=open(journal, "a",0)
     self.provenance_log=open(provenance, "a",0)
+    #Restoring old state from journal.
+    journalinfo={}
+    try :
+      f=open(journal,'r')
+    except:
+      f=None
+    if f != None:
+      for line in f:
+        line=line.rstrip()
+        dat=json.loads(line)
+        dtype=dat["type"]
+        dkey=dat["key"]
+        if dtype == "NEW":
+          journalinfo[dkey]=[]
+        if dtype != "FNL":
+          journalinfo[dkey].append(dat["provenance"])
+        else:
+          del journalinfo[dkey]
+      f.close()
+      for needrestore in journalinfo:
+        provenance_log=journalinfo[needrestore]
+        self.journal_restore(provenance_log)
+    self.journal=open(journal, "a",0)
   def __getitem__(self,key):
     if not key in self.modules:
       self.modules[key]=ModuleState(key,self.capgen,self,self.rep)
     return self.modules[key]
+  def journal_restore(self,provenance_log):
+    pass #FIXME; figure out how to properly restore from journal.
+    #module=provenance_log[-1]["module"]
+    #if len(provenance_log) == 1:
+    #  self[module].anycast_add(provenance_log[0]["carvpath"],"FIXME-ROUTER-STATE-AFTER-RESTORE",provenance_log[0]["mime"],"dat",[]) 
+    #else:
+    #  self[module].anycast_add(provenance_log[0]["carvpath"],"FIXME-ROUTER-STATE-AFTER-RESTORE",provenance_log[0]["mime"],"dat",provenance_log[:-1])
   def selectmodule(self,select_policy):
     moduleset=self.modules.keys()
     if len(moduleset) == 0:

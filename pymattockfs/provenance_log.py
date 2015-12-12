@@ -44,15 +44,23 @@ class ProvenanceLog:
     if parentjob!=None:
       rec["parent_job"]=parentjob
     self.log.append(rec)
-    self.journal.write("NEW:cp="+carvpath+":firstjob="+jobid+":module="+module+":parent="+str(parentcp)+":type="+mimetype+"\n")
+    key=carvpath + "-" + jobid
+    journal_rec= {"type" : "NEW", "key" : key, "provenance" : rec}
+    self.journal.write(json.dumps(journal_rec))
+    self.journal.write("\n")
   def __del__(self):
     rec={}
     rec["time"]=time.time()
     self.log.append(rec)
-    self.journal.write("FNL:cp="+self.log[0]["carvpath"]+":firstjob="+self.log[0]["job"]+"\n")
+    key=self.log[0]["carvpath"] + "-" + self.log[0]["job"]
+    journal_rec= {"type" : "FNL", "key" : key}
+    self.journal.write(json.dumps(journal_rec))
+    self.journal.write("\n")
     self.provenance.write(json.dumps(self.log))
     self.provenance.write("\n")
   def __call__(self,jobid,module):
     self.log.append({"jobid": jobid,"module" : module})
-    self.journal.write("UPD:cp="+self.log[0]["carvpath"]+":firstjob="+self.log[0]["job"]+":module="+module+"\n")
-
+    key=self.log[0]["carvpath"] + "-" + self.log[0]["job"]
+    journal_rec = {"type" : "UPD", "key" : key, "provenance" : {"jobid": jobid,"module" : module}}
+    self.journal.write(json.dumps(journal_rec))
+    self.journal.write("\n")
