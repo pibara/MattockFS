@@ -129,10 +129,10 @@ class Job:
     self.mutable=None
     self.frozen=None
     if provenance == None:
-      self.provenance= provenance_log.ProvenanceLog(jobhandle,modulename,carvpath,mime_type,journal=self.allmodules.journal,provenance_log=allmodules.provenance_log)
+      self.provenance= provenance_log.ProvenanceLog(jobhandle,modulename,carvpath,mime_type,extension=file_extension,journal=self.allmodules.journal,provenance_log=allmodules.provenance_log)
     else:
       self.provenance = provenance
-      self.provenance(jobhandle,modulename)
+      self.provenance(jobhandle,modulename,router_state)
   def __del__(self):
     if self.mutable != None:
       carvpath=self.get_frozen_mutable()
@@ -161,7 +161,7 @@ class Job:
     return None
   def submit_child(self,carvpath,nexthop,routerstate,mimetype,extension):
     carvpath=carvpath.split("data/")[-1].split(".")[0]
-    provenance=provenance_log.ProvenanceLog(self.jobhandle,self.modulename,carvpath,mimetype,self.carvpath,journal=self.allmodules.journal,provenance_log=self.allmodules.provenance_log)
+    provenance=provenance_log.ProvenanceLog(self.jobhandle,self.modulename,carvpath,mimetype,parentcp=self.carvpath,extension=self.file_extension,journal=self.allmodules.journal,provenance_log=self.allmodules.provenance_log)
     self.allmodules[nexthop].anycast_add(carvpath,routerstate,self.mime_type,self.file_extension,provenance) 
 
 #The state shared by all module instances of a specific type. Also used when no instances are pressent.
@@ -253,12 +253,12 @@ class ModulesState:
       self.modules[key]=ModuleState(key,self.capgen,self,self.rep)
     return self.modules[key]
   def journal_restore(self,provenance_log):
-    pass #FIXME; figure out how to properly restore from journal.
-    #module=provenance_log[-1]["module"]
-    #if len(provenance_log) == 1:
-    #  self[module].anycast_add(provenance_log[0]["carvpath"],"FIXME-ROUTER-STATE-AFTER-RESTORE",provenance_log[0]["mime"],"dat",[]) 
-    #else:
-    #  self[module].anycast_add(provenance_log[0]["carvpath"],"FIXME-ROUTER-STATE-AFTER-RESTORE",provenance_log[0]["mime"],"dat",provenance_log[:-1])
+    module=provenance_log[-1]["module"]
+    if len(provenance_log) == 1:
+      self[module].anycast_add(provenance_log[0]["carvpath"],provenance_log[0]["router_state"],provenance_log[0]["mime"],provenance_log[0]["extension"],[]) 
+    else:
+      print "FIXME: don't know how to properly restore a >1 long provenance log"
+      #self[module].anycast_add(provenance_log[0]["carvpath"],provenance_log[-1]["router_state"],provenance_log[0]["mime"],provenance_log[0]["extension"],provenance_log[:-1])
   def selectmodule(self,select_policy):
     moduleset=self.modules.keys()
     if len(moduleset) == 0:

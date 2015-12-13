@@ -33,11 +33,11 @@
 import time
 import json
 class ProvenanceLog:
-  def __init__(self,jobid,module,carvpath,mimetype,parentcp=None,parentjob=None,journal=None,provenance_log=None):
+  def __init__(self,jobid,module,carvpath,mimetype,extension="dat",parentcp=None,parentjob=None,journal=None,provenance_log=None):
     self.log=[]
     self.journal=journal
     self.provenance=provenance_log
-    rec={"job" : jobid,"module" : module, "carvpath" : carvpath,"mime" : mimetype}
+    rec={"job" : jobid,"module" : module, "carvpath" : carvpath,"mime" : mimetype,"extension": extension}
     rec["time"]=time.time()
     if parentcp != None:
       rec["parent_carvpath"] = parentcp
@@ -58,9 +58,9 @@ class ProvenanceLog:
     self.journal.write("\n")
     self.provenance.write(json.dumps(self.log))
     self.provenance.write("\n")
-  def __call__(self,jobid,module):
-    self.log.append({"jobid": jobid,"module" : module})
+  def __call__(self,jobid,module,router_state=""):
+    self.log.append({"jobid": jobid,"module" : module,"router_state": router_state})
     key=self.log[0]["carvpath"] + "-" + self.log[0]["job"]
-    journal_rec = {"type" : "UPD", "key" : key, "provenance" : {"jobid": jobid,"module" : module}}
+    journal_rec = {"type" : "UPD", "key" : key, "provenance" : {"jobid": jobid,"module" : module,"router_state":router_state}}
     self.journal.write(json.dumps(journal_rec))
     self.journal.write("\n")
