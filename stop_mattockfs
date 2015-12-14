@@ -1,0 +1,2 @@
+#!/bin/bash
+sudo su mattockfs -c 'fusermount -u /var/mattock/mnt/0'

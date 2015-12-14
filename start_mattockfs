@@ -1,0 +1,2 @@
+#!/bin/bash
+sudo su mattockfs -c '/usr/local/bin/start_mattockfs.py -o allow_other'

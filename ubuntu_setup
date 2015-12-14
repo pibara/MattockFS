@@ -1,0 +1,20 @@
+#!/bin/bash
+python ./setup.py build
+sudo python ./setup.py install 
+if grep --quiet "^mattockfs:" /etc/passwd; then
+  echo "User mattockfs exists already" 
+else
+  if grep --quiet "^fuse:" /etc/group; then
+    sudo useradd mattockfs -g fuse -d /var/mattock -m
+  else
+    sudo useradd mattockfs -d /var/mattock -m
+  fi
+fi
+if grep --quiet "^user_allow_other" /etc/fuse.conf; then
+  echo "user_allow_other already set for fuse"
+else
+  sudo sh -c '/bin/echo user_allow_other >> /etc/fuse.conf'
+fi
+sudo apt-get install -y fuse python-fuse redis-server
+sudo cp start_mattockfs  start_mattockfs.py stop_mattockfs /usr/local/bin
+      
