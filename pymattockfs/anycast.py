@@ -129,7 +129,7 @@ class Job:
     self.mutable=None
     self.frozen=None
     if provenance == None:
-      self.provenance= provenance_log.ProvenanceLog(jobhandle,modulename,carvpath,mime_type,extension=file_extension,journal=self.allmodules.journal,provenance_log=allmodules.provenance_log)
+      self.provenance= provenance_log.ProvenanceLog(jobhandle,modulename,router_state,carvpath,mime_type,extension=file_extension,journal=self.allmodules.journal,provenance_log=allmodules.provenance_log)
     else:
       self.provenance = provenance
       self.provenance(jobhandle,modulename,router_state)
@@ -161,7 +161,7 @@ class Job:
     return None
   def submit_child(self,carvpath,nexthop,routerstate,mimetype,extension):
     carvpath=carvpath.split("data/")[-1].split(".")[0]
-    provenance=provenance_log.ProvenanceLog(self.jobhandle,self.modulename,carvpath,mimetype,parentcp=self.carvpath,extension=self.file_extension,journal=self.allmodules.journal,provenance_log=self.allmodules.provenance_log)
+    provenance=provenance_log.ProvenanceLog(self.jobhandle,self.modulename,self.router_state,carvpath,mimetype,parentcp=self.carvpath,extension=self.file_extension,journal=self.allmodules.journal,provenance_log=self.allmodules.provenance_log)
     self.allmodules[nexthop].anycast_add(carvpath,routerstate,self.mime_type,self.file_extension,provenance) 
 
 #The state shared by all module instances of a specific type. Also used when no instances are pressent.
@@ -244,21 +244,26 @@ class ModulesState:
         else:
           del journalinfo[dkey]
       f.close()
-      for needrestore in journalinfo:
-        provenance_log=journalinfo[needrestore]
-        self.journal_restore(provenance_log)
-    self.journal=open(journal, "a",0)
+    self.journal=open(journal,"a",0)
+    for needrestore in journalinfo:
+      provenance_log=journalinfo[needrestore]
+      self.journal_restore(provenance_log)
   def __getitem__(self,key):
     if not key in self.modules:
       self.modules[key]=ModuleState(key,self.capgen,self,self.rep)
     return self.modules[key]
-  def journal_restore(self,provenance_log):
-    module=provenance_log[-1]["module"]
-    if len(provenance_log) == 1:
-      self[module].anycast_add(provenance_log[0]["carvpath"],provenance_log[0]["router_state"],provenance_log[0]["mime"],provenance_log[0]["extension"],[]) 
+  def journal_restore(self,journal_records):
+    module=journal_records[-1]["module"]
+    if len(journal_records) == 1:
+      pl0=journal_records[0]
+      self[module].anycast_add(pl0["carvpath"],pl0["router_state"],pl0["mime"],pl0["extension"],None) 
     else:
-      print "FIXME: don't know how to properly restore a >1 long provenance log"
-      #self[module].anycast_add(provenance_log[0]["carvpath"],provenance_log[-1]["router_state"],provenance_log[0]["mime"],provenance_log[0]["extension"],provenance_log[:-1])
+      pl0=journal_records[0]
+      newpl=provenance_log.ProvenanceLog(pl0["job"],pl0["module"],pl0["router_state"],pl0["carvpath"],pl0["mime"],pl0["extension"],journal=self.journal,provenance_log=self.provenance_log,restore=True)
+      for subseq in journal_records[1:-1]:
+        newpl(subseq["jobid"],subseq["module"],subseq["router_state"],restore=True)
+      pln=journal_records[-1]
+      self[module].anycast_add(pl0["carvpath"],pln["router_state"],pl0["mime"],pl0["extension"],newpl)
   def selectmodule(self,select_policy):
     moduleset=self.modules.keys()
     if len(moduleset) == 0:
