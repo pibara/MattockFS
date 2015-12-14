@@ -1,7 +1,11 @@
+MattockFS Computer Forensics File-System
+========================================
+
+
 In order to run pymattockfs, you should first do the following.
 
 
-* Make sure fuse and python fuse are installed. Uncomment 'user_allow_other' in the /etc/fuse.conf is active.
+* Make sure fuse and python fuse are installed. Uncomment 'user\_allow\_other' in the /etc/fuse.conf is active.
 
 * Make sure the Redis server is installed and running on localhost.
 
@@ -24,11 +28,11 @@ In order to run pymattockfs, you should first do the following.
 
 After that, you may start the file-system and make it run as the new user:
 
-  sudo su mattockfs -c './pymattockfs.py -o allow_other'
+  sudo su mattockfs -c './pymattockfs.py -o allow\_other'
 
 Or if you suspect there to be bugs (MattockFS is currently still in alpha testing):
  
-  sudo su mattockfs -c './pymattockfs.py -o allow_other -f'
+  sudo su mattockfs -c './pymattockfs.py -o allow\_other -f'
 
 The file-system will be mounted under /var/mattock/mnt/0 and can be unmounted using:
 
