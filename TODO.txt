@@ -1,0 +1,13 @@
+* Work in-queue/in-progress state into the journal and restore process.
+* Optimize job picking by factoring out full fledged sorting.
+* Complete the base API for accessing the FS from Python
+* Integrate libmagic into the base API for Python.
+* Code cleanup and (if needed) refactoring.
+* Refactor for distributed usage.
+* Port the base API to C++
+* Port the base API to Perl
+* Port the base API to NodeJs
+* Port the base API to Rust
+* Port MattockFS to C++ and/or make Python version work with Blake2bp
+* Proper Python packaging
+* Proper deb package packaging for Ubuntu.
