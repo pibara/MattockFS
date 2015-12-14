@@ -18,8 +18,8 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
-    name='mattockfs',
-    version='1.0.4',
+    name='mattock',
+    version='1.0.6',
     description='The MattockFS Computer Forensics Framework Filesystem',
     long_description=long_description,
     url='https://github.com/pibara/MattockFS',
@@ -39,5 +39,6 @@ setup(
     ],
     keywords='computer forensics',
     install_requires=['pyblake2','fuse-python','redis'],
+    
     packages=find_packages(exclude=['start_mattockfs','quicktest','docs']),
 )

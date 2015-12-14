@@ -489,14 +489,8 @@ class MattockFS(fuse.Fuse):
       return -errno.EPERM
     def flush(self,path):
       self.rep.flush()
-    #def __getattr__(self, name): 
-    #  def method(*args):
-    #    print("tried to handle unknown method " + name)
-    #    if args:
-    #      print("it had arguments: " + str(args))
-    #  return method
 
-if __name__ == '__main__':
+def run():
     mattockdir="/var/mattock"
     if not os.path.isdir(mattockdir):
       print "ERROR: ", mattockdir, "should exist and be owned by the mattockfs user"
@@ -537,3 +531,6 @@ if __name__ == '__main__':
     mattockfs.flags = 0
     mattockfs.multithreaded = 0
     mattockfs.main()
+
+if __name__ == '__main__':
+  run()

@@ -1,3 +1,3 @@
 #!/usr/bin/python
-import mattockfs
-mattockfs.run()
+import mattock
+mattock.run()
