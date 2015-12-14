@@ -10,5 +10,4 @@
 * Port the base API to NodeJs
 * Port the base API to Rust
 * Port MattockFS to C++ and/or make Python version work with Blake2bp
-* Proper Python packaging
-* Proper deb package packaging for Ubuntu.
+* Proper Python/Ubuntu packaging, most importantly related to user creation and fuse tuning.
