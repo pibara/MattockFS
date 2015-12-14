@@ -2,6 +2,7 @@
 * Optimize job picking by factoring out full fledged sorting.
 * Complete the base API for accessing the FS from Python
 * Integrate libmagic into the base API for Python.
+* Write base documentation and a simple Github web page.
 * Code cleanup and (if needed) refactoring.
 * Refactor for distributed usage.
 * Port the base API to C++
