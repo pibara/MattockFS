@@ -1,6 +1,10 @@
 #!/bin/bash
+#first, install fuse and Redis dependencies using apt-get.
+sudo apt-get install -y fuse python-fuse redis-server
+#Use regular setup to install the code and most python dependencies.
 python ./setup.py build
 sudo python ./setup.py install 
+#Create the mattockfs user and make it a member of the fufe geoup if needed
 if grep --quiet "^mattockfs:" /etc/passwd; then
   echo "User mattockfs exists already" 
 else
@@ -10,11 +14,12 @@ else
     sudo useradd mattockfs -d /var/mattock -m
   fi
 fi
+#Patch fuse.conf to include user_allow_other
 if grep --quiet "^user_allow_other" /etc/fuse.conf; then
   echo "user_allow_other already set for fuse"
 else
   sudo sh -c '/bin/echo user_allow_other >> /etc/fuse.conf'
 fi
-sudo apt-get install -y fuse python-fuse redis-server
+#Copy the start, stop and test scripts to /usr/local/bin
 sudo cp start_mattockfs start_mattockfs_fg  start_mattockfs.py stop_mattockfs mattockfs_api_test.py /usr/local/bin
       

@@ -1,4 +1,12 @@
 MattockFS Computer Forensics File-System
+==
+
+WARNING: The code-base s still rather fluid and somewhat buggy at this point in time.
+         It should not be considered production stable at this point in time.
+         Enough of it is working though for people to experiment with the general
+         file-system setup and get a feel for the overall design phylosophy behind
+         the file-system. So please toy with it and give me your feedback, but don't
+         even consider using in production yet.
 
 This code contains four main components:
 

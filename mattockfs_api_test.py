@@ -53,6 +53,8 @@ kickstartjob.childsubmit(frozenmutable,"harmodule","t1:l11","x-mattock/harhar","
 #Nothing more to do with our parent job. We mark it as done.
 print "Marking parent job as done"
 kickstartjob.done()
+print "Fetching global fadvise status:"
+print " * ", kickstartcontext.fadvise_status()
 #The child entity has been submitted to the harmodule now, lets check the anycast status for that module.
 print "Checking anycast status for harmodule"
 print " * throttle info = ",kickstartcontext.anycast_status("harmodule")
@@ -83,6 +85,8 @@ else:
   print "Forward parent entity to bazmod" 
   harjob.forward("bazmod","t18:l6")
   print 
+  print "Fetching global fadvise status:"
+  print " * ", kickstartcontext.fadvise_status()
   #
   #
   #
@@ -106,4 +110,6 @@ else:
       print "ERROR, polling the bazmod returned None"
     else:
       bazjob.done()
+print "Fetching global fadvise status:"
+print " * ", kickstartcontext.fadvise_status()
 print "Done"
