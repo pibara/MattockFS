@@ -59,8 +59,6 @@ class Job:
     self.router_state=self.ctl["user.routing_info"].split(";")[1]
     self.carvpath=CarvPathFile(mp,self.ctl["user.job_carvpath"])
     self.newdata=None
-  def __del__(self):
-    self.forward("","")
   def childdata(self,datasize):
     if self.isdone == False:
       self.ctl["user.allocate_mutable"]=str(datasize)
@@ -161,7 +159,6 @@ class Context:
     return int(self.module_ctl["user.overflow"])
   def module_instance_count(self):
     return int(self.module_ctl["user.instance_count"])
-  #WARNING, will mess with any running module by revoking its instance handle and anything below that.
   def module_reset(self):
     self.module_ctl["user.reset"]="1"
   def anycast_status(self,peermodule):

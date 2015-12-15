@@ -1,11 +1,9 @@
-* Fix queuing bug
-* Work in-queue/in-progress state into the journal and restore process.
-* Optimize job picking by factoring out full fledged sorting.
-* Complete the base API for accessing the FS from Python
-* Integrate libmagic into the base API for Python.
 * Write base documentation and a simple Github web page.
+
 * Code cleanup and (if needed) refactoring.
 * Refactor for distributed usage.
+* Optimize job picking by factoring out full fledged sorting.
+* Implement restore of state from journal at startup.
 * Port the base API to C++
 * Port the base API to Perl
 * Port the base API to NodeJs

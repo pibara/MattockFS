@@ -227,44 +227,55 @@ class ModulesState:
     self.newdata={}
     self.capgen=CapabilityGenerator()
     self.provenance_log=open(provenance, "a",0)
-    #Restoring old state from journal.
-    journalinfo={}
-    try :
-      f=open(journal,'r')
-    except:
-      f=None
-    if f != None:
-      for line in f:
-        line=line.rstrip()
-        dat=json.loads(line)
-        dtype=dat["type"]
-        dkey=dat["key"]
-        if dtype == "NEW":
-          journalinfo[dkey]=[]
-        if dtype != "FNL":
-          journalinfo[dkey].append(dat["provenance"])
-        else:
-          del journalinfo[dkey]
-      f.close()
+    #Restoring old state from journal; commented out for now, BROKEN!
+    #journalinfo={}
+    #try :
+    #  f=open(journal,'r')
+    #except:
+    #  f=None
+    #if f != None:
+    #  print "Harvesting old state from journal"
+    #  for line in f:
+    #    line=line.rstrip().encode('ascii','ignore')
+    #    dat=json.loads(line)
+    #    dtype=dat["type"]
+    #    dkey=dat["key"]
+    #    if dtype == "NEW":
+    #      journalinfo[dkey]=[]
+    #    if dtype != "FNL":
+    #      journalinfo[dkey].append(dat["provenance"])
+    #    else:
+    #      del journalinfo[dkey]
+    #  f.close()
+    #  print "Done harvesting"
     self.journal=open(journal,"a",0)
-    for needrestore in journalinfo:
-      provenance_log=journalinfo[needrestore]
-      self.journal_restore(provenance_log)
+    #if len(journalinfo) > 0:
+    #  print "Processing harvested journal state"
+    #  for needrestore in journalinfo:
+    #    provenance_log=journalinfo[needrestore]
+    #    print "Restoring : ",provenance_log
+    #    self.journal_restore(provenance_log)
+    #  print "State restored"
   def __getitem__(self,key):
     if not key in self.modules:
       self.modules[key]=ModuleState(key,self.capgen,self,self.rep)
     return self.modules[key]
   def journal_restore(self,journal_records):
     module=journal_records[-1]["module"]
+    print "Restoring job for module ", module
     if len(journal_records) == 1:
       pl0=journal_records[0]
+      print "  * Restoring without a provenance log: ", pl0["carvpath"],pl0["router_state"],pl0["mime"],pl0["extension"]
       self[module].anycast_add(pl0["carvpath"],pl0["router_state"],pl0["mime"],pl0["extension"],None) 
     else:
       pl0=journal_records[0]
+      print "* Creating first record for provenance log object for job"
       newpl=provenance_log.ProvenanceLog(pl0["job"],pl0["module"],pl0["router_state"],pl0["carvpath"],pl0["mime"],pl0["extension"],journal=self.journal,provenance_log=self.provenance_log,restore=True)
       for subseq in journal_records[1:-1]:
+        print "* Adding one more record to provenance log for job"
         newpl(subseq["jobid"],subseq["module"],subseq["router_state"],restore=True)
       pln=journal_records[-1]
+      print "* Restoring job with provenance log:",pl0["carvpath"],pln["router_state"],pl0["mime"],pl0["extension"],newpl
       self[module].anycast_add(pl0["carvpath"],pln["router_state"],pl0["mime"],pl0["extension"],newpl)
   def selectmodule(self,select_policy):
     moduleset=self.modules.keys()
