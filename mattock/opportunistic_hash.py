@@ -202,7 +202,7 @@ class OpportunisticHashCollection:
 if __name__ == "__main__":
   import carvpath
   context=carvpath.Context({},160)
-  ohc=OpportunisticHashCollection(context)
+  ohc=OpportunisticHashCollection(context,"./test.log")
   ohc.add_carvpath("10+5") #10,11,12,13,14
   ohc.add_carvpath("13+5") #         13,14,15,16,17
   print

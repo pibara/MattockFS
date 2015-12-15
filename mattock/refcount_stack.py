@@ -31,10 +31,7 @@
 import time
 
 def _defaultlt(al1,al2):
-  minlen = len(al1)
-  if len(al2) < minlen:
-    minlen=len(al2)
-  for index in range(0,minlen):
+  for index in range(0,len(al1)):
     if al1[index] < al2[index]:
       return True
     if al1[index] > al2[index]:
@@ -267,8 +264,8 @@ if __name__ == "__main__":
   import opportunistic_hash
   fadvise=FakeFadviseFunctor()
   context=carvpath.Context({},160)
-  col=opportunistic_hash.OpportunisticHashCollection(context) 
-  stack=CarvpathRefcountStack(context,fadvise,col)
+  col=opportunistic_hash.OpportunisticHashCollection(context,"./test.log") 
+  stack=CarvpathRefcountStack(context,fadvise,col,"./test2.log")
   stack.add_carvpath("0+1700_S1000_1750+1000")
   print str(stack)
   stack.add_carvpath("1500+1000")

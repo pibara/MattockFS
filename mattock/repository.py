@@ -229,7 +229,7 @@ if __name__ == "__main__":
   import carvpath
   import opportunistic_hash
   context=carvpath.Context({},160)
-  rep=Repository("/var/mattock/archive/0.dd",context)
+  rep=Repository("/var/mattock/archive/0.dd",context,"test3.log","test4.log")
   entity=context.parse("1234+5678")
   f1=rep.open("1234+5678","/data/1234+5678.dat",True)
   print rep.volume() 

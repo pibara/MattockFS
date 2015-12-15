@@ -254,7 +254,7 @@ class JobCtl:
     return -errno.ENOTDIR
   def readlink(self):
     return -errno.EINVAL
-  def listxattr(self):
+  def listxattr(self): 
     return ["user.routing_info","user.submit_child","user.allocate_mutable","user.frozen_mutable","user.current_mutable","user.job_carvpath"]
   def getxattr(self,name, size):
     if name == "user.routing_info":
@@ -468,7 +468,11 @@ class MattockFS(fuse.Fuse):
     def listxattr(self, path,huh):
       return self.parsepath(path).listxattr()
     def getxattr(self, path, name, size):
-      return self.parsepath(path).getxattr(name,size)
+      rval=self.parsepath(path).getxattr(name,size)
+      if size == 0:
+         if not isinstance(rval, int):
+          rval=len(rval)
+      return rval
     def setxattr(self, path, name, val, more):
       return self.parsepath(path).setxattr(name,val)
     def main(self,args=None):

@@ -193,28 +193,23 @@ class ModuleState:
     return len(self.instances)
   def throttle_info(self):    #read-only extended attribute
     set_size=len(self.anycast)
+    #if set_size == 0:
+    #  return [0,0]
     set_volume=self.rep.anycast_set_volume(self.anycast)
     return (set_size,set_volume)
   def anycast_add(self,carvpath,router_state,mime_type,file_extension,provenance):
     jobhandle = self.capgen(self.secret)
     self.anycast[jobhandle]=Job(jobhandle,self.name,carvpath,router_state,mime_type,file_extension,self.allmodules,provenance)
-    print self.name,self.anycast
   def get_kickjob(self):
     self.anycast_add("S0","","application/x-zerosize","empty",None)
     return self.anycast_pop("S")
   def anycast_pop(self,sort_policy,select_policy="S"):
     if self.name != "loadbalance":
-      print "POP:",self.name,self.anycast.keys()
       best=self.rep.anycast_best(self.name,self.anycast,sort_policy)
-      print "DEBUG 1"
       if best != None and best in self.anycast:
-        print "DEBUG 2"
         job = self.anycast.pop(best)
-        print "DEBUG 3"
         self.allmodules.jobs[best]=job
-        print "OK"
         return job
-      print "OOPS"
     else:
       best=self.allmodules.selectmodule(select_policy)
       if best != None:

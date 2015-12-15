@@ -16,5 +16,5 @@ else
   sudo sh -c '/bin/echo user_allow_other >> /etc/fuse.conf'
 fi
 sudo apt-get install -y fuse python-fuse redis-server
-sudo cp start_mattockfs  start_mattockfs.py stop_mattockfs mattockfs_api_test.py /usr/local/bin
+sudo cp start_mattockfs start_mattockfs_fg  start_mattockfs.py stop_mattockfs mattockfs_api_test.py /usr/local/bin
       
