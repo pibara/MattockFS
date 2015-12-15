@@ -43,28 +43,28 @@ class CarvPathFile:
     self.mp=mp
     self.carvpath=cp
     self.xa=xattr.xattr(mp + "/" + self.carvpath)
-  def path_state(self):
-    st=self.xa["user.path_state"].split(";")
+  def opportunistic_hash(self):
+    st=self.xa["user.opportunistic_hash"].split(";")
     return {"hash" : st[0],
             "hash_offset" : int(st[1])}
-  def throttle_info(self):
-    st=self.xa["user.throttle_info"].split(";")
+  def fadvise_status(self):
+    st=self.xa["user.fadvise_status"].split(";")
     return {"normal" : int(st[0]), "dontneed" : int(st[1])}  
 
 class Job:
   def __init__(self,mp,job_ctl):
+    self.isdone=False
     self.mp=mp
     self.ctl=xattr.xattr(job_ctl)
     self.router_state=self.ctl["user.routing_info"].split(";")[1]
     self.carvpath=CarvPathFile(mp,self.ctl["user.job_carvpath"])
     self.newdata=None
-    self.isdone=False
   def __del__(self):
     self.forward("","")
   def childdata(self,datasize):
     if self.isdone == False:
-      self.ctl["user.create_mutable"]=str(datasize)
-      self.newdata=self.mp + "/" +self.ctl["user.mutable"]
+      self.ctl["user.allocate_mutable"]=str(datasize)
+      self.newdata=self.mp + "/" +self.ctl["user.current_mutable"]
       return self.newdata
     return None
   def frozen_childdata(self):
@@ -112,22 +112,22 @@ class Context:
     path=self.module_ctl["user.register_instance"]
     self.instance_ctl = xattr.xattr(self.mountpoint + "/" + path)
     if not initial_sort_policy == None:
-      self.set_sort_policy(initial_sort_policy)
+      self.set_job_select_policy(initial_sort_policy)
       ok=bool(self.sortre.search(initial_sort_policy))
       if ok:
-        self.instance_ctl["user.sort_policy"] = initial_sort_policy
+        self.instance_ctl["user.job_select_policy"] = initial_sort_policy
       else:
         raise RuntimeError("Invalid sort policy string")
   def __del__(self):
     if self.instance_ctl != None:
       self.instance_ctl["user.unregister"]="1"
-  def set_sort_policy(self,policy):
+  def set_job_select_policy(self,policy):
     ok=bool(self.sortre.search(policy))
     if ok:
-      self.instance_ctl["user.sort_policy"] = policy
+      self.instance_ctl["user.job_select_policy"] = policy
     else:
       raise RuntimeError("Invalid sort policy string")
-  def set_select_policy(self,pollicy):
+  def set_module_select_policy(self,pollicy):
     ok=bool(self.selectre.search(policy))
     if ok:
       self.instance_ctl["user.select_policy"] = policy
@@ -146,79 +146,25 @@ class Context:
         sleep(0.05)
       else:
         yield job
-  def fs_throttle_info(self):
-    st=self.main_ctl["user.throttle_info"].split(";")
+  def fadvise_status(self):
+    st=self.main_ctl["user.fadvise_status"].split(";")
     return {"normal": int(st[0]), "dontneed" : int(st[1])}
+  def full_archive_path(self):
+    return self.main_ctl["user.full_archive"]
   def module_set_weight(self,weight):
     self.module_ctl["user.weight"] = str(weight)
+  def module_get_weight(self):
+    return int(self.module_ctl["user.weight"])
   def module_set_overflow(self,overflow):
     self.module_ctl["user.overflow"] = str(overflow)
+  def module_get_overflow(self):
+    return int(self.module_ctl["user.overflow"])
   def module_instance_count(self):
     return int(self.module_ctl["user.instance_count"])
   #WARNING, will mess with any running module by revoking its instance handle and anything below that.
   def module_reset(self):
     self.module_ctl["user.reset"]="1"
-  def anycast_throttle_info(self,peermodule):
-    st=self.module_ctl["user.throttle_info"].split(";")
+  def anycast_status(self,peermodule):
+    st=self.module_ctl["user.anycast_status"].split(";")
     return {"set_size" : int(st[0]), "set_volume" : int(st[1])}
 
-if __name__ == '__main__':
-  mountpoint="/var/mattock/mnt/0"
-  print "Regestering kickstart module and setting \"K\" sort policy"
-  context=Context(mountpoint,"kickstart","K")
-  print "Fetching global throttle info"
-  print " * ", context.fs_throttle_info()
-  print "Accepting our first job"
-  job=context.poll_job()
-  print " * carvpath      = ", job.carvpath.carvpath
-  print " * path_state    = ",job.carvpath.path_state()
-  print " * throttle_info = ",job.carvpath.throttle_info()
-  print " * instance_count= ",context.module_instance_count()
-  print "Creating new mutable entity within job context"
-  kickfile=job.childdata(1234567)
-  print " * file =", kickfile
-  print "Writing to mutable file"
-  with open(kickfile,"r+") as f:
-    f.seek(0)
-    f.write("harhar")
-    f.seek(1234560)
-    f.write("HARHAR")
-  print "Freezing mutable file"
-  frozen=job.frozen_childdata()
-  print " * Carvpath =", frozen
-  print "Submitting child carvpath to harmodule"
-  job.childsubmit(frozen,"harmodule","t1:l11","x-mattock/harhar","har")
-  print "Marking parent job as done"
-  job.done()
-  print 
-  print "Checking throttle info for harmodule"
-  print " * throttle info = ",context.anycast_throttle_info("harmodule")
-  print "Register as harmodule"
-  context2=Context(mountpoint,"harmodule")
-  print "Setting weight and overflow for harmodule"
-  context2.module_set_weight(7)
-  context2.module_set_overflow(3)
-  print "There should be one job, poll it"
-  job2=context2.poll_job()
-  if job2 == None:
-    print "ERROR, polling the harmodule returned None"
-  else:
-    print "Fetched job"
-    print " * carvpath      = ",job2.carvpath.carvpath
-    print " * path_state    =",job2.carvpath.path_state()
-    print " * throttle_info =", job2.carvpath.throttle_info()
-    print "Submit sub-carvpath 123+1000 as child entity to barmod"
-    job2.childsubmit("123+1000","barmod","t9:l4","x-mattock/silly-sparse","sparse")
-  print "Forward parent entity to bazmod" 
-  job2.forward("bazmod","t18:l6")
-  print 
-  print "Doing nothing as barmod"
-#  context3=Context(mountpoint,"barmod")
-#  job3 = context3.poll_job()
-#  print " * routing_info : ", job3.router_state
-#  job3.done
-#  print 
-#  print "Doing nothing as bazmod"
-#  context4=Context(mountpoint,"bazmod")
-#  job4 = context4.poll_job()
-#  job4.done

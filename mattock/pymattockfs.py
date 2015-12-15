@@ -131,15 +131,15 @@ class TopCtl:
   def readlink(self):
     return -errno.EINVAL
   def listxattr(self):
-    return ["user.throttle_info","user.full_archive"]
+    return ["user.fadvise_status","user.full_archive"]
   def getxattr(self,name, size):
-    if name == "user.throttle_info":
+    if name == "user.fadvise_status":
       return ";".join(map(lambda x: str(x),self.rep.getTopThrottleInfo()))
     if name == "user.full_archive":
       return "data/" + str(self.rep.top.topentity) + ".raw"
     return -errno.ENODATA
   def setxattr(self,name, val):
-    if name in ("user.throttle_info","user.full_archive"):
+    if name in ("user.fadvise_status","user.full_archive"):
       return -errno.EPERM
     return -errno.ENODATA
   def open(self,flags,path):
@@ -154,13 +154,13 @@ class ModuleCtl:
   def readlink(self):
     return -errno.EINVAL
   def listxattr(self):
-    return ["user.weight","user.overflow","user.throttle_info","user.instance_count","user.reset","user.register_instance"]
+    return ["user.weight","user.overflow","user.anycast_status","user.instance_count","user.reset","user.register_instance"]
   def getxattr(self,name, size):
     if name == "user.weight":
       return str(self.mod.weight)
     if name == "user.overflow":
       return str(self.mod.overflow)
-    if name == "user.throttle_info":
+    if name == "user.anycast_status":
       return ";".join(map(lambda x: str(x),self.mod.throttle_info()))
     if name == "user.instance_count":
       return str(self.mod.instance_count())
@@ -187,7 +187,7 @@ class ModuleCtl:
         return 0
       self.mod.overflow=asnum
       return 0
-    if name in ("user.throttle_info","user.instance_count","user.register_instance"):
+    if name in ("user.anycast_status","user.instance_count","user.register_instance"):
       return -errno.EPERM
     if name == "user.reset":
       if val == "1":
@@ -208,11 +208,11 @@ class InstanceCtl:
   def readlink(self):
     return -errno.EINVAL
   def listxattr(self):
-    return ["user.sort_policy","user.select_policy","user.unregister","user.accept_job"]
+    return ["user.job_select_policy","user.module_select_policy","user.unregister","user.accept_job"]
   def getxattr(self,name, size):
-    if name == "user.sort_policy":
+    if name == "user.job_select_policy":
       return self.instance.sort_policy
-    if name == "user.select_policy":
+    if name == "user.module_select_policy":
       return self.instance.select_policy
     if name == "user.unregister":
       return "0"
@@ -226,12 +226,12 @@ class InstanceCtl:
         return "job/" + job + ".ctl"    
     return -errno.ENODATA
   def setxattr(self,name, val):
-    if name == "user.sort_policy":
+    if name == "user.job_select_policy":
        ok=bool(self.sortre.search(val))
        if ok:
          self.instance.sort_policy=val
        return 0
-    if name == "user.select_policy":
+    if name == "user.module_select_policy":
        ok=bool(self.selectre.search(val))
        if ok:
          self.instance.select_policy=val
@@ -255,15 +255,15 @@ class JobCtl:
   def readlink(self):
     return -errno.EINVAL
   def listxattr(self):
-    return ["user.routing_info","user.submit_child","user.create_mutable","user.frozen_mutable","user.mutable","user.job_carvpath"]
+    return ["user.routing_info","user.submit_child","user.allocate_mutable","user.frozen_mutable","user.current_mutable","user.job_carvpath"]
   def getxattr(self,name, size):
     if name == "user.routing_info":
       return self.job.modulename + ";" + self.job.router_state
     if name == "user.submit_child":
       return ""
-    if name == "user.create_mutable":
+    if name == "user.allocate_mutable":
       return ""
-    if name == "user.mutable":
+    if name == "user.current_mutable":
       rval= self.job.get_mutable()
       if rval == None:
         return ""
@@ -288,7 +288,7 @@ class JobCtl:
         #carvpath,nexthop,routerstate,mime,ext
         self.job.submit_child(parts[0],parts[1],parts[2],parts[3],parts[4])
       return 0
-    if name == "user.create_mutable":
+    if name == "user.allocate_mutable":
       self.job.create_mutable(int(val))
       return 0
     if name == "user.frozen_mutable":
@@ -332,11 +332,9 @@ class CarvPathFile:
   def readlink(self):
     return -errno.EINVAL
   def listxattr(self):
-    if self.carvpath[0] == "D":
-      return ["user.path_state","user.throttle_info","user.longpath"]
-    return ["user.path_state","user.throttle_info"]
+    return ["user.opportunistic_hash","user.fadvise_status"]
   def getxattr(self,name, size):
-    if name == "user.path_state":
+    if name == "user.opportunistic_hash":
       offset="0"
       hashresult=""
       if self.carvpath in self.modules.rep.stack.ohashcollection.ohash:
@@ -344,7 +342,7 @@ class CarvPathFile:
         offset=str(ohash.offset)
         hashresult=ohash.result
       return hashresult + ";" + offset
-    if name == "user.throttle_info":
+    if name == "user.fadvise_status":
       return ";".join(map(lambda x: str(x),self.modules.rep.stack.carvpath_throttle_info(self.carvpath)))
     if name == "user.longpath":
       if self.carvpath[0] == "D":
@@ -354,7 +352,7 @@ class CarvPathFile:
       else:
         return  self.carvpath
   def setxattr(self,name, val):
-    if name in ("user.state","user.throttle_info","user.longpath"):
+    if name in ("user.opportunistic_hash","user.fadvise_status"):
       return -errno.EPERM
     return -errno.ENODATA
   def open(self,flags,path):

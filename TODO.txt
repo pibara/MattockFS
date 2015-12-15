@@ -1,3 +1,4 @@
+* Fix queuing bug
 * Work in-queue/in-progress state into the journal and restore process.
 * Optimize job picking by factoring out full fledged sorting.
 * Complete the base API for accessing the FS from Python
@@ -10,4 +11,3 @@
 * Port the base API to NodeJs
 * Port the base API to Rust
 * Port MattockFS to C++ and/or make Python version work with Blake2bp
-* Proper Python/Ubuntu packaging, most importantly related to user creation and fuse tuning.

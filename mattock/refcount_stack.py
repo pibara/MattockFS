@@ -31,7 +31,10 @@
 import time
 
 def _defaultlt(al1,al2):
-  for index in range(0,len(al1)):
+  minlen = len(al1)
+  if len(al2) < minlen:
+    minlen=len(al2)
+  for index in range(0,minlen):
     if al1[index] < al2[index]:
       return True
     if al1[index] > al2[index]:
