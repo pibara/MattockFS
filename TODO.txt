@@ -1,5 +1,4 @@
-* Write base documentation and a simple Github web page.
-
+* Make mattockfs_api_test.py into a complete test script of API and make it run without errors.
 * Code cleanup and (if needed) refactoring.
 * Refactor for distributed usage.
 * Optimize job picking by factoring out full fledged sorting.
