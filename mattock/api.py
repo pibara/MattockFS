@@ -28,7 +28,7 @@
 #(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 #SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
 #
-#This file contains the API to be used by the future Mattock framework.
+#This file contains the Python API to be used by the future Mattock framework.
 #It is a wrapper for the extended attribute interface offered by MattockFS.
 #
 import xattr
@@ -37,12 +37,24 @@ import os.path
 import re
 from time import sleep
 import carvpath
+import longpathmap
 
-class CarvPathFile:
-  def __init__(self,mp,cp):
+class _CarvPathFile:
+  def __init__(self,mp,cp,context):
     self.mp=mp
     self.carvpath=cp
+    self.context=context
     self.xa=xattr.xattr(mp + "/" + self.carvpath)
+  def as_path(self):
+    return self.mp + "/" + self.carvpath
+  def as_entity(self):
+    return self.context.parse(self.carvpath.split("/")[-1].split(".")[0])
+  def __getitem__(self,cp):
+    twolevel= self.mp + "/" + self.carvpath.split(".")[0]+"/"+cp
+    symlink = self.mp + "/" + self.carvpath.split(".")[0] + "/" + os.readlink(twolevel)
+    absolute_symlink=os.path.abspath(symlink)
+    cp2 = absolute_symlink[len(self.mp)+1:]
+    return _CarvPathFile(self.mp,cp2,self.context)
   def opportunistic_hash(self):
     st=self.xa["user.opportunistic_hash"].split(";")
     return {"hash" : st[0],
@@ -51,13 +63,15 @@ class CarvPathFile:
     st=self.xa["user.fadvise_status"].split(";")
     return {"normal" : int(st[0]), "dontneed" : int(st[1])}  
 
-class Job:
-  def __init__(self,mp,job_ctl):
+class _Job:
+  def __init__(self,mp,job_ctl,context):
     self.isdone=False
     self.mp=mp
     self.ctl=xattr.xattr(job_ctl)
-    self.router_state=self.ctl["user.routing_info"].split(";")[1]
-    self.carvpath=CarvPathFile(mp,self.ctl["user.job_carvpath"])
+    rstate=self.ctl["user.routing_info"].split(";")
+    self.router_state=rstate[1]
+    self.jobmodule=rstate[0]
+    self.carvpath=_CarvPathFile(mp,self.ctl["user.job_carvpath"],context)
     self.newdata=None
   def childdata(self,datasize):
     if self.isdone == False:
@@ -81,30 +95,13 @@ class Job:
       self.ctl["user.routing_info"] = nextmodule + ";" + routerstate
       self.isdone = True
 
-class FsLongPathMap:
-  def __init__(self,main_ctl,mp):
-    self.main_ctl=main_ctl
-    self.cpdir = mp + "/data/"
-  def __getitem__(self,key):
-    filepath = self.cpdir + key + ".dat"
-    if os.path.isfile(filepath):
-      ctl=xattr.xattr(filepath)
-      return ctl["user.longpath"]
-    else:
-      raise IndexError("Inknown longpath digest")
-  def __setitem__(self,key,val):
-    self.main_ctl["user.add_longpath"] = val
-  def __contains__(self,key):
-    filepath = self.cpdir + key + ".dat"
-
-
-class Context:
-  def __init__(self,mountpoint,module,initial_sort_policy=None):
+class _Context:
+  def __init__(self,mountpoint,module,context,initial_sort_policy):
     self.selectre = re.compile(r'^[SVDWC]{1,5}$')
     self.sortre = re.compile(r'^(K|[RrOHDdWS]{1,6})$')    
     self.mountpoint=mountpoint
     self.main_ctl=xattr.xattr(self.mountpoint + "/mattockfs.ctl")
-    self.carcpathcontext=carvpath.Context(FsLongPathMap(self.main_ctl,self.mountpoint))
+    self.context=context
     self.module_ctl=xattr.xattr(self.mountpoint + "/module/" + module + ".ctl")
     self.instance_ctl=None
     path=self.module_ctl["user.register_instance"]
@@ -128,13 +125,13 @@ class Context:
   def set_module_select_policy(self,pollicy):
     ok=bool(self.selectre.search(policy))
     if ok:
-      self.instance_ctl["user.select_policy"] = policy
+      self.instance_ctl["user.module_select_policy"] = policy
     else:
       raise RuntimeError("Invalid select policy string")
   def poll_job(self):
     try:
       job=self.instance_ctl["user.accept_job"]
-      return Job(self.mountpoint,self.mountpoint + "/" + job)
+      return _Job(self.mountpoint,self.mountpoint + "/" + job,self.context)
     except:
       return None
   def get_job(self):
@@ -144,11 +141,6 @@ class Context:
         sleep(0.05)
       else:
         yield job
-  def fadvise_status(self):
-    st=self.main_ctl["user.fadvise_status"].split(";")
-    return {"normal": int(st[0]), "dontneed" : int(st[1])}
-  def full_archive_path(self):
-    return self.main_ctl["user.full_archive"]
   def module_set_weight(self,weight):
     self.module_ctl["user.weight"] = str(weight)
   def module_get_weight(self):
@@ -157,11 +149,29 @@ class Context:
     self.module_ctl["user.overflow"] = str(overflow)
   def module_get_overflow(self):
     return int(self.module_ctl["user.overflow"])
-  def module_instance_count(self):
-    return int(self.module_ctl["user.instance_count"])
   def module_reset(self):
     self.module_ctl["user.reset"]="1"
-  def anycast_status(self,peermodule):
-    st=self.module_ctl["user.anycast_status"].split(";")
+
+class MountPoint:
+  def __init__(self,mp):
+    self.context=carvpath.Context(longpathmap.LongPathMap())
+    self.mountpoint=mp
+    self.main_ctl=xattr.xattr(self.mountpoint + "/mattockfs.ctl")
+  def register_instance(self,modname,initial_pollicy=None):
+    return _Context(self.mountpoint,modname,self.context,initial_pollicy)
+  def fadvise_status(self):
+    st=self.main_ctl["user.fadvise_status"].split(";")
+    return {"normal": int(st[0]), "dontneed" : int(st[1])}
+  def full_archive(self):
+    return _CarvPathFile(self.mountpoint,self.main_ctl["user.full_archive"],self.context)
+  def module_instance_count(self,modulename):
+    module_ctl=xattr.xattr(self.mountpoint + "/module/" + modulename + ".ctl")
+    return int(module_ctl["user.instance_count"])
+  def anycast_status(self,modulename):
+    module_ctl=xattr.xattr(self.mountpoint + "/module/" + modulename + ".ctl")
+    st=module_ctl["user.anycast_status"].split(";")
     return {"set_size" : int(st[0]), "set_volume" : int(st[1])}
+  def full_path(self,entity,ext="dat"):
+    return self.mountpoint + "/data/" + str(entity) + "." + ext
+
 

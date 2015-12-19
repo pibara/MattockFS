@@ -57,7 +57,8 @@ class _Opportunistic_Hash:
     self.result="INCOMPLETE-OPPORTUNISTIC_HASHING"
     self.fullsize=size
   def sparse(self,length):
-    _h.update(bytearray(length).decode())
+    self._h.update(bytearray(length))
+    self.offset += length
   def written_chunk(self,data,offset):
     if offset < self.offset or self.isdone:
       self._h=ohash_algo(digest_size=32) #restart, we are no longer done, things are getting written.
