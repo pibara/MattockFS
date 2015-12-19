@@ -22,20 +22,18 @@ whole=mp.full_archive()
 if whole.as_entity().totalsize > 4000:
   sub1=whole["500+1800_3000+1000.gif"]
   sub2=whole["0+8000.dat"]
-  print "The initial opportunistic hash state should not exist"
-  print sub1.opportunistic_hash()
-  print sub2.opportunistic_hash()
-  #Open, yet don't read the first file.
-  file1=sub1.as_path()
-  f1=open(file1,"r")
-  #Open and read the second file.
-  file2=sub2.as_path()
-  print "'" + file2 + "'"
-  f2=open(file2,"r")
+  sub3=whole["500+1800_S19000_3000+1000.gif"]
+  #Open all three files
+  f1=open(sub1.as_path(),"r")
+  f2=open(sub2.as_path(),"r")
+  f3=open(sub3.as_path(),"r")
+  #Read only from file two
   a=f2.read()
   #If everything is iree, both files should have been hashed now.
+  print "We read only one file but the other twho should have been hashed opportunistically also"
   print sub1.opportunistic_hash()  
   print sub2.opportunistic_hash()
+  print sub3.opportunistic_hash()
 else:
   print "Skipping carvpath test, to little data in the archive."
 
