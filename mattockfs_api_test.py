@@ -20,6 +20,7 @@ for modulename in ["kickstart","harmodule","barmod","bazmod"]:
 whole=mp.full_archive()
 #If there is data in the archive, we test opportunistic hashing.
 if whole.as_entity().totalsize > 4000:
+  print "======== TESTING data/ ==========="
   sub1=whole["500+1800_3000+1000.gif"]
   sub2=whole["0+8000.dat"]
   sub3=whole["500+1800_S19000_3000+1000.gif"]
@@ -34,9 +35,12 @@ if whole.as_entity().totalsize > 4000:
   print sub1.opportunistic_hash()  
   print sub2.opportunistic_hash()
   print sub3.opportunistic_hash()
+  sub4=whole["7000+3512.dat"]
+  print "Testing fadvise on non open partially overlapping entity"
+  print sub4.fadvise_status()
 else:
   print "Skipping carvpath test, to little data in the archive."
-
+print "======= FIXME; need more tests here ========="
 sys.exit(0)
 #First we act like a kickstart and enter some data.
 print "Regestering kickstart module and setting \"K\" sort policy"
