@@ -11,6 +11,7 @@ import sys
 #The standard place for our MattockFS mountpoint in the initial release.
 mp=MountPoint("/var/mattock/mnt/0")
 #Record the starting situation.
+fadvise_start=mp.fadvise_status()
 module_instance_count_start={}
 anycast_status_start={}
 for modulename in ["kickstart","harmodule","barmod","bazmod"]:
@@ -19,11 +20,14 @@ for modulename in ["kickstart","harmodule","barmod","bazmod"]:
 #Look at the archive as a whole
 whole=mp.full_archive()
 #If there is data in the archive, we test opportunistic hashing.
-if whole.as_entity().totalsize > 4000:
+if whole.as_entity().totalsize > 8000:
   print "======== TESTING data/ ==========="
   sub1=whole["500+1800_3000+1000.gif"]
   sub2=whole["0+8000.dat"]
   sub3=whole["500+1800_S19000_3000+1000.gif"]
+  print "Testing full path resolution for sub path"
+  fp=mp.full_path(sub3.as_entity())
+  print fp
   #Open all three files
   f1=open(sub1.as_path(),"r")
   f2=open(sub2.as_path(),"r")
@@ -31,38 +35,30 @@ if whole.as_entity().totalsize > 4000:
   #Read only from file two
   a=f2.read()
   #If everything is iree, both files should have been hashed now.
-  print "We read only one file but the other twho should have been hashed opportunistically also"
+  print "We read only one file but the other 2 should have been hashed opportunistically also"
   print sub1.opportunistic_hash()  
   print sub2.opportunistic_hash()
   print sub3.opportunistic_hash()
   sub4=whole["7000+3512.dat"]
   print "Testing fadvise on non open partially overlapping entity"
   print sub4.fadvise_status()
+  print "Testing global fadvise"
+  print "start:", fadvise_start
+  print "openf:", mp.fadvise_status()
+  f1.close()
+  f2.close()
+  f3.close()
+  print "closf:", mp.fadvise_status()
 else:
   print "Skipping carvpath test, to little data in the archive."
-print "======= FIXME; need more tests here ========="
-sys.exit(0)
-#First we act like a kickstart and enter some data.
-print "Regestering kickstart module and setting \"K\" sort policy"
+print "======= Testing kickstarting API walkthrough  ========="
+print "Initial module count kickstart     :",mp.module_instance_count("kickstart")
 kickstartcontext=mp.register_instance("kickstart","K")
-#In this example we don't act on it, but this info may be used for throttling new data input.
-print "Fetching global fadvise status:"
-global_fadvice_start=mp.fadvise_status()
-print " * ", global_fadvice_start
-#We are running in "K" mode so we cn grab a job out of thin air here
-print "Accepting our first job"
+print "After kickstart module registration:",mp.module_instance_count("kickstart")
 kickstartjob=kickstartcontext.poll_job()
+print "Job info:"
 print " * carvpath      = " + kickstartjob.carvpath.as_path()
-#There will be nothing here now, but this is where an opportunistic hash may arise.
-print " * opportunistic_hash    = ",kickstartjob.carvpath.opportunistic_hash()
-#Not of much use now as this one is zero size, but this will tell if any part of the carvpath
-#is marked as dontneed.
-print " * fadvise_status = ",kickstartjob.carvpath.fadvise_status()
-#There might be more than one kickstart currently alive, lets count how many there are.
-print " * instance_count= ",mp.module_instance_count("kickstart")
-#Allocate a piece of mutable data to put our kickstart data in. The pseudo file
-#is fixed size and writable untill frozen. The file can NOT be truncated so open
-#it appropriately!
+print " * router_state  = " + kickstartjob.router_state
 print "Creating new mutable entity within job context"
 mutabledata=kickstartjob.childdata(1234567)
 print " * mutabledata =", mutabledata
@@ -77,21 +73,20 @@ with open(mutabledata,"r+") as f:
 print "Freezing mutable file"
 frozenmutable=kickstartjob.frozen_childdata()
 print " * Carvpath =", frozenmutable
-#The carvpath of the frozen entity can be submitted as child of the job we are processing.
-#We need to specify the next module that is to process this entity. We may specify a short 
-#router-state string for maintaining router state between modules processing the same entity,
-#and we specify the content mime-type and prefered file-extension.
 print "Submitting child carvpath to harmodule"
+#Fetching fadvise status for harmodule for reference
+pre_status=mp.anycast_status("harmodule")
 kickstartjob.childsubmit(frozenmutable,"harmodule","t1:l11","x-mattock/harhar","har")
-#Nothing more to do with our parent job. We mark it as done.
 print "Marking parent job as done"
 kickstartjob.done()
 print "Fetching global fadvise status:"
-print " * ", mp.fadvise_status()
+print " * old  :", fadvise_start
+print " * new  :", mp.fadvise_status()
 #The child entity has been submitted to the harmodule now, lets check the anycast status for that module.
 print "Checking anycast status for harmodule"
-print " * throttle info = ",mp.anycast_status("harmodule")
-#
+print " * old anycast status = ",pre_status
+print " * new anycast status = ",mp.anycast_status("harmodule")
+sys.exit(0)
 #
 #From now, we pretend we are the harmodule
 print "Register as harmodule"
