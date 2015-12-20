@@ -156,7 +156,10 @@ class MountPoint:
   def __init__(self,mp):
     self.context=carvpath.Context(longpathmap.LongPathMap())
     self.mountpoint=mp
-    self.main_ctl=xattr.xattr(self.mountpoint + "/mattockfs.ctl")
+    ctlpath = self.mountpoint + "/mattockfs.ctl"
+    if not os.path.isfile(ctlpath):
+      raise RuntimeError("File-system not mounted at "+mp) 
+    self.main_ctl=xattr.xattr(ctlpath)
   def register_instance(self,modname,initial_pollicy=None):
     return _Context(self.mountpoint,modname,self.context,initial_pollicy)
   def fadvise_status(self):

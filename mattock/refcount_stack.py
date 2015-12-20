@@ -110,9 +110,10 @@ class CarvpathRefcountStack:
       self.ohashcollection.remove_carvpath(carvpath)
       r= self._stackdiminish(len(self.fragmentrefstack)-1,ent)
       unmerged=r
-      for fragment in unmerged:
-        self.fadvise(fragment.offset,fragment.size,False)
-      self.log.write(str(time.time())+":-:"+str(unmerged)+"\n")
+      if unmerged != None:
+        for fragment in unmerged:
+          self.fadvise(fragment.offset,fragment.size,False)
+        self.log.write(str(time.time())+":-:"+str(unmerged)+"\n")
     return
   #Request a list of entities that overlap from the box that overlap (for opportunistic hashing purposes).
   def _overlaps(self,offset,size):
@@ -250,7 +251,7 @@ class CarvpathRefcountStack:
       if level == 0:
         return unmerged
       else:
-        return []
+        return None
 
 
 if __name__ == "__main__":

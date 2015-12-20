@@ -126,6 +126,7 @@ class Job:
     self.file_extension=file_extension
     self.submit_info=[]
     self.allmodules=allmodules
+    self.allmodules.rep.stack.add_carvpath(self.carvpath)
     self.mutable=None
     self.frozen=None
     if provenance == None:
@@ -134,6 +135,7 @@ class Job:
       self.provenance = provenance
       self.provenance(jobhandle,modulename,router_state)
   def __del__(self):
+    self.allmodules.rep.stack.remove_carvpath(self.carvpath)
     if self.mutable != None:
       carvpath=self.get_frozen_mutable()
       #FIXME, we need better logging.
