@@ -109,16 +109,13 @@ else:
   #We are not done yet with our input data, we forward it to an other module.
   print "Forward parent entity to bazmod" 
   harjob.forward("bazmod","t18:l6")
-
-sys.exit(0)
-if 0:
   #
   #
   #
   #Now we become the barmodule and process the subchunk entity.
   print "Doing nothing as barmod"
-  barcontext=mp.register_instance("barmod")
-  barjob = barcontext.poll_job()
+  context=mp.register_instance("barmod")
+  barjob = context.poll_job()
   if barjob == None:
     print "ERROR, polling the barmod returned None"
   else:
@@ -129,13 +126,28 @@ if 0:
     #
     #We become the bazmod module and process the written-to entity.
     print "Doing nothing as bazmod"
-    bazcontext=mp.register_instace("bazmod")
+    context=mp.register_instance("bazmod")
 
-    bazjob = bazcontext.poll_job()
+    bazjob = context.poll_job()
     if bazjob == None:
       print "ERROR, polling the bazmod returned None"
     else:
+      print " * routing_info : ", bazjob.router_state
       bazjob.done()
-print "Fetching global fadvise status:"
-print " * ", mp.fadvise_status()
-print "Done"
+      context=None
+      print "Done"
+      fadvise_end=mp.fadvise_status()
+      module_instance_count_end={}
+      anycast_status_end={}
+      for modulename in ["kickstart","harmodule","barmod","bazmod"]:
+        module_instance_count_end[modulename] = mp.module_instance_count(modulename)
+        anycast_status_end[modulename] = mp.anycast_status(modulename)
+      print "Comparing start fadvise to end fadvise state"
+      print fadvise_start
+      print fadvise_end
+      print "Comparing instance count start and end:"
+      print module_instance_count_start
+      print module_instance_count_end
+      print "Comparing anycast state start and end:"
+      print anycast_status_start
+      print anycast_status_end
