@@ -53,9 +53,9 @@ else:
   print "Skipping carvpath test, to little data in the archive."
 print "======= Testing kickstarting API walkthrough  ========="
 print "Initial module count kickstart     :",mp.module_instance_count("kickstart")
-kickstartcontext=mp.register_instance("kickstart","K")
+context=mp.register_instance("kickstart","K")
 print "After kickstart module registration:",mp.module_instance_count("kickstart")
-kickstartjob=kickstartcontext.poll_job()
+kickstartjob=context.poll_job()
 print "Job info:"
 print " * carvpath      = " + kickstartjob.carvpath.as_path()
 print " * router_state  = " + kickstartjob.router_state
@@ -86,22 +86,19 @@ print " * new  :", mp.fadvise_status()
 print "Checking anycast status for harmodule"
 print " * old anycast status = ",pre_status
 print " * new anycast status = ",mp.anycast_status("harmodule")
-sys.exit(0)
 #
 #From now, we pretend we are the harmodule
-print "Register as harmodule"
-harcontext=mp.register_instance("harmodule")
+print "Processing the generated job as harmodule"
+context=mp.register_instance("harmodule")
 #To allow load-balancing, we can set some metrics on the module.
-print "Setting weight and overflow for harmodule"
-harcontext.module_set_weight(7)
-harcontext.module_set_overflow(3)
+context.module_set_weight(7)
+context.module_set_overflow(3)
 #Lets poll the job we just submitted when we were kickstart.
-print "There should be one job, poll it"
-harjob=harcontext.poll_job()
+harjob=context.poll_job()
 if harjob == None:
   print "ERROR, polling the harmodule returned None"
 else:
-  print "Fetched job"
+  print "OK; Fetched job, there should be an opportunistic hash over the sparse data!"
   #Get the path of our job data.
   print " * carvpath      = "+harjob.carvpath.as_path()
   #If all data was accessed, the opportunistic hash should be there.
@@ -112,9 +109,9 @@ else:
   #We are not done yet with our input data, we forward it to an other module.
   print "Forward parent entity to bazmod" 
   harjob.forward("bazmod","t18:l6")
-  print 
-  print "Fetching global fadvise status:"
-  print " * ", mp.fadvise_status()
+
+sys.exit(0)
+if 0:
   #
   #
   #
