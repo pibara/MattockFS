@@ -148,7 +148,7 @@ class Repository:
       cp = anycast[jobid].carvpath
       volume += self.context.parse(anycast[jobid].carvpath).totalsize
     return volume
-  def anycast_best(self,modulename,anycast,sort_policy):
+  def anycast_best(self,actorname,anycast,sort_policy):
     if len(anycast) > 0:
       cp2key={}
       for anycastkey in anycast.keys():
@@ -162,15 +162,15 @@ class Repository:
     normal=self.volume()
     dontneed=totalsize-normal
     return (normal,dontneed)
-  def anycast_best_modules(self,modulesstate,moduleset,letter):
+  def anycast_best_actors(self,actorsstate,actorset,letter):
     fetchvolume=False
     if letter in "VDC":
       fetchvolume=True
-    bestmodules=set()
+    bestactors=set()
     bestval=0
-    for module in moduleset.modules.keys():
-      anycast = moduleset.modules[module].anycast
-      overflow = moduleset.modules[module].overflow
+    for actor in actorset.actors.keys():
+      anycast = actorset.actors[actor].anycast
+      overflow = actorset.actors[actor].overflow
       if len(anycast) > overflow:
         volume=0
         if fetchvolume:
@@ -187,19 +187,19 @@ class Repository:
             if len(anycast) > 0:
                return 100*len(anycast)
         if letter == "W":
-          val=modulesstate[module].weight
+          val=actorsstate[actor].weight
         if letter == "C":
           if volume > 0:
-            val=float(modulesstate[module].weight)*float(len(anycast))/float(volume)
+            val=float(actorsstate[actor].weight)*float(len(anycast))/float(volume)
           else:
             if len(anycast) > 0:
-              return 100*len(anycast)*modulesstate[module].weight
+              return 100*len(anycast)*actorsstate[actor].weight
         if val > bestval:
           bestval=val
-          bestmodules=set()
+          bestactors=set()
         if val == bestval:
-          bestmodules.add(module)
-    return bestmodules
+          bestactors.add(actors)
+    return bestactors
   def open(self,carvpath,path,readonly=True):
     ent=self.context.parse(carvpath)
     if path in self.openfiles:
@@ -231,5 +231,5 @@ if __name__ == "__main__":
   context=carvpath.Context({},160)
   rep=Repository("/var/mattock/archive/0.dd",context,"test3.log","test4.log")
   entity=context.parse("1234+5678")
-  f1=rep.open("1234+5678","/data/1234+5678.dat",True)
+  f1=rep.open("1234+5678","/frozen/1234+5678.dat",True)
   print rep.volume() 

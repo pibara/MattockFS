@@ -90,11 +90,11 @@ class TopDir:
     return 0
   def readdir(self):
     yield fuse.Direntry("mattockfs.ctl")
-    yield fuse.Direntry("data")
-    yield fuse.Direntry("module")
-    yield fuse.Direntry("instance")
+    yield fuse.Direntry("frozen")
+    yield fuse.Direntry("actor")
+    yield fuse.Direntry("worker")
     yield fuse.Direntry("job")
-    yield fuse.Direntry("newdata")
+    yield fuse.Direntry("mutable")
   def readlink(self):
     return -errno.EINVAL
   def listxattr(self):
@@ -136,7 +136,7 @@ class TopCtl:
     if name == "user.fadvise_status":
       return ";".join(map(lambda x: str(x),self.rep.getTopThrottleInfo()))
     if name == "user.full_archive":
-      return "data/" + str(self.rep.top.topentity) + ".raw"
+      return "frozen/" + str(self.rep.top.topentity) + ".raw"
     return -errno.ENODATA
   def setxattr(self,name, val):
     if name in ("user.fadvise_status","user.full_archive"):
@@ -144,7 +144,7 @@ class TopCtl:
     return -errno.ENODATA
   def open(self,flags,path):
     return -errno.EPERM
-class ModuleCtl:
+class ActorCtl:
   def __init__(self,mod):
     self.mod=mod
   def getattr(self):
@@ -154,7 +154,7 @@ class ModuleCtl:
   def readlink(self):
     return -errno.EINVAL
   def listxattr(self):
-    return ["user.weight","user.overflow","user.anycast_status","user.instance_count","user.reset","user.register_instance"]
+    return ["user.weight","user.overflow","user.anycast_status","user.worker_count","user.reset","user.register_worker"]
   def getxattr(self,name, size):
     if name == "user.weight":
       return str(self.mod.weight)
@@ -162,15 +162,15 @@ class ModuleCtl:
       return str(self.mod.overflow)
     if name == "user.anycast_status":
       return ";".join(map(lambda x: str(x),self.mod.throttle_info()))
-    if name == "user.instance_count":
-      return str(self.mod.instance_count())
+    if name == "user.worker_count":
+      return str(self.mod.worker_count())
     if name == "user.reset":
       return "0"
-    if name == "user.register_instance":
+    if name == "user.register_worker":
       if size == 0:
         return 82
       else:
-        return "instance/" + self.mod.register_instance() + ".ctl" 
+        return "worker/" + self.mod.register_worker() + ".ctl" 
     return -errno.ENODATA
   def setxattr(self,name, val):
     if name == "user.weight":
@@ -187,7 +187,7 @@ class ModuleCtl:
         return 0
       self.mod.overflow=asnum
       return 0
-    if name in ("user.anycast_status","user.instance_count","user.register_instance"):
+    if name in ("user.anycast_status","user.worker_count","user.register_worker"):
       return -errno.EPERM
     if name == "user.reset":
       if val == "1":
@@ -196,9 +196,32 @@ class ModuleCtl:
     return -errno.ENODATA
   def open(self,flags,path):
     return -errno.EPERM
-class InstanceCtl:
-  def __init__(self,instance,sortre,selectre):
-    self.instance=instance
+class ActorInf:
+  def __init__(self,mod):
+    self.mod=mod
+  def getattr(self):
+    return  defaultstat(STAT_MODE_FILE_RO)
+  def opendir(self):
+    return -errno.ENOTDIR
+  def readlink(self):
+    return -errno.EINVAL
+  def listxattr(self):
+    return ["user.anycast_status","user.worker_count"]
+  def getxattr(self,name, size):
+    if name == "user.anycast_status":
+      return ";".join(map(lambda x: str(x),self.mod.throttle_info()))
+    if name == "user.worker_count":
+      return str(self.mod.worker_count())
+    return -errno.ENODATA
+  def setxattr(self,name, val):
+    if name in ("user.anycast_status","user.worker_count"):
+      return -errno.EPERM
+    return -errno.ENODATA
+  def open(self,flags,path):
+    return -errno.EPERM
+class WorkerCtl:
+  def __init__(self,worker,sortre,selectre):
+    self.worker=worker
     self.sortre=sortre
     self.selectre=selectre
   def getattr(self):
@@ -208,19 +231,19 @@ class InstanceCtl:
   def readlink(self):
     return -errno.EINVAL
   def listxattr(self):
-    return ["user.job_select_policy","user.module_select_policy","user.unregister","user.accept_job"]
+    return ["user.job_select_policy","user.actor_select_policy","user.unregister","user.accept_job"]
   def getxattr(self,name, size):
     if name == "user.job_select_policy":
-      return self.instance.sort_policy
-    if name == "user.module_select_policy":
-      return self.instance.select_policy
+      return self.worker.sort_policy
+    if name == "user.actor_select_policy":
+      return self.worker.select_policy
     if name == "user.unregister":
       return "0"
     if name == "user.accept_job":
       if size == 0:
         return 77
       else:
-        job=self.instance.accept_job()
+        job=self.worker.accept_job()
         if job == None:
           return -errno.ENODATA
         return "job/" + job + ".ctl"    
@@ -229,16 +252,16 @@ class InstanceCtl:
     if name == "user.job_select_policy":
        ok=bool(self.sortre.search(val))
        if ok:
-         self.instance.sort_policy=val
+         self.worker.sort_policy=val
        return 0
-    if name == "user.module_select_policy":
+    if name == "user.actor_select_policy":
        ok=bool(self.selectre.search(val))
        if ok:
-         self.instance.select_policy=val
+         self.worker.select_policy=val
        return 0
     if name == "user.unregister":
       if val == "1":
-        self.instance.unregister()
+        self.worker.unregister()
       return 0
     if name == "user.accept_job":
        return -errno.EPERM 
@@ -258,7 +281,7 @@ class JobCtl:
     return ["user.routing_info","user.submit_child","user.allocate_mutable","user.frozen_mutable","user.current_mutable","user.job_carvpath"]
   def getxattr(self,name, size):
     if name == "user.routing_info":
-      return self.job.modulename + ";" + self.job.router_state
+      return self.job.actorname + ";" + self.job.router_state
     if name == "user.submit_child":
       return ""
     if name == "user.allocate_mutable":
@@ -267,19 +290,19 @@ class JobCtl:
       rval= self.job.get_mutable()
       if rval == None:
         return ""
-      return "newdata/" + rval + ".dat"
+      return "mutable/" + rval + ".dat"
     if name == "user.frozen_mutable":
       if size == 0:
         return 81
-      return "data/" + self.job.get_frozen_mutable() + ".dat"
+      return "frozen/" + self.job.get_frozen_mutable() + ".dat"
     if name == "user.job_carvpath":
-      return "data/" + self.job.carvpath + "." + self.job.file_extension
+      return "frozen/" + self.job.carvpath + "." + self.job.file_extension
     return -errno.ENODATA
   def setxattr(self,name, val):
     if name == "user.routing_info":
       if ";" in val:
         parts=val.split(";")
-        if self.job.allmodules.validmodulename(parts[0]):
+        if self.job.actors.validactorname(parts[0]):
           self.job.next_hop(parts[0],parts[1])
       return 0
     if name == "user.submit_child":
@@ -294,11 +317,11 @@ class JobCtl:
     if name == "user.frozen_mutable":
       return -errno.EPERM
     if name == "user.job_carvpath":
-      return "data/" + self.job.carvpath + "." + self.job.file_extension
+      return "frozen/" + self.job.carvpath + "." + self.job.file_extension
     return -errno.ENODATA
   def open(self,flags,path):
     return -errno.EPERM
-class NewDataCtl:
+class MutableCtl:
   def __init__(self,carvpath,rep,context):
     self.rep=rep
     self.carvpath=carvpath
@@ -319,11 +342,11 @@ class NewDataCtl:
   def open(self,flags,path):
     return self.rep.open(self.carvpath,path,readonly=False) 
 class CarvPathFile:
-  def __init__(self,carvpath,rep,context,modules):
+  def __init__(self,carvpath,rep,context,actors):
     self.carvpath=carvpath
     self.rep=rep
     self.context=context
-    self.modules=modules
+    self.actors=actors
   def getattr(self):
     size=self.context.parse(self.carvpath).totalsize
     return  defaultstat(STAT_MODE_FILE_RO,size)
@@ -337,13 +360,13 @@ class CarvPathFile:
     if name == "user.opportunistic_hash":
       offset="0"
       hashresult=""
-      if self.carvpath in self.modules.rep.stack.ohashcollection.ohash:
-        ohash = self.modules.rep.stack.ohashcollection.ohash[self.carvpath].ohash
+      if self.carvpath in self.actors.rep.stack.ohashcollection.ohash:
+        ohash = self.actors.rep.stack.ohashcollection.ohash[self.carvpath].ohash
         offset=str(ohash.offset)
         hashresult=ohash.result
       return hashresult + ";" + offset
     if name == "user.fadvise_status":
-      return ";".join(map(lambda x: str(x),self.modules.rep.stack.carvpath_throttle_info(self.carvpath)))
+      return ";".join(map(lambda x: str(x),self.actors.rep.stack.carvpath_throttle_info(self.carvpath)))
     if name == "user.longpath":
       if self.carvpath[0] == "D":
         if self.carvpath in self.context.longpathmap:
@@ -389,7 +412,7 @@ class MattockFS(fuse.Fuse):
       self.sortre = re.compile(r'^(K|[RrOHDdWS]{1,6})$')
       self.archive_dd = dd
       self.rep=repository.Repository(self.archive_dd,self.context,ohash_log,refcount_log)
-      self.ms=anycast.ModulesState(self.rep,journal,provenance_log)
+      self.ms=anycast.Actors(self.rep,journal,provenance_log)
       self.topctl=TopCtl(self.rep,self.context)
       self.needinit=True
     def parsepath(self,path):
@@ -398,14 +421,14 @@ class MattockFS(fuse.Fuse):
         tokens=path[1:].split("/")
         if len(tokens) > 3:
           return None
-        if tokens[0] in ("data","module","instance","job","newdata","mattockfs.ctl"):
-          if len(tokens) >2 and tokens[0] != "data":
+        if tokens[0] in ("frozen","actor","worker","job","mutable","mattockfs.ctl"):
+          if len(tokens) >2 and tokens[0] != "frozen":
             return NoEnt()
           if len(tokens) == 1:
             if tokens[0] == "mattockfs.ctl":
               return self.topctl
             return self.nolistdir
-          if tokens[0] == "data":
+          if tokens[0] == "frozen":
             lastpart=tokens[1].split(".")
             if len(lastpart) > 2:
               return NoEnt()
@@ -435,22 +458,26 @@ class MattockFS(fuse.Fuse):
           handle = lastpart[0]
           extension = lastpart[1]
           if extension == "ctl":
-            if tokens[0] == "module":
-              if self.ms.validmodulename(handle):
-                return ModuleCtl(self.ms[handle])
+            if tokens[0] == "actor":
+              if self.ms.validactorname(handle):
+                return ActorCtl(self.ms[handle])
               return NoEnt()
-            if tokens[0] == "instance":
-              if self.ms.validinstancecap(handle):
-                return InstanceCtl(self.ms.instances[handle],self.sortre,self.selectre)
+            if tokens[0] == "worker":
+              if self.ms.validworkercap(handle):
+                return WorkerCtl(self.ms.workers[handle],self.sortre,self.selectre)
               return NoEnt()
             if tokens[0] == "job":
               if self.ms.validjobcap(handle):
                 return JobCtl(self.ms.jobs[handle])
               return NoEnt()
             return NoEnt()
-          if extension == "dat" and  tokens[0] == "newdata":
+          if extension == "dat" and  tokens[0] == "mutable":
             if self.ms.validnewdatacap(handle):
-              return NewDataCtl(self.ms.newdata[handle],self.rep,self.context)
+              return MutableCtl(self.ms.newdata[handle],self.rep,self.context)
+          if extension == "inf" and tokens[0] == "actor":
+            if self.ms.validactorname(handle):
+              return ActorInf(self.ms[handle])
+            return NoEnt()
           return NoEnt()
         return NoEnt()
     def getattr(self, path):

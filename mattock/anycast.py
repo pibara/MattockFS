@@ -49,12 +49,12 @@ except ImportError:
     print("")
     sys.exit()
 
-#In-file-system representation of a module instance.
-class ModuleInstance:
-  def __init__(self,modulename,instancehandle,module):
-    self.module=module
-    self.modulename=modulename
-    self.instancehandle=instancehandle
+#In-file-system representation of a worker.
+class Worker:
+  def __init__(self,actorname,workerhandle,actor):
+    self.actor=actor
+    self.actorname=actorname
+    self.workerhandle=workerhandle
     self.currentjob=None
     self.select_policy="S"
     self.sort_policy="HrdS"
@@ -64,7 +64,7 @@ class ModuleInstance:
       self.currentjob.commit()
       self.currentjob = None
     if self.valid:
-      self.module.unregister(self.instancehandle)
+      self.actor.unregister(self.workerhandle)
       self.valid=False
   def __del__(self):
     self.teardown()
@@ -74,9 +74,9 @@ class ModuleInstance:
     if self.currentjob != None:
       self.currentjob.commit()
     if self.sort_policy=="K":
-      self.currentjob=self.module.get_kickjob() 
+      self.currentjob=self.actor.get_kickjob() 
     else:
-      self.currentjob=self.module.anycast_pop(self.select_policy,self.sort_policy)
+      self.currentjob=self.actor.anycast_pop(self.select_policy,self.sort_policy)
     if self.currentjob != None:
       return self.currentjob.jobhandle
     return None
@@ -103,12 +103,12 @@ class Frozen:
     self.stack.remove_carvpath(self.carvpath)
 
 class Mutable:
-  def __init__(self,allmodules,msize,secret):
-    self.mutablehandle = allmodules.capgen(secret)
-    self.carvpath=allmodules.rep.newmutable(msize)
-    self.lookup=allmodules.newdata
+  def __init__(self,actors,msize,secret):
+    self.mutablehandle = actors.capgen(secret)
+    self.carvpath=actors.rep.newmutable(msize)
+    self.lookup=actors.newdata
     self.lookup[self.mutablehandle]=self.carvpath
-    self.stack=allmodules.rep.stack
+    self.stack=actors.rep.stack
     self.stack.add_carvpath(self.carvpath)
   def __del__(self):
     self.stack.remove_carvpath(self.carvpath)
@@ -117,37 +117,37 @@ class Mutable:
 
 #The core of the anycast funcionality is the concept of a job.
 class Job:
-  def __init__(self,jobhandle,modulename,carvpath,router_state,mime_type,file_extension,allmodules,provenance=None):
+  def __init__(self,jobhandle,actorname,carvpath,router_state,mime_type,file_extension,actors,provenance=None):
     self.jobhandle=jobhandle
-    self.modulename=modulename
+    self.actorname=actorname
     self.carvpath=carvpath
     self.router_state=router_state
     self.mime_type=mime_type
     self.file_extension=file_extension
     self.submit_info=[]
-    self.allmodules=allmodules
-    self.allmodules.rep.stack.add_carvpath(self.carvpath)
+    self.actors=actors
+    self.actors.rep.stack.add_carvpath(self.carvpath)
     self.mutable=None
     self.frozen=None
     if provenance == None:
-      self.provenance= provenance_log.ProvenanceLog(jobhandle,modulename,router_state,carvpath,mime_type,extension=file_extension,journal=self.allmodules.journal,provenance_log=allmodules.provenance_log)
+      self.provenance= provenance_log.ProvenanceLog(jobhandle,actorname,router_state,carvpath,mime_type,extension=file_extension,journal=self.actors.journal,provenance_log=actors.provenance_log)
     else:
       self.provenance = provenance
-      self.provenance(jobhandle,modulename,router_state)
+      self.provenance(jobhandle,actorname,router_state)
   def __del__(self):
-    self.allmodules.rep.stack.remove_carvpath(self.carvpath)
+    self.actors.rep.stack.remove_carvpath(self.carvpath)
     if self.mutable != None:
       carvpath=self.get_frozen_mutable()
       #FIXME, we need better logging.
       print "WARNING: Orphaned mutable: " + carvpath
   def commit(self):
-    if self.jobhandle in self.allmodules.jobs:
-      del self.allmodules.jobs[self.jobhandle] 
-  def next_hop(self,module,state):
-    self.allmodules[module].anycast_add(self.carvpath,state,self.mime_type,self.file_extension,self.provenance)
-    del self.allmodules.jobs[self.jobhandle]
+    if self.jobhandle in self.actors.jobs:
+      del self.actors.jobs[self.jobhandle] 
+  def next_hop(self,actor,state):
+    self.actors[actor].anycast_add(self.carvpath,state,self.mime_type,self.file_extension,self.provenance)
+    del self.actors.jobs[self.jobhandle]
   def create_mutable(self,msize):
-    self.mutable=Mutable(self.allmodules,msize,self.jobhandle[:64])
+    self.mutable=Mutable(self.actors,msize,self.jobhandle[:64])
   def get_mutable(self):
     if self.mutable != None:
       return self.mutable.mutablehandle
@@ -155,44 +155,44 @@ class Job:
   def get_frozen_mutable(self):
     if self.mutable != None:
       carvpath=self.mutable.carvpath
-      self.frozen=Frozen(self.allmodules.rep.stack,carvpath)
+      self.frozen=Frozen(self.actors.rep.stack,carvpath)
       self.mutable=None
       return carvpath
     if self.frozen != None:
       return self.frozen.carvpath
     return None
   def submit_child(self,carvpath,nexthop,routerstate,mimetype,extension):
-    carvpath=carvpath.split("data/")[-1].split(".")[0]
-    provenance=provenance_log.ProvenanceLog(self.jobhandle,self.modulename,self.router_state,carvpath,mimetype,parentcp=self.carvpath,extension=self.file_extension,journal=self.allmodules.journal,provenance_log=self.allmodules.provenance_log)
-    self.allmodules[nexthop].anycast_add(carvpath,routerstate,self.mime_type,self.file_extension,provenance) 
+    carvpath=carvpath.split("frozen/")[-1].split(".")[0]
+    provenance=provenance_log.ProvenanceLog(self.jobhandle,self.actorname,self.router_state,carvpath,mimetype,parentcp=self.carvpath,extension=self.file_extension,journal=self.actors.journal,provenance_log=self.actors.provenance_log)
+    self.actors[nexthop].anycast_add(carvpath,routerstate,self.mime_type,self.file_extension,provenance) 
 
-#The state shared by all module instances of a specific type. Also used when no instances are pressent.
-class ModuleState:
-  def __init__(self,modulename,capgen,allmodules,rep):
-    self.name=modulename
-    self.instances={}
+#The state shared by all workers of a specific type. Also used when no workers are pressent.
+class Actor:
+  def __init__(self,actorname,capgen,actors,rep):
+    self.name=actorname
+    self.workers={}
     self.anycast={}
     self.secret=capgen()
     self.capgen=capgen
     self.weight=100              #rw extended attribute
     self.overflow=10             #rw extended attribute
-    self.allmodules=allmodules
+    self.actors=actors
     self.rep=rep
-  def register_instance(self):   #read-only (responsibility accepting) extended attribute.
+  def register_worker(self):   #read-only (responsibility accepting) extended attribute.
     rval=self.capgen(self.secret)
-    self.instances[rval]=ModuleInstance(self.name,rval,self)
-    self.allmodules.instances[rval]=self.instances[rval]
+    self.workers[rval]=Worker(self.name,rval,self)
+    self.actors.workers[rval]=self.workers[rval]
     return rval
   def unregister(self,handle):
-    if handle in self.instances:
-      del self.instances[handle]
-      del self.allmodules.instances[handle]
+    if handle in self.workers:
+      del self.workers[handle]
+      del self.actors.workers[handle]
   def reset(self):             #writable extended attribute (setting to one results in reset)
-    handles=self.instances.keys()
+    handles=self.workers.keys()
     for handle in handles:
       self.unregister(handle)
-  def instance_count(self):   #read-only extended attribute
-    return len(self.instances)
+  def worker_count(self):   #read-only extended attribute
+    return len(self.workers)
   def throttle_info(self):    #read-only extended attribute
     set_size=len(self.anycast)
     #if set_size == 0:
@@ -201,7 +201,7 @@ class ModuleState:
     return (set_size,set_volume)
   def anycast_add(self,carvpath,router_state,mime_type,file_extension,provenance):
     jobhandle = self.capgen(self.secret)
-    self.anycast[jobhandle]=Job(jobhandle,self.name,carvpath,router_state,mime_type,file_extension,self.allmodules,provenance)
+    self.anycast[jobhandle]=Job(jobhandle,self.name,carvpath,router_state,mime_type,file_extension,self.actors,provenance)
   def get_kickjob(self):
     self.anycast_add("S0","","application/x-zerosize","empty",None)
     return self.anycast_pop("S")
@@ -210,21 +210,21 @@ class ModuleState:
       best=self.rep.anycast_best(self.name,self.anycast,sort_policy)
       if best != None and best in self.anycast:
         job = self.anycast.pop(best)
-        self.allmodules.jobs[best]=job
+        self.actors.jobs[best]=job
         return job
     else:
-      best=self.allmodules.selectmodule(select_policy)
+      best=self.actors.selectactor(select_policy)
       if best != None:
         best=anycast_pop(sort_policy,select_policy)
         return best
       return None 
 
-#State shared between different modules and a central coordination point.
-class ModulesState:
+#State shared between different actors and a central coordination point.
+class Actors:
   def __init__(self,rep,journal,provenance):
     self.rep=rep
-    self.modules={}
-    self.instances={}
+    self.actors={}
+    self.workers={}
     self.jobs={}
     self.newdata={}
     self.capgen=CapabilityGenerator()
@@ -259,47 +259,47 @@ class ModulesState:
     #    self.journal_restore(provenance_log)
     #  print "State restored"
   def __getitem__(self,key):
-    if not key in self.modules:
-      self.modules[key]=ModuleState(key,self.capgen,self,self.rep)
-    return self.modules[key]
+    if not key in self.actors:
+      self.actors[key]=Actor(key,self.capgen,self,self.rep)
+    return self.actors[key]
   def journal_restore(self,journal_records):
-    module=journal_records[-1]["module"]
-    print "Restoring job for module ", module
+    actor=journal_records[-1]["actor"]
+    print "Restoring job for actor ", actor
     if len(journal_records) == 1:
       pl0=journal_records[0]
       print "  * Restoring without a provenance log: ", pl0["carvpath"],pl0["router_state"],pl0["mime"],pl0["extension"]
-      self[module].anycast_add(pl0["carvpath"],pl0["router_state"],pl0["mime"],pl0["extension"],None) 
+      self[actor].anycast_add(pl0["carvpath"],pl0["router_state"],pl0["mime"],pl0["extension"],None) 
     else:
       pl0=journal_records[0]
       print "* Creating first record for provenance log object for job"
-      newpl=provenance_log.ProvenanceLog(pl0["job"],pl0["module"],pl0["router_state"],pl0["carvpath"],pl0["mime"],pl0["extension"],journal=self.journal,provenance_log=self.provenance_log,restore=True)
+      newpl=provenance_log.ProvenanceLog(pl0["job"],pl0["actor"],pl0["router_state"],pl0["carvpath"],pl0["mime"],pl0["extension"],journal=self.journal,provenance_log=self.provenance_log,restore=True)
       for subseq in journal_records[1:-1]:
         print "* Adding one more record to provenance log for job"
-        newpl(subseq["jobid"],subseq["module"],subseq["router_state"],restore=True)
+        newpl(subseq["jobid"],subseq["actor"],subseq["router_state"],restore=True)
       pln=journal_records[-1]
       print "* Restoring job with provenance log:",pl0["carvpath"],pln["router_state"],pl0["mime"],pl0["extension"],newpl
-      self[module].anycast_add(pl0["carvpath"],pln["router_state"],pl0["mime"],pl0["extension"],newpl)
-  def selectmodule(self,select_policy):
-    moduleset=self.modules.keys()
-    if len(moduleset) == 0:
+      self[actor].anycast_add(pl0["carvpath"],pln["router_state"],pl0["mime"],pl0["extension"],newpl)
+  def selectactor(self,select_policy):
+    actorset=self.actors.keys()
+    if len(actorset) == 0:
       return None
-    if len(moduleset) == 1:
-      return moduleset[0]
+    if len(actorset) == 1:
+      return actorset[0]
     for letter in select_policy:
-      moduleset=self.rep.anycast_best_modules(self,moduleset,letter) 
-      if len(moduleset) == 1:
-        return moduleset[0]
-    return moduleset[0]
-  def validmodulename(self,modulename):
-    if len(modulename) < 2:
+      actorset=self.rep.anycast_best_actors(self,actorset,letter) 
+      if len(actorset) == 1:
+        return actorset[0]
+    return actorset[0]
+  def validactorname(self,actorname):
+    if len(actorname) < 2:
       return False
-    if len(modulename) > 40:
+    if len(actorname) > 40:
       return False
-    if not modulename.isalpha() and  modulename.islower():
+    if not actorname.isalpha() and  actorname.islower():
       return False
     return True
-  def validinstancecap(self,handle):
-    if handle in self.instances:
+  def validworkercap(self,handle):
+    if handle in self.workers:
       return True
     return False
   def validjobcap(self,handle):
