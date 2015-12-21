@@ -56,17 +56,20 @@ class _Opportunistic_Hash:
     self.isdone=False
     self.result="INCOMPLETE-OPPORTUNISTIC_HASHING"
     self.fullsize=size
+    self.cleansparse=True
   def sparse(self,length):
     self._h.update(bytearray(length))
     self.offset += length
   def written_chunk(self,data,offset):
+    print "written_chunk ",data,offset,"(size = ",self.fullsize,")"
     if offset < self.offset or self.isdone:
       self._h=ohash_algo(digest_size=32) #restart, we are no longer done, things are getting written.
       self.offset=0
       self.isdone=False
+      self.cleansparse=False
       self.result="INCOMPLETE-OPPORTUNISTIC_HASHING"
-    if (offset > self.offset):
-      #There is a gap!
+    if (offset > self.offset) and cleansparse:
+      #There is a gap we can assume sparse.
       difference = offset - self.offset
       times = difference / 1024
       for i in range(0,times):
@@ -74,7 +77,11 @@ class _Opportunistic_Hash:
         self.sparse(difference % 1024)
       if offset == self.offset:
         self._h.update(data)
-        self.offset += len(data)  
+        self.offset += len(data)
+      print self.offset
+      if self.offset > 0 and self.offset == self.fullsize:
+        print "Marking as done"
+        self.done()
   def read_chunk(self,data,offset):
     if (not self.isdone) and offset <= self.offset and offset+len(data) > self.offset:
       #Fragment overlaps our offset; find the part that we didn't process yet.
@@ -97,6 +104,7 @@ class _OH_Entity:
     self.roi=ent.getroi(0)
     self.startroi=ent.getroi(0)
   def  written_parent_chunk(self,data,parentoffset):
+    print "written_parent_chunk",parentoffset,len(data)
     parentfragsize=len(data)
     parentendoffset = parentoffset+parentfragsize-1
     #Quick range of interest check. Only check if there is any overlap between the range off interest and the parent chunk.
@@ -136,7 +144,7 @@ class _OH_Entity:
   def  read_parent_chunk(self,data,parentoffset):
     parentfragsize=len(data)
     parentendoffset = parentoffset+parentfragsize-1
-    #Quick range of interest check. Only check if hahing is needed and start of interest is contained in parent frag.
+    #Quick range of interest check. Only check if hashing is needed and start of interest is contained in parent frag.
     if (not self.ohash.isdone) and parentoffset <= self.roi[0] and parentendoffset >= self.roi[0]:
       childoffset=0 #Start of with a child offset of zero.
       working=False #This marks if we are in the progress of working on the hash.
@@ -183,9 +191,11 @@ class OpportunisticHashCollection:
     self.ohash=dict()
     self.log=open(ohash_log,"a",0)
   def add_carvpath(self,carvpath):
+    print "add_carvpath",carvpath
     ent=self.context.parse(carvpath)
     self.ohash[carvpath]=_OH_Entity(ent,self.log)
   def remove_carvpath(self,carvpath):
+    print "remove_carvpath",carvpath
     del self.ohash[carvpath]   
   def lowlevel_written_data(self,offset,data):
     for carvpath in self.ohash.keys():
