@@ -340,7 +340,7 @@ class MutableCtl:
   def setxattr(self,name, val):
     return -errno.ENODATA
   def open(self,flags,path):
-    return self.rep.open(self.carvpath,path,readonly=False) 
+    return self.rep.open(self.carvpath,path) 
 class CarvPathFile:
   def __init__(self,carvpath,rep,context,actors):
     self.carvpath=carvpath
@@ -379,6 +379,7 @@ class CarvPathFile:
       return -errno.EPERM
     return -errno.ENODATA
   def open(self,flags,path):
+    #FIXME, check for 'write' flags and reject.
     return self.rep.open(self.carvpath,path)
 class CarvPathLink:
   def __init__(self,cp,ext):

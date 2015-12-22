@@ -50,6 +50,7 @@ except:
     print("")
     sys.exit()
 
+#Functor class for fadvise on an archive fd.
 class _FadviseFunctor:
   def __init__(self,fd):
     self.fd=fd
@@ -59,6 +60,7 @@ class _FadviseFunctor:
     else:
       posix_fadvise(self.fd,offset,size,POSIX_FADV_DONTNEED)
 
+#RAII class for keeping a file lock during sparse grow operations.
 class _RaiiFLock:
   def __init__(self,fd):
     self.fd=fd
@@ -66,26 +68,36 @@ class _RaiiFLock:
   def __del__(self):
     fcntl.flock(self.fd,fcntl.LOCK_UN)
 
+#Class representing an open file. This can either be a mutable or a carvpath file.
 class _OpenFile:
-  def __init__(self,stack,cp,is_ro,entity,fd):
-    self.is_ro = is_ro
-    self.refcount = 1
+  def __init__(self,stack,cp,entity,fd):
     self.cp=cp
     self.stack=stack
+    self.ohashcollection=self.stack.ohashcollection
     self.stack.add_carvpath(cp)
     self.entity=entity
     self.fd=fd
+    self.refcount=1
   def __del__(self):
     self.stack.remove_carvpath(self.cp)
+  def atomic_read(self,chunk):
+    #In python 3 we could do this:
+    #return os.pread(self.fd,chunk.size,chunk.offset)
+    #FIXME, we need a lock here if we want to support multi-threader operations
+    os.lseek(self.fd, chunk.offset, 0)
+    return os.read(self.fd, chunk.size)
+  def atomic_write(self,chunk,chunkdata):
+    #FIXME, we need a lock here if we want to support multi-threader operations
+    os.lseek(self.fd, chunk.offset, 0)
+    os.write(self.fd,chunkdata)
+    return
   def read(self,offset,size):
     readent=self.entity.subentity(carvpath._Entity(self.entity.longpathmap,self.entity.maxfstoken,[carvpath.Fragment(offset,size)]),True)
     result=b''
     for chunk in readent:
-      #FIXME: Check to make this attomic
-      os.lseek(self.fd, chunk.offset, 0)
-      datachunk = os.read(self.fd, chunk.size)
+      datachunk = self.atomic_read(chunk)
       result += datachunk
-      self.stack.ohashcollection.lowlevel_read_data(chunk.offset,datachunk)
+      self.ohashcollection.lowlevel_read_data(chunk.offset,datachunk)
     return result
   def write(self,offset,data):
     size=len(data)
@@ -94,33 +106,48 @@ class _OpenFile:
     for chunk in writeent:
       chunkdata=data[dataindex:dataindex+chunk.size]
       dataindex += chunk.size
-      #FIXME: Check to make this attomic
-      os.lseek(self.fd, chunk.offset, 0)
-      os.write(self.fd,chunkdata)
-      self.stack.ohashcollection.lowlevel_written_data(chunk.offset,chunkdata)
+      self.atomic_write(chunk,chunkdata)
+      self.ohashcollection.lowlevel_written_data(chunk.offset,chunkdata)
     return size
 
 class Repository:
   def __init__(self,reppath,context,ohash_log,refcount_log):
     self.context=context
+    #Create a new opportunistic hash collection.
     col=opportunistic_hash.OpportunisticHashCollection(context,ohash_log)
+    #We start off with zero open files
     self.openfiles={}
-    self.lastfd=1
+    #Open the underlying data file and create if needed.
     self.fd=os.open(reppath,(os.O_RDWR | os.O_LARGEFILE | os.O_NOATIME | os.O_CREAT))
+    #Get the current repository total size.
     cursize=os.lseek(self.fd,0,os.SEEK_END) 
+    #Set the entire repository as dontneed and assume everything to be cold data for now.
     posix_fadvise(self.fd,0,cursize,POSIX_FADV_DONTNEED)
+    #Create CarvPath top entity of the proper size.
     self.top=self.context.make_top(cursize)
+    #Create fadvise functor from fd.
     fadvise=_FadviseFunctor(self.fd)
+    #Create a referencecounting carvpath stack using our fadvise functor and ohash collection.
     self.stack=refcount_stack.CarvpathRefcountStack(self.context,fadvise,col,refcount_log)
   def __del__(self):
+    #On destruction close the underlying file.
     os.close(self.fd)
-  def _grow(self,newsize):
+  def _grow(self,chunksize):
+    #Use a file lock to atomically allocate a new chunk of (at first sparse) file data.
     l=_RaiiFLock(self.fd)
-    os.ftruncate(self.fd,newsize)
+    cursize=os.lseek(self.fd,0,os.SEEK_END)
+    os.ftruncate(self.fd,cursize+chunksize)
+    self.top.grow(cursize + chunksize - self.top.size)
+    return cursize
+  #It multiple instances of MattockFS use the smae repository, sync archive size with the underlying file size.
+  def multi_sync(self):
+    cursize=os.lseek(self.fd,0,os.SEEK_END)
+    grown = cursize - self.top.size
+    self.top.grow(grown)
+    return grown
+  #Allocate a new piece of mutable data and return CarvPath
   def newmutable(self,chunksize):
-    chunkoffset=self.top.size
-    self._grow(chunkoffset+chunksize) 
-    self.top.grow(chunksize)
+    chunkoffset=self._grow(chunksize) 
     cp=str(carvpath._Entity(self.context.longpathmap,self.context.maxfstoken,[carvpath.Fragment(chunkoffset,chunksize)])) 
     return cp
   def volume(self):
@@ -200,13 +227,13 @@ class Repository:
         if val == bestval:
           bestactors.add(actors)
     return bestactors
-  def open(self,carvpath,path,readonly=True):
+  def open(self,carvpath,path):
     ent=self.context.parse(carvpath)
     if path in self.openfiles:
       self.openfiles[path].refcount += 1
     else :
       ent=self.context.parse(carvpath)
-      self.openfiles[path]=_OpenFile(self.stack,carvpath,readonly,ent,self.fd)
+      self.openfiles[path]=_OpenFile(self.stack,carvpath,ent,self.fd)
     return 0
   def read(self,path,offset,size):
     if path in self.openfiles: 
@@ -231,5 +258,5 @@ if __name__ == "__main__":
   context=carvpath.Context({},160)
   rep=Repository("/var/mattock/archive/0.dd",context,"test3.log","test4.log")
   entity=context.parse("1234+5678")
-  f1=rep.open("1234+5678","/frozen/1234+5678.dat",True)
+  f1=rep.open("1234+5678","/frozen/1234+5678.dat")
   print rep.volume() 
