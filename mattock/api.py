@@ -175,6 +175,6 @@ class MountPoint:
     st=actor_inf["user.anycast_status"].split(";")
     return {"set_size" : int(st[0]), "set_volume" : int(st[1])}
   def full_path(self,entity,ext="dat"):
-    return self.mountpoint + "/frozen/" + str(entity) + "." + ext
+    return self.mountpoint + "/carvpath/" + str(entity) + "." + ext
 
 

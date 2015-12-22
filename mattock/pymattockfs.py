@@ -90,7 +90,7 @@ class TopDir:
     return 0
   def readdir(self):
     yield fuse.Direntry("mattockfs.ctl")
-    yield fuse.Direntry("frozen")
+    yield fuse.Direntry("carvpath")
     yield fuse.Direntry("actor")
     yield fuse.Direntry("worker")
     yield fuse.Direntry("job")
@@ -136,7 +136,7 @@ class TopCtl:
     if name == "user.fadvise_status":
       return ";".join(map(lambda x: str(x),self.rep.getTopThrottleInfo()))
     if name == "user.full_archive":
-      return "frozen/" + str(self.rep.top.topentity) + ".raw"
+      return "carvpath/" + str(self.rep.top.topentity) + ".raw"
     return -errno.ENODATA
   def setxattr(self,name, val):
     if name in ("user.fadvise_status","user.full_archive"):
@@ -294,9 +294,9 @@ class JobCtl:
     if name == "user.frozen_mutable":
       if size == 0:
         return 81
-      return "frozen/" + self.job.get_frozen_mutable() + ".dat"
+      return "carvpath/" + self.job.get_frozen_mutable() + ".dat"
     if name == "user.job_carvpath":
-      return "frozen/" + self.job.carvpath + "." + self.job.file_extension
+      return "carvpath/" + self.job.carvpath + "." + self.job.file_extension
     return -errno.ENODATA
   def setxattr(self,name, val):
     if name == "user.routing_info":
@@ -317,7 +317,7 @@ class JobCtl:
     if name == "user.frozen_mutable":
       return -errno.EPERM
     if name == "user.job_carvpath":
-      return "frozen/" + self.job.carvpath + "." + self.job.file_extension
+      return "carvpath/" + self.job.carvpath + "." + self.job.file_extension
     return -errno.ENODATA
   def open(self,flags,path):
     return -errno.EPERM
@@ -422,14 +422,14 @@ class MattockFS(fuse.Fuse):
         tokens=path[1:].split("/")
         if len(tokens) > 3:
           return None
-        if tokens[0] in ("frozen","actor","worker","job","mutable","mattockfs.ctl"):
-          if len(tokens) >2 and tokens[0] != "frozen":
+        if tokens[0] in ("carvpath","actor","worker","job","mutable","mattockfs.ctl"):
+          if len(tokens) >2 and tokens[0] != "carvpath":
             return NoEnt()
           if len(tokens) == 1:
             if tokens[0] == "mattockfs.ctl":
               return self.topctl
             return self.nolistdir
-          if tokens[0] == "frozen":
+          if tokens[0] == "carvpath":
             lastpart=tokens[1].split(".")
             if len(lastpart) > 2:
               return NoEnt()

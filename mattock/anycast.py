@@ -162,7 +162,7 @@ class Job:
       return self.frozen.carvpath
     return None
   def submit_child(self,carvpath,nexthop,routerstate,mimetype,extension):
-    carvpath=carvpath.split("frozen/")[-1].split(".")[0]
+    carvpath=carvpath.split("carvpath/")[-1].split(".")[0]
     provenance=provenance_log.ProvenanceLog(self.jobhandle,self.actorname,self.router_state,carvpath,mimetype,parentcp=self.carvpath,extension=self.file_extension,journal=self.actors.journal,provenance_log=self.actors.provenance_log)
     self.actors[nexthop].anycast_add(carvpath,routerstate,self.mime_type,self.file_extension,provenance) 
 
