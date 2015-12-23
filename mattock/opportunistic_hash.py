@@ -155,7 +155,11 @@ class _OH_Entity:
     return self.ohash.result
   def hashing_isdone(self):
     return self.ohash.isdone
-      
+  def freeze(self):
+    self.ohash.freeze()
+    if self.ohash.isdone:
+      self.log.write(str(self.ent) + ":" + self.ohash.result + "\n")
+
 class OpportunisticHashCollection:
   def __init__(self,carvpathcontext,ohash_log):
     self.context=carvpathcontext
@@ -178,6 +182,8 @@ class OpportunisticHashCollection:
     return self.ohash[carvpath].hashing_result()
   def hashing_offset(self,carvpath):
     return self.ohash[carvpath].hashing_offset()
+  def freeze(self,carvpath):
+    self.ohash[carvpath].freeze()
 
 if __name__ == "__main__":
   import carvpath

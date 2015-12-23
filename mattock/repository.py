@@ -114,7 +114,7 @@ class Repository:
   def __init__(self,reppath,context,ohash_log,refcount_log):
     self.context=context
     #Create a new opportunistic hash collection.
-    col=opportunistic_hash.OpportunisticHashCollection(context,ohash_log)
+    self.col=opportunistic_hash.OpportunisticHashCollection(context,ohash_log)
     #We start off with zero open files
     self.openfiles={}
     #Open the underlying data file and create if needed.
@@ -128,7 +128,7 @@ class Repository:
     #Create fadvise functor from fd.
     fadvise=_FadviseFunctor(self.fd)
     #Create a referencecounting carvpath stack using our fadvise functor and ohash collection.
-    self.stack=refcount_stack.CarvpathRefcountStack(self.context,fadvise,col,refcount_log)
+    self.stack=refcount_stack.CarvpathRefcountStack(self.context,fadvise,self.col,refcount_log)
   def __del__(self):
     #On destruction close the underlying file.
     os.close(self.fd)

@@ -155,6 +155,7 @@ class Job:
   def get_frozen_mutable(self):
     if self.mutable != None:
       carvpath=self.mutable.carvpath
+      self.actors.rep.col.freeze(carvpath)
       self.frozen=Frozen(self.actors.rep.stack,carvpath)
       self.mutable=None
       return carvpath
