@@ -5,6 +5,7 @@ TODO for first beta:
     (instead of text strings that only Rob knows how to parse for success)
 * Check code-coverage of tests.
 * Code cleanup.
+* Allign text on website with the OCFA naming sceme to Actor-model naming sceme.
 
 Todo for second beta:
 * Grow top on oob grow of raw data file (distributed usage)
