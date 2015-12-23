@@ -8,7 +8,6 @@ TODO for first beta:
 * Allign text on website with the OCFA naming sceme to Actor-model naming sceme.
 
 Todo for second beta:
-* Grow top on oob grow of raw data file (distributed usage)
 * Test for load-balancing related module+job processing.
 * Unified logging facility.
 * Refactor sorting to picking.

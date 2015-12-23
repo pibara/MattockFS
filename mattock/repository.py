@@ -159,8 +159,12 @@ class Repository:
   def validcarvpath(self,cp):
     try:
       ent=self.context.parse(cp)
-      rval=self.top.test(ent)
-      return rval
+      if self.top.test(ent):
+        return True
+      #If the Carvpath is out of range it could be an other system in the NFS-meshup  grew the repository
+      #so just to be sure, lets check for that.
+      self.multi_sync()
+      return self.top.test(ent)
     except:
       return False
   def flatten(self,basecp,subcp):
