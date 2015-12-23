@@ -105,11 +105,16 @@ class _OH_Entity:
     self.ent=copy.deepcopy(ent)
     self.ohash=_Opportunistic_Hash(self.ent.totalsize)
     self.roi=ent.getroi(0)
+    self.writeroi=ent.getroi(0)
   def  process_parent_chunk(self,data,parentoffset,writemode):
     parentfragsize=len(data)
     parentendoffset = parentoffset+parentfragsize-1
+    if writemode:
+      roi=self.writeroi
+    else:
+      roi=self.roi
     #Quick range of interest check. Only check if hashing is needed and start of interest is contained in parent frag.
-    if (not self.ohash.isdone) and (parentoffset <= self.roi[0] or writemode) and parentendoffset > self.roi[0]:
+    if (not self.ohash.isdone) and (parentoffset <= roi[0] or writemode) and parentoffset < roi[1] and parentendoffset > roi[0]:
       childoffset=0 #Start of with a child offset of zero.
       working=False #This marks if we are in the progress of working on the hash.
       updated=False #This indicates that the hash has been updated in this read_parent_chunk invocation.

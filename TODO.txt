@@ -1,14 +1,20 @@
-* Fix dual ROI issue with opportunistic hashing
-* Extended tests opportunistic hashing
-* Test for all jop picking strategies.
-* Unified logging facility.
-* Make test scripts output OK/FAIL for tests on (un)expected results.
+TODO for first beta:
+* Extend tests for opportunistic hashing scenarios.
+* Extend tests for job picking strategies.
+* Make test scripts output OK/FAIL for tests on (un)expected results 
+    (instead of text strings that only Rob knows how to parse for success)
+* Check code-coverage of tests.
+* Code cleanup.
+
+Todo for second beta:
 * Grow top on oob grow of raw data file (distributed usage)
+* Test for load-balancing related module+job processing.
+* Unified logging facility.
 * Refactor sorting to picking.
-* Restore state from journal
-* Code cleanup and (if needed) refactoring.
-* Release first beta
+* Restore state from journal.
 * Look into packaging issues (pip?/apt?)
+
+After second beta:
 * Port the base API to C++
 * Port the base API to Perl
 * Port the base API to NodeJs

@@ -4,6 +4,9 @@ sudo apt-get install -y fuse redis-server
 #Use regular setup to install the code and most python dependencies.
 python ./setup.py build
 sudo python ./setup.py install 
+#The above seems to fail sometimes after updating a source file, running it twice seems to fix it, duno why yet
+python ./setup.py build
+sudo python ./setup.py install
 #Create the mattockfs user and make it a member of the fuse group if needed
 if grep --quiet "^mattockfs:" /etc/passwd; then
   echo "User mattockfs exists already" 
