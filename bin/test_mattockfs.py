@@ -68,7 +68,7 @@ with open(mutabledata,"r+") as f:
   f.write("harhar")
   #The file can very well be sparse if we want it to.
   f.seek(1234560)
-  f.write("HARHAR12")
+  f.write("HARHAR1")
 #Once we are done writing the data, we freeze it and get a carvpath back.
 print "Freezing mutable file"
 frozenmutable=kickstartjob.frozen_childdata()

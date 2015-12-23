@@ -60,28 +60,31 @@ class _Opportunistic_Hash:
   def sparse(self,length):
     self._h.update(bytearray(length))
     self.offset += length
+    if self.offset > 0 and self.offset == self.fullsize:
+      self.done()
+  def freeze(self):
+    if self.cleansparse:
+      lastchunksize = self.fullsize - self.offset
+      self.sparse(lastchunksize)
   def written_chunk(self,data,offset):
-    print "written_chunk ",data,offset,"(size = ",self.fullsize,")"
-    if offset < self.offset or self.isdone:
+    if offset < self.offset:
       self._h=ohash_algo(digest_size=32) #restart, we are no longer done, things are getting written.
       self.offset=0
       self.isdone=False
       self.cleansparse=False
       self.result="INCOMPLETE-OPPORTUNISTIC_HASHING"
-    if (offset > self.offset) and cleansparse:
+    if (offset > self.offset) and self.cleansparse:
       #There is a gap we can assume sparse.
       difference = offset - self.offset
-      times = difference / 1024
+      times = difference / 65536
       for i in range(0,times):
-        self.sparse(1024)
-        self.sparse(difference % 1024)
-      if offset == self.offset:
-        self._h.update(data)
-        self.offset += len(data)
-      print self.offset
-      if self.offset > 0 and self.offset == self.fullsize:
-        print "Marking as done"
-        self.done()
+        self.sparse(65536)
+      self.sparse(difference % 65536)
+    if offset == self.offset:
+      self._h.update(data)
+      self.offset += len(data)
+    if self.offset > 0 and self.offset == self.fullsize:
+      self.done()
   def read_chunk(self,data,offset):
     if (not self.isdone) and offset <= self.offset and offset+len(data) > self.offset:
       #Fragment overlaps our offset; find the part that we didn't process yet.
@@ -102,50 +105,11 @@ class _OH_Entity:
     self.ent=copy.deepcopy(ent)
     self.ohash=_Opportunistic_Hash(self.ent.totalsize)
     self.roi=ent.getroi(0)
-    self.startroi=ent.getroi(0)
-  def  written_parent_chunk(self,data,parentoffset):
-    print "written_parent_chunk",parentoffset,len(data)
-    parentfragsize=len(data)
-    parentendoffset = parentoffset+parentfragsize-1
-    #Quick range of interest check. Only check if there is any overlap between the range off interest and the parent chunk.
-    if (not self.ohash.isdone) and parentoffset <= self.startroi[1] and parentendoffset <= self.startroi[0]:
-      childoffset=0 #Start of with a child offset of zero.
-      working=False #This marks if we are in the progress of working on the hash.
-      updated=False #This indicates that the hash has been updated in this read_parent_chunk invocation.
-      for fragment in self.ent.fragments:
-        #First look at real fragments.
-        if not fragment.issparse():
-          lastbyte = fragment.offset + fragment.size -1
-          #Check if there is at least some overlap of the fragment and the parent chunk.
-          if lastbyte >= parentoffset and fragment.offset <= parentendoffset:
-            reducedparentstart=parentoffset
-            if fragment.offset > reducedparentstart:
-              reducedparentstart=fragment.offset
-            reducedparentend=parentendoffset
-            if lastbyte < reducedparentend:
-              reducedparentend=lastbyte
-            reducedparentsize=reducedparentend+1-reducedparentstart
-            inchildoffset = childoffset + reducedparentstart - fragment.offset
-            inparentoffset = reducedparentstart - parentoffset
-            self.ohash.written_chunk(data[inparentoffset:inparentoffset+reducedparentsize],inchildoffset)
-            working=True
-            updated=True
-          else:
-            working=False
-        else:
-          if working and fragment.issparse():
-            self.ohash.sparse(fragment.size)
-        childoffset+=fragment.size
-      if updated:
-        #Update our range of interest.
-        self.roi=self.ent.getroi(self.ohash.offset)
-        if self.ohash.isdone:
-          self.log.write(str(self.ent) + ":" + self.ohash.result + "\n")
-  def  read_parent_chunk(self,data,parentoffset):
+  def  process_parent_chunk(self,data,parentoffset,writemode):
     parentfragsize=len(data)
     parentendoffset = parentoffset+parentfragsize-1
     #Quick range of interest check. Only check if hashing is needed and start of interest is contained in parent frag.
-    if (not self.ohash.isdone) and parentoffset <= self.roi[0] and parentendoffset >= self.roi[0]:
+    if (not self.ohash.isdone) and (parentoffset <= self.roi[0] or writemode) and parentendoffset > self.roi[0]:
       childoffset=0 #Start of with a child offset of zero.
       working=False #This marks if we are in the progress of working on the hash.
       updated=False #This indicates that the hash has been updated in this read_parent_chunk invocation.
@@ -164,7 +128,10 @@ class _OH_Entity:
             reducedparentsize=reducedparentend+1-reducedparentstart
             inchildoffset = childoffset + reducedparentstart - fragment.offset
             inparentoffset = reducedparentstart - parentoffset
-            self.ohash.read_chunk(data[inparentoffset:inparentoffset+reducedparentsize],inchildoffset)
+            if writemode:
+              self.ohash.written_chunk(data[inparentoffset:inparentoffset+reducedparentsize],inchildoffset)
+            else:
+              self.ohash.read_chunk(data[inparentoffset:inparentoffset+reducedparentsize],inchildoffset)
             working=True
             updated=True
           else:
@@ -178,6 +145,10 @@ class _OH_Entity:
         self.roi=self.ent.getroi(self.ohash.offset)
         if self.ohash.isdone:
           self.log.write(str(self.ent) + ":" + self.ohash.result + "\n")
+  def  written_parent_chunk(self,data,parentoffset):
+    self.process_parent_chunk(data,parentoffset,True)
+  def  read_parent_chunk(self,data,parentoffset):
+    self.process_parent_chunk(data,parentoffset,False)
   def hashing_offset(self):
     return self.ohash.offset
   def hashing_result(self):
@@ -191,11 +162,9 @@ class OpportunisticHashCollection:
     self.ohash=dict()
     self.log=open(ohash_log,"a",0)
   def add_carvpath(self,carvpath):
-    print "add_carvpath",carvpath
     ent=self.context.parse(carvpath)
     self.ohash[carvpath]=_OH_Entity(ent,self.log)
   def remove_carvpath(self,carvpath):
-    print "remove_carvpath",carvpath
     del self.ohash[carvpath]   
   def lowlevel_written_data(self,offset,data):
     for carvpath in self.ohash.keys():
