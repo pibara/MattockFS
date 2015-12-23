@@ -347,6 +347,7 @@ class CarvPathFile:
     self.rep=rep
     self.context=context
     self.actors=actors
+    self.badflags = os.O_WRONLY | os.O_RDWR | os.O_APPEND | os.O_CREAT | os.O_TRUNC | os.O_EXCL
   def getattr(self):
     size=self.context.parse(self.carvpath).totalsize
     return  defaultstat(STAT_MODE_FILE_RO,size)
@@ -379,7 +380,8 @@ class CarvPathFile:
       return -errno.EPERM
     return -errno.ENODATA
   def open(self,flags,path):
-    #FIXME, check for 'write' flags and reject.
+    if (flags & self.badflags) != 0:
+      return -errno.EPERM
     return self.rep.open(self.carvpath,path)
 class CarvPathLink:
   def __init__(self,cp,ext):
