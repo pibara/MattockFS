@@ -314,10 +314,8 @@ class JobCtl:
     if name == "user.allocate_mutable":
       self.job.create_mutable(int(val))
       return 0
-    if name == "user.frozen_mutable":
+    if name in ("user.frozen_mutable","user.job_carvpath"):
       return -errno.EPERM
-    if name == "user.job_carvpath":
-      return "carvpath/" + self.job.carvpath + "." + self.job.file_extension
     return -errno.ENODATA
   def open(self,flags,path):
     return -errno.EPERM
@@ -368,13 +366,6 @@ class CarvPathFile:
       return hashresult + ";" + offset
     if name == "user.fadvise_status":
       return ";".join(map(lambda x: str(x),self.actors.rep.stack.carvpath_throttle_info(self.carvpath)))
-    if name == "user.longpath":
-      if self.carvpath[0] == "D":
-        if self.carvpath in self.context.longpathmap:
-          return self.context.longpathmap[carvpath]
-        return "INVALID"
-      else:
-        return  self.carvpath
   def setxattr(self,name, val):
     if name in ("user.opportunistic_hash","user.fadvise_status"):
       return -errno.EPERM

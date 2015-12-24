@@ -1,43 +1,13 @@
-#Project specific stuff.
-ocfa/step1/stripped2.bz2
-ocfa/step1/stripped3.bz2
-ocfa/step1/stripped4.bz2
-ocfa/*/stripped1
-ocfa/*/stripped2
-ocfa/*/stripped3
-ocfa/*/stripped4
-*.log
-*.aux
-ucd_fcci_rob_j_meijer.pdf
-ocfa/step2/*.pdf
-ocfa/step3/*.pdf
-ocfa/step4/*.pdf
-ocfa/step5/*.pdf
-*.toc
-*.dot
-*.bak
-*.out
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 
-# C extensions
-*.so
-
 # Distribution / packaging
-.Python
-env/
 build/
 develop-eggs/
 dist/
-downloads/
 eggs/
 .eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
 *.egg-info/
 .installed.cfg
 *.egg

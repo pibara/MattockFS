@@ -59,24 +59,25 @@ kickstartjob=context.poll_job()
 print "Job info:"
 print " * carvpath      = " + kickstartjob.carvpath.as_path()
 print " * router_state  = " + kickstartjob.router_state
-print "Creating new mutable entity within job context"
-mutabledata=kickstartjob.childdata(1234567)
-print " * mutabledata =", mutabledata
-print "Writing to mutable file"
-with open(mutabledata,"r+") as f:
-  f.seek(0)
-  f.write("harhar")
-  #The file can very well be sparse if we want it to.
-  f.seek(1234500)
-  f.write("HARHAR")
-#Once we are done writing the data, we freeze it and get a carvpath back.
-print "Freezing mutable file"
-frozenmutable=kickstartjob.frozen_childdata()
-print " * Carvpath =", frozenmutable
-print "Submitting child carvpath to har"
-#Fetching fadvise status for har for reference
-pre_status=mp.anycast_status("har")
-kickstartjob.childsubmit(frozenmutable,"har","t1:l11","x-mattock/harhar","har")
+print "Creating new mutable entities within job context"
+for time in range(0,3):
+  mutabledata=kickstartjob.childdata(1234567)
+  print " * mutabledata =", mutabledata
+  print "Writing to mutable file"
+  with open(mutabledata,"r+") as f:
+    f.seek(0)
+    f.write("harhar")
+    #The file can very well be sparse if we want it to.
+    f.seek(1234500)
+    f.write("HARHAR")
+  #Once we are done writing the data, we freeze it and get a carvpath back.
+  print "Freezing mutable file"
+  frozenmutable=kickstartjob.frozen_childdata()
+  print " * Carvpath =", frozenmutable
+  print "Submitting child carvpath to har"
+  #Fetching fadvise status for har for reference
+  pre_status=mp.anycast_status("har")
+  kickstartjob.childsubmit(frozenmutable,"har","t1:l11","x-mattock/harhar","har")
 print "Marking parent job as done"
 kickstartjob.done()
 print "Fetching global fadvise status:"
@@ -94,27 +95,28 @@ context=mp.register_worker("har")
 context.actor_set_weight(7)
 context.actor_set_overflow(3)
 #Lets poll the job we just submitted when we were kickstart.
-harjob=context.poll_job()
-if harjob == None:
-  print "ERROR, polling the har returned None"
-else:
-  print "OK; Fetched job, there should be an opportunistic hash over the sparse data!"
-  #Get the path of our job data.
-  print " * carvpath      = "+harjob.carvpath.as_path()
-  #If all data was accessed, the opportunistic hash should be there.
-  print " * opportunistic_hash    =",harjob.carvpath.opportunistic_hash()
-  #We can pick a subchunk of our input data and submit it as child data. No questions asked.
-  print "Submit sub-carvpath 123+1000 as child entity to bar"
-  harjob.childsubmit("123+1000","bar","t9:l4","x-mattock/silly-sparse","sparse")
-  #We are not done yet with our input data, we forward it to an other actor.
-  print "Forward parent entity to baz" 
-  harjob.forward("baz","t18:l6")
-  #
-  #
-  #
-  #Now we become a bar worker and process the subchunk entity.
-  print "Doing nothing as bar"
-  context=mp.register_worker("bar")
+for time in range(0,3):
+  harjob=context.poll_job()
+  if harjob == None:
+    print "ERROR, polling the har returned None"
+  else:
+    print "OK; Fetched job, there should be an opportunistic hash over the sparse data!"
+    #Get the path of our job data.
+    print " * carvpath      = "+harjob.carvpath.as_path()
+    print " * hash   = ",harjob.carvpath.opportunistic_hash()
+    print " * fadvise= ",harjob.carvpath.fadvise_status()
+    #If all data was accessed, the opportunistic hash should be there.
+    print " * opportunistic_hash    =",harjob.carvpath.opportunistic_hash()
+    #We can pick a subchunk of our input data and submit it as child data. No questions asked.
+    print "Submit sub-carvpath 123+1000 as child entity to bar"
+    harjob.childsubmit("123+1000_S9000_234+1000_S9000_345+9000_S99000_456+9000_S999000_567+9000_678+9000_S1000000_789+9000_S2000000_1234+8000_S3000000_2345+8000_S4000000_3456+8000_S5000000_4567+8000_S6000000_5678+8000_S7000000_6789+8000_S8000000","bar","t9:l4","x-mattock/silly-sparse","sparse")
+    #We are not done yet with our input data, we forward it to an other actor.
+    print "Forward parent entity to baz" 
+    harjob.forward("baz","t18:l6")
+#Now we become a bar worker and process the subchunk entity.
+print "Doing nothing as bar"
+context=mp.register_worker("bar")
+for time in range(0,3):
   barjob = context.poll_job()
   if barjob == None:
     print "ERROR, polling the bar context returned None"
@@ -122,32 +124,32 @@ else:
     print " * routing_info : ", barjob.router_state
     barjob.done()
     print
-    #
-    #
-    #We become a baz worker and process the written-to entity.
-    print "Doing nothing as baz"
-    context=mp.register_worker("baz")
+ 
 
+#We become a baz worker and process the written-to entity.
+print "Doing nothing as baz"
+context=mp.register_worker("baz")
+for time in range(0,3):
     bazjob = context.poll_job()
     if bazjob == None:
       print "ERROR, polling the baz returned None"
     else:
       print " * routing_info : ", bazjob.router_state
       bazjob.done()
-      context=None
-      print "Done"
-      fadvise_end=mp.fadvise_status()
-      worker_count_end={}
-      anycast_status_end={}
-      for actorname in ["kickstart","har","bar","baz"]:
-        worker_count_end[actorname] = mp.worker_count(actorname)
-        anycast_status_end[actorname] = mp.anycast_status(actorname)
-      print "Comparing start fadvise to end fadvise state"
-      print fadvise_start
-      print fadvise_end
-      print "Comparing worker count start and end:"
-      print worker_count_start
-      print worker_count_end
-      print "Comparing anycast state start and end:"
-      print anycast_status_start
-      print anycast_status_end
+context=None
+print "Done"
+fadvise_end=mp.fadvise_status()
+worker_count_end={}
+anycast_status_end={}
+for actorname in ["kickstart","har","bar","baz"]:
+  worker_count_end[actorname] = mp.worker_count(actorname)
+  anycast_status_end[actorname] = mp.anycast_status(actorname)
+print "Comparing start fadvise to end fadvise state"
+print fadvise_start
+print fadvise_end
+print "Comparing worker count start and end:"
+print worker_count_start
+print worker_count_end
+print "Comparing anycast state start and end:"
+print anycast_status_start
+print anycast_status_end

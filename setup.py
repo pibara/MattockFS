@@ -40,5 +40,5 @@ setup(
     keywords='computer forensics',
     install_requires=['pyblake2','fuse-python','redis'],
     
-    packages=find_packages(exclude=['start_mattockfs','quicktest','docs']),
+    packages=find_packages(exclude=['bin']),
 )

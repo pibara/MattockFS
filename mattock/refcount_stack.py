@@ -115,15 +115,6 @@ class CarvpathRefcountStack:
           self.fadvise(fragment.offset,fragment.size,False)
         self.log.write(str(time.time())+":-:"+str(unmerged)+"\n")
     return
-  #Request a list of entities that overlap from the box that overlap (for opportunistic hashing purposes).
-  def _overlaps(self,offset,size):
-    ent=context.empty()
-    ent.unaryplus(carvpath.Fragment(offset,size))
-    rval=[]
-    for carvpath in self.content:
-      if self.content[carvpath].overlaps(ent):
-        rval.append(carvpath)
-    return rval
   def _priority_customsort(self,params,ltfunction=_defaultlt,intransit=None,reverse=False):
     Rmap={}
     rmap={}
@@ -213,11 +204,6 @@ class CarvpathRefcountStack:
     sortable.sort(reverse=reverse)
     for wrapper in sortable:
       yield wrapper.carvpath
-  def _priority_customsorted(self,params,ltfunction=_defaultlt,intransit=None,reverse=False):
-    customsrt=[]
-    for entity in self._priority_customsort(params,ltfunction,intransit,reverse):
-      customsrt.append(entity)
-    return customsrt
   def priority_custompick(self,params,ltfunction=_defaultlt,intransit=None,reverse=False):
     for entity in self._priority_customsort(params,ltfunction,intransit,reverse):
       return entity #A bit nasty but safes needles itterations.
