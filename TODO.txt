@@ -6,7 +6,6 @@ TODO for first beta:
 * Make test scripts output OK/FAIL for tests on (un)expected results 
     (instead of text strings that only Rob knows how to parse for success)
 * Code cleanup.
-* Allign text on website with the OCFA naming sceme to Actor-model naming sceme.
 
 Todo for second beta:
 * Test for load-balancing related module+job processing.
