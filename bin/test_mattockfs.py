@@ -70,6 +70,9 @@ for time in range(0,3):
     #The file can very well be sparse if we want it to.
     f.seek(1234500)
     f.write("HARHAR")
+    if time == 2:
+      f.seek(1000000)
+      f.write("poison")
   #Once we are done writing the data, we freeze it and get a carvpath back.
   print "Freezing mutable file"
   frozenmutable=kickstartjob.frozen_childdata()

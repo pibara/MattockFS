@@ -1,5 +1,4 @@
 TODO for first beta:
-* Poison hash test in walktrough test (opportunistic_hash 73%)
 * Extend tests for job picking strategies (refcount_stack 56%)
 * Add test for just out of range carvpath (repository 68%)
 * Make test scripts output OK/FAIL for tests on (un)expected results 
