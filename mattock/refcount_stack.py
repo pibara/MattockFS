@@ -66,7 +66,8 @@ class CarvpathRefcountStack:
     else:
       if len(self.fragmentrefstack) == 0:
         return [0,ent.totalsize]
-      overlapsize=ent.overlap_size(self.fragmentrefstack[0])
+      nonsparse=ent.copy(stripsparse=True)
+      overlapsize=nonsparse.overlap_size(self.fragmentrefstack[0])
     return [overlapsize,ent.totalsize-overlapsize]    
   def __str__(self):
     rval=""
@@ -102,7 +103,7 @@ class CarvpathRefcountStack:
   # 2) An entity with all fragments still remaining in the box. 
   def remove_carvpath(self,carvpath):
     if not carvpath in self.entityrefcount.keys():
-      raise IndexError("Carvpath "+carvpath+" not found in box.")    
+      raise IndexError("Carvpath "+carvpath+" not found in box.")
     self.entityrefcount[carvpath] -= 1
     if self.entityrefcount[carvpath] == 0:
       ent=self.content.pop(carvpath)
@@ -253,21 +254,19 @@ if __name__ == "__main__":
   context=carvpath.Context({},160)
   col=opportunistic_hash.OpportunisticHashCollection(context,"./test.log") 
   stack=CarvpathRefcountStack(context,fadvise,col,"./test2.log")
-  stack.add_carvpath("0+1700_S1000_1750+1000")
+  stack.add_carvpath("181481349+1234567")
   print str(stack)
-  stack.add_carvpath("1500+1000")
+  stack.add_carvpath("183950483+1234567")
   print str(stack)
-  stack.add_carvpath("50+2650")
+  stack.add_carvpath("182715916+1234567")
   print str(stack)
-  stack.add_carvpath("2200+2200")
+  stack.add_carvpath("123+1000_S9000_234+1000_S9000_345+9000_S99000_456+9000_S999000_567+9000_678+9000_S1000000_789+9000_S2000000_1234+8000_S3000000_2345+8000_S4000000_3456+8000_S5000000_4567+8000_S6000000_5678+8000_S7000000_6789+8000_S8000000")
   print str(stack)
-  #rval=stack.priority_custompick("S",intransit=["1500+1000","2200+2200"])
-  #print "Picked ",rval
-  stack.remove_carvpath("1500+1000")
+  stack.remove_carvpath("123+1000_S9000_234+1000_S9000_345+9000_S99000_456+9000_S999000_567+9000_678+9000_S1000000_789+9000_S2000000_1234+8000_S3000000_2345+8000_S4000000_3456+8000_S5000000_4567+8000_S6000000_5678+8000_S7000000_6789+8000_S8000000")
   print str(stack)
-  stack.remove_carvpath("2200+2200")
+  stack.remove_carvpath("181481349+1234567")
   print str(stack)
-  stack.remove_carvpath("0+1700_S1000_1750+1000")
+  stack.remove_carvpath("183950483+1234567")
   print str(stack)
-  stack.remove_carvpath("50+2650")
+  stack.remove_carvpath("182715916+1234567")
   print str(stack)

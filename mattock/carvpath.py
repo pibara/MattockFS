@@ -53,6 +53,10 @@ class Fragment:
     else:
       self.offset=a1
       self.size=a2
+  def copy(self):
+    if self.size > 0:
+      return Fragment(self.offset,self.size)
+    return Sparse(0)
   #Casting Fragment to a carvpath string
   def __str__(self):
     if self.size == 0:
@@ -100,6 +104,8 @@ class Sparse:
       self.size = int(a1[1:])
     else:
       self.size = a1
+  def copy(self):
+    return Sparse(self.size)
   #Casting to a carvpath string
   def __str__(self):
     return "S" + str(self.size)
@@ -170,6 +176,15 @@ class _Entity:
     self.totalsize=0
     for frag in fragments:
       self.unaryplus(frag)
+  def copy(self,stripsparse=False):
+    if stripsparse:
+      fragments=[]
+      for frag in self.fragments:
+        if frag.issparse() == False:
+          fragments.append(frag.copy())
+      return _Entity(self.longpathmap,self.maxfstoken,fragments)
+    else:
+      return _Entity(self.longpathmap,self.maxfstoken,copy.deepcopy(self.fragments))
   def _asdigest(self,path):
     rval = "D" + blake2b(path.encode(),digest_size=32).hexdigest()
     self.longpathmap[rval] = path
@@ -252,7 +267,7 @@ class _Entity:
       #Or a single fragment.
       #If the new fragment is directly adjacent and of the same type, we don't add it but instead we grow the last existing fragment. 
       if len(self.fragments) > 0 and self.fragments[-1].issparse() == other.issparse() and (other.issparse() or (self.fragments[-1].getoffset() + self.fragments[-1].size) == other.getoffset()):
-        self.fragments[-1]=copy.deepcopy(self.fragments[-1])
+        self.fragments[-1]=self.fragments[-1].copy()
         self.fragments[-1].grow(other.size)
       else:
         #Otherwise we append the new fragment.
@@ -349,7 +364,7 @@ class _Entity:
     return _fragapply(self,entity,test)
   def overlap_size(self,entity):
     size1=self.totalsize + entity.totalsize
-    tent=copy.deepcopy(entity)
+    tent=entity.copy()
     tent.merge(self)
     return size1 - tent.totalsize
   def density(self,entity):

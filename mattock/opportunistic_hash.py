@@ -102,7 +102,7 @@ class _Opportunistic_Hash:
 class _OH_Entity:
   def __init__(self,ent,log):
     self.log=log
-    self.ent=copy.deepcopy(ent)
+    self.ent=ent.copy()
     self.ohash=_Opportunistic_Hash(self.ent.totalsize)
     self.roi=ent.getroi(0)
     self.writeroi=ent.getroi(0)

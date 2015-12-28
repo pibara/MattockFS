@@ -545,7 +545,7 @@ def run():
                usage = 'Mattock filesystem ' + fuse.Fuse.fusage,
                dash_s_do = 'setsingle',
                dd=dd,
-               lpdb=longpathmap.LongPathMap,
+               lpdb=longpathmap.LongPathMap(),
                journal=journal,
                provenance_log=provenance_log,
                ohash_log=ohash_log,

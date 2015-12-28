@@ -121,7 +121,10 @@ for time in range(0,3):
   if barjob == None:
     print "ERROR, polling the bar context returned None"
   else:
+    print " * carvpath      = "+barjob.carvpath.as_path()
     print " * routing_info : ", barjob.router_state
+    print " * hash   = ",barjob.carvpath.opportunistic_hash()
+    print " * fadvise= ",barjob.carvpath.fadvise_status()    
     barjob.done()
     print
  

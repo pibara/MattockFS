@@ -120,7 +120,8 @@ class Job:
   def __init__(self,jobhandle,actorname,carvpath,router_state,mime_type,file_extension,actors,provenance=None):
     self.jobhandle=jobhandle
     self.actorname=actorname
-    self.carvpath=carvpath
+    ent=actors.rep.context.parse(carvpath)
+    self.carvpath=str(ent)
     self.router_state=router_state
     self.mime_type=mime_type
     self.file_extension=file_extension
