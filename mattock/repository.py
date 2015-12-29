@@ -164,7 +164,9 @@ class Repository:
       #If the Carvpath is out of range it could be an other system in the NFS-meshup  grew the repository
       #so just to be sure, lets check for that.
       self.multi_sync()
-      return self.top.test(ent)
+      if self.top.test(ent):
+        return True
+      return False
     except:
       return False
   def flatten(self,basecp,subcp):
