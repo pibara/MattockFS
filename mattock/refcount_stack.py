@@ -198,7 +198,7 @@ class CarvpathRefcountStack:
                     wmap[carvpath]=accumdensity
                   arglist.append(wmap)
                 else:
-                  raise RuntimeError("Invalid letter for pickspecial policy")
+                  raise RuntimeError("Invalid letter '"+letter+"' for pickspecial policy")
     sortable=[]
     for carvpath in startset:
       sortable.append(_CustomSortable(carvpath,ltfunction,arglist))

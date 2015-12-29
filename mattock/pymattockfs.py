@@ -234,9 +234,9 @@ class WorkerCtl:
     return ["user.job_select_policy","user.actor_select_policy","user.unregister","user.accept_job"]
   def getxattr(self,name, size):
     if name == "user.job_select_policy":
-      return self.worker.sort_policy
+      return self.worker.job_select_policy
     if name == "user.actor_select_policy":
-      return self.worker.select_policy
+      return self.worker.module_select_policy
     if name == "user.unregister":
       return "0"
     if name == "user.accept_job":
@@ -252,12 +252,12 @@ class WorkerCtl:
     if name == "user.job_select_policy":
        ok=bool(self.sortre.search(val))
        if ok:
-         self.worker.sort_policy=val
+         self.worker.job_select_policy=val
        return 0
     if name == "user.actor_select_policy":
        ok=bool(self.selectre.search(val))
        if ok:
-         self.worker.select_policy=val
+         self.worker.module_select_policy=val
        return 0
     if name == "user.unregister":
       if val == "1":
@@ -406,7 +406,7 @@ class MattockFS(fuse.Fuse):
       self.sortre = re.compile(r'^(K|[RrOHDdWS]{1,6})$')
       self.archive_dd = dd
       self.rep=repository.Repository(self.archive_dd,self.context,ohash_log,refcount_log)
-      self.ms=anycast.Actors(self.rep,journal,provenance_log)
+      self.ms=anycast.Actors(rep=self.rep,journal=journal,provenance=provenance_log,context=self.context,stack=self.rep.stack,col=self.rep.col)
       self.topctl=TopCtl(self.rep,self.context)
       self.needinit=True
     def parsepath(self,path):
