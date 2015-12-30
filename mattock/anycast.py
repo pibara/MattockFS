@@ -372,6 +372,8 @@ class Actors:
       actorset=self.rep.anycast_best_actors(self,actorset,letter) 
       if len(actorset) == 1:
         return actorset[0]
+    if len(actorset) == 0:
+      return None
     return actorset[0]
   #Valid actor names are 2 to 40 alphanumeric characters.
   def validactorname(self,actorname):

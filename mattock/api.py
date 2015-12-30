@@ -152,8 +152,6 @@ class _Context:
     self.actor_ctl["user.overflow"] = str(overflow)
   def actor_get_overflow(self):
     return int(self.actor_ctl["user.overflow"])
-  def actor_reset(self):
-    self.actor_ctl["user.reset"]="1"
 
 class MountPoint:
   def __init__(self,mp):
@@ -177,6 +175,9 @@ class MountPoint:
     actor_inf=xattr.xattr(self.mountpoint + "/actor/" + actorname + ".inf")
     st=actor_inf["user.anycast_status"].split(";")
     return {"set_size" : int(st[0]), "set_volume" : int(st[1])}
+  def actor_reset(self,actorname):
+    actor_ctl=xattr.xattr(self.mountpoint + "/actor/" + actorname + ".ctl")
+    actor_ctl["user.reset"]="1"    
   def full_path(self,entity,ext="dat"):
     return self.mountpoint + "/carvpath/" + str(entity) + "." + ext
 

@@ -9,6 +9,19 @@
 from mattock.api import MountPoint
 import sys
 
+def test_bogus_path(base):
+  for subdir in ("job","mutable","worker"):
+    ext="ctl"
+    if subdir == "mutable":
+      ext="dat"
+    path = base + "/" + subdir + "/C21de91cabe9f201cebe3d39834eb8c0b9fcd12688082200658ba46a02b66147b." + ext
+    try:
+      f=open(path,"r")
+      print "FAIL: Bogus file not suposed to exist ;",path
+      f.close()
+    except:
+      pass
+
 def test_add_data_to_job(job):
   mutable=job.childdata(10000)
   with open(mutable,"r+") as f:
@@ -25,7 +38,10 @@ def test_anycast_coverage(mp):
   nojob=nomodule.poll_job()
   if nojob != None:
     print "FAIL: polling bogusmodule should return None"
+  mp.actor_reset("kickstart")
   kickstart=mp.register_worker("kickstart","K")
+  if mp.worker_count("kickstart") != 1:
+    print "FAIL: Kickstart worker count should be '1' ; it is " , mp.worker_count("kickstart")
   kickstartjob=kickstart.poll_job()
   if kickstartjob == None:
     print "FAIL: polling kickstart should always yield a job, None returned"
@@ -33,6 +49,28 @@ def test_anycast_coverage(mp):
     print "FAIL: shouldn't be able to freeze child data that was never allocated."
   test_add_data_to_job(kickstartjob)
   test_add_data_to_job(kickstartjob)
+  path=kickstartjob.frozen_childdata()
+  kickstartjob.childsubmit(path,"foo","routerstate123","x-mattock/testdata","data")
+  test_add_data_to_job(kickstartjob)
+  path=kickstartjob.frozen_childdata()
+  kickstartjob.childsubmit(path,"foo","routerstate234","x-mattock/testdata","data")
+  status=mp.anycast_status("foo")
+  if status["set_size"] !=2:
+    print "FAIL: unexpected set size", status["set_size"],"expected 2"
+  else:
+    if status["set_volume"] != 20000:
+      print "FAIL: unexpected set volume", status["set_volume"],"expected 20000"
+  foo=mp.register_worker("foo")
+  foo.actor_set_overflow(0)
+  foo.actor_set_weight(1000)
+  mp.actor_reset("foo")
+  loadbalance=mp.register_worker("loadbalance")
+  lbjob=loadbalance.poll_job()
+  lbjob=loadbalance.poll_job()
+  if lbjob == None:
+    print "FAIL: Problem fetching job with loadbalance"
+  else:
+    lbjob.forward("bar","routerstate789") 
   if kickstartjob.frozen_childdata() == None:
     print "FAIL: freezing a mutable should yield a non-None value."
   try:
@@ -44,11 +82,12 @@ def test_anycast_coverage(mp):
   except:
     pass
   try:
-    bogus3=mp.regisger_worker("abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+    bogus3=mp.register_worker("abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
   except:
     pass
 #The standard place for our MattockFS mountpoint in the initial release.
 mp=MountPoint("/var/mattock/mnt/0")
+test_bogus_path("/var/mattock/mnt/0")
 test_anycast_coverage(mp)
 #Record the starting situation.
 #fadvise_start=mp.fadvise_status()

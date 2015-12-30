@@ -201,9 +201,9 @@ class Repository:
       fetchvolume=True
     bestactors=set()
     bestval=0
-    for actor in actorset.actors.keys():
-      anycast = actorset.actors[actor].anycast
-      overflow = actorset.actors[actor].overflow
+    for actor in actorset:
+      anycast = actorsstate.actors[actor].anycast
+      overflow = actorsstate.actors[actor].overflow
       if len(anycast) > overflow:
         volume=0
         if fetchvolume:
@@ -231,8 +231,8 @@ class Repository:
           bestval=val
           bestactors=set()
         if val == bestval:
-          bestactors.add(actors)
-    return bestactors
+          bestactors.add(actor)
+    return list(bestactors)
   def open(self,carvpath,path):
     ent=self.context.parse(carvpath)
     if path in self.openfiles:
