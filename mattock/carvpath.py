@@ -34,7 +34,7 @@ import fcntl
 
 try:
     from pyblake2 import blake2b
-except ImportError:
+except ImportError: #pragma: no cover
     import sys
     print("")
     print("\033[93mERROR:\033[0m Pyblake2 module not installed. Please install blake2 python module. Run:")
@@ -561,7 +561,7 @@ class Context:
   #def open_repository(self,rawdatapath):
   #  return _Repository(rawdatapath,self.longpathmap,self.maxfstoken)
 
-class _Test:
+class _Test: #pragma: no cover
   def __init__(self,lpmap,maxtokenlen):
     self.context=Context(lpmap,maxtokenlen)
   def testadd(self,pin1,pin2,pout):
@@ -624,7 +624,7 @@ class _Test:
     else:
       print("OK : "+str(a))
 
-if __name__ == "__main__":
+if __name__ == "__main__": #pragma: no cover
   import longpathmap
   lpmap=longpathmap.LongPathMap()
   context=Context(lpmap)

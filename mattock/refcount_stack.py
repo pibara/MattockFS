@@ -241,7 +241,7 @@ class CarvpathRefcountStack:
         return None
 
 
-if __name__ == "__main__":
+if __name__ == "__main__": #pragma: no cover
   class FakeFadviseFunctor:
     def __call__(self,offset,size,willneed):
       if willneed:

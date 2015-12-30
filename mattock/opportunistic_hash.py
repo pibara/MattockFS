@@ -33,7 +33,7 @@ import copy
 try:
     from pyblake2 import blake2b
     ohash_algo=blake2b
-except ImportError:
+except ImportError: #pragma: no cover
     import sys
     print("")
     print("\033[93mERROR:\033[0m Pyblake2 module not installed. Please install blake2 python module. Run:")
@@ -190,7 +190,7 @@ class OpportunisticHashCollection:
   def freeze(self,carvpath):
     self.ohash[carvpath].freeze()
 
-if __name__ == "__main__":
+if __name__ == "__main__": #pragma: no cover
   import carvpath
   context=carvpath.Context({},160)
   ohc=OpportunisticHashCollection(context,"./test.log")

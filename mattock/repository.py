@@ -38,7 +38,7 @@ import opportunistic_hash
 
 try:
   from os import posix_fadvise,POSIX_FADV_DONTNEED,POSIX_FADV_NORMAL
-except:
+except: #pragma: no cover
   try:  
     from fadvise import posix_fadvise,POSIX_FADV_DONTNEED,POSIX_FADV_NORMAL
   except:
@@ -258,7 +258,7 @@ class Repository:
     return 0
     
 
-if __name__ == "__main__":
+if __name__ == "__main__": #pragma: no cover
   import carvpath
   import opportunistic_hash
   context=carvpath.Context({},160)

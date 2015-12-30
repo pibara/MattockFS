@@ -40,7 +40,7 @@ import json
 
 try:
     from pyblake2 import blake2b
-except ImportError:
+except ImportError: #pragma: no cover
     import sys
     print("")
     print("\033[93mERROR:\033[0m Pyblake2 module not installed. Please install blake2 python module. Run:")
@@ -400,5 +400,5 @@ class Actors:
       return True
     return False
 
-if __name__ == '__main__':
+if __name__ == '__main__': #pragma: no cover
   print "We should probably write some test code here"
