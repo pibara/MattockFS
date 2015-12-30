@@ -202,8 +202,10 @@ class Job:
       self.frozen=Frozen(stack=self.stack,carvpath=carvpath) 
       #And delete the mutable itself.
       self.mutable=None
-    #Return the new carvpath of the frozen mutable.
-    return self.frozen.carvpath
+    if self.frozen != None:
+      #Return the new carvpath of the frozen mutable.
+      return self.frozen.carvpath
+    return None
   def submit_child(self,carvpath,nexthop,routerstate,mimetype,extension):
     #Get the actual CarvPath part of the carvpath in the file-system.
     carvpath=carvpath.split("carvpath/")[-1].split(".")[0]

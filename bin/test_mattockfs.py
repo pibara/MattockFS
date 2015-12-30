@@ -8,6 +8,18 @@
 #First we import the minimal python API
 from mattock.api import MountPoint
 import sys
+
+def test_add_data_to_job(job):
+  mutable=job.childdata(10000)
+  with open(mutable,"r+") as f:
+      f.seek(0)
+      f.write("harhar")
+      #The file can very well be sparse if we want it to.
+      f.seek(5000)
+      f.write("HARHAR") 
+  return
+
+
 def test_anycast_coverage(mp):
   nomodule=mp.register_worker("bogusmodule")
   nojob=nomodule.poll_job()
@@ -17,8 +29,24 @@ def test_anycast_coverage(mp):
   kickstartjob=kickstart.poll_job()
   if kickstartjob == None:
     print "FAIL: polling kickstart should always yield a job, None returned"
-    
-
+  if kickstartjob.frozen_childdata() != None:
+    print "FAIL: shouldn't be able to freeze child data that was never allocated."
+  test_add_data_to_job(kickstartjob)
+  test_add_data_to_job(kickstartjob)
+  if kickstartjob.frozen_childdata() == None:
+    print "FAIL: freezing a mutable should yield a non-None value."
+  try:
+    bogus1=mp.register_worker("a")
+  except:
+    pass
+  try:
+    bogus2=mp.register_worker("#!`+apn^")
+  except:
+    pass
+  try:
+    bogus3=mp.regisger_worker("abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+  except:
+    pass
 #The standard place for our MattockFS mountpoint in the initial release.
 mp=MountPoint("/var/mattock/mnt/0")
 test_anycast_coverage(mp)

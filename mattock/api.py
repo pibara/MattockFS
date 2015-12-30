@@ -81,7 +81,10 @@ class _Job:
     return None
   def frozen_childdata(self):
     if self.isdone == False:
-      return self.ctl["user.frozen_mutable"]
+      try:
+        return self.ctl["user.frozen_mutable"]
+      except:
+        return None
     return None
   def childsubmit(self,carvpath,nextactor,routerstate,mimetype,extension):
     if self.isdone == False:

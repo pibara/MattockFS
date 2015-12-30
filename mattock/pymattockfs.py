@@ -294,7 +294,10 @@ class JobCtl:
     if name == "user.frozen_mutable":
       if size == 0:
         return 81
-      return "carvpath/" + self.job.get_frozen_mutable() + ".dat"
+      frozen=self.job.get_frozen_mutable()
+      if frozen != None:
+        return "carvpath/" + self.job.get_frozen_mutable() + ".dat"
+      return -errno.ENODATA
     if name == "user.job_carvpath":
       return "carvpath/" + self.job.carvpath + "." + self.job.file_extension
     return -errno.ENODATA
