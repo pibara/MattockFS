@@ -1,8 +1,6 @@
 TODO for first beta:
-* Extend tests for job picking strategies (refcount_stack 56%)
-* Make test scripts output OK/FAIL for tests on (un)expected results 
-    (instead of text strings that only Rob knows how to parse for success)
-* Code cleanup.
+* Increase code-coverage for test (currently at 75%)
+* Code cleanup and comments (currently 50% done)
 
 Todo for second beta:
 * Test for load-balancing related module+job processing.
