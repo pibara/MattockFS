@@ -1,6 +1,13 @@
 TODO for first beta:
-* Increase code-coverage for test (currently at 75%)
-* Code cleanup and comments (currently 50% done)
+* Increase         code-coverage and cleanup+document code
+  + provenance_log     (97%)            OK
+  + anycast            (96%)            OK
+  + opportunistic_hash (89%)            OK
+  + repository         (77%)            TODO
+  + carvpath           (72%)            TODO
+  + longpathmap        (70%)            OK
+  + pymattockfs        (66%)            TODO
+  + refcount_stack     (61%)            TODO
 
 Todo for second beta:
 * Unified logging facility.

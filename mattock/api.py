@@ -118,7 +118,10 @@ class _Context:
         raise RuntimeError("Invalid sort policy string")
   def __del__(self):
     if self.worker_ctl != None:
-      self.worker_ctl["user.unregister"]="1"
+      try:
+        self.worker_ctl["user.unregister"]="1"
+      except:
+        pass
   def set_job_select_policy(self,policy):
     ok=bool(self.sortre.search(policy))
     if ok:

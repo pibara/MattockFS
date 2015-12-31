@@ -79,6 +79,7 @@ def test_anycast_coverage(mp):
   foo.actor_set_overflow(0)
   foo.actor_set_weight(1000)
   mp.actor_reset("foo")
+  foo=None
   loadbalance=mp.register_worker("loadbalance")
   lbjob=loadbalance.poll_job()
   lbjob=loadbalance.poll_job()
