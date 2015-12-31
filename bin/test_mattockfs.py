@@ -23,14 +23,28 @@ def test_bogus_path(base):
       pass
 
 def test_add_data_to_job(job):
-  mutable=job.childdata(10000)
+  mutable=job.childdata(1000000)
   with open(mutable,"r+") as f:
       f.seek(0)
       f.write("harhar")
       #The file can very well be sparse if we want it to.
-      f.seek(5000)
+      f.seek(500000)
       f.write("HARHAR") 
   return
+
+def test_add_poisoned_data_to_job(job):
+  mutable=job.childdata(1000000)
+  with open(mutable,"r+") as f:
+      f.seek(0)
+      f.write("harhar")
+      #The file can very well be sparse if we want it to.
+      f.seek(500000)
+      f.write("HARHAR")
+      #Poison the hashing
+      f.seek(200000)
+      f.write("poison")
+  return
+
 
 
 def test_anycast_coverage(mp):
@@ -48,6 +62,7 @@ def test_anycast_coverage(mp):
   if kickstartjob.frozen_childdata() != None:
     print "FAIL: shouldn't be able to freeze child data that was never allocated."
   test_add_data_to_job(kickstartjob)
+  test_add_poisoned_data_to_job(kickstartjob)
   test_add_data_to_job(kickstartjob)
   path=kickstartjob.frozen_childdata()
   kickstartjob.childsubmit(path,"foo","routerstate123","x-mattock/testdata","data")
@@ -58,7 +73,7 @@ def test_anycast_coverage(mp):
   if status["set_size"] !=2:
     print "FAIL: unexpected set size", status["set_size"],"expected 2"
   else:
-    if status["set_volume"] != 20000:
+    if status["set_volume"] != 2000000:
       print "FAIL: unexpected set volume", status["set_volume"],"expected 20000"
   foo=mp.register_worker("foo")
   foo.actor_set_overflow(0)

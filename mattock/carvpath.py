@@ -372,14 +372,14 @@ class _Entity:
     r=_fragapply(self,entity,[t])
     rval= float(r[0].totalsize)/float(self.totalsize)
     return rval
-  def getroi(self,fromoffset):
+  def getroi(self,from_offset):
     coffset=0
     start=None
     end=None
     for fragment in self.fragments:
-      if (not fragment.issparse()) and fromoffset <= coffset+fragment.size:
-        if coffset <= fromoffset:
-          start=fragment.offset + fromoffset - coffset
+      if (not fragment.issparse()) and from_offset <= coffset+fragment.size:
+        if coffset <= from_offset:
+          start=fragment.offset + from_offset - coffset
           end=fragment.offset+fragment.size -1
         else:
           if start > fragment.offset:
