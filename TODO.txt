@@ -2,7 +2,7 @@ TODO for first beta:
 * Track-down order of destruction bug.
 * Increase         code-coverage and cleanup+document code
   + provenance_log     (97%)            OK          pep8
-  + anycast            (96%)            OK          -
+  + anycast            (96%)            OK          pep8
   + opportunistic_hash (89%)            OK          pep8
   + repository         (77%)            OK          pep8
   + carvpath           (72%)            TODO        -
