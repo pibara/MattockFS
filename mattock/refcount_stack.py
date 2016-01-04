@@ -59,8 +59,6 @@ class CarvpathRefcountStack:
     self.fragmentrefstack=[] #A stack of fragments with different refcounts for keeping reference counts on fragments.
     self.fragmentrefstack.append(self.context.empty()) #At least one empty entity on the stack
     self.log=open(refcount_log,"a",0)
-  def __del__(self):
-    print "CarvPathRefCount del"
   def carvpath_throttle_info(self,carvpath):
     ent=self.context.parse(carvpath)
     if ent.totalsize == 0 or len(self.fragmentrefstack)==0 or self.fragmentrefstack[0].totalsize ==0:

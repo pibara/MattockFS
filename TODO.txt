@@ -1,5 +1,4 @@
 TODO for first beta:
-* Track-down order of destruction bug.
 * Increase         code-coverage and cleanup+document code
     FILE               COVERAGE SUFFICIENT  CLEANUP COMMENTS LINT
   + anycast            (96%)       YES       OK       OK     pep8

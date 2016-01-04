@@ -209,13 +209,14 @@ class _OH_Entity:
                         self.ohash.sparse(length=fragment.size,
                                           offset=childoffset)
                 childoffset += fragment.size
-        if updated:
-            # Update our range of interest.
-            self.roi = self.ent.getroi(from_offset=self.ohash.offset)
-            if self.ohash.isdone and (not wasdone):
-                # If the data resulted in completion of opportunustic hash,
-                # than log the new hash.
-                self.log.write(str(self.ent) + ":" + self.ohash.result + "\n")
+            if updated:
+                # Update our range of interest.
+                self.roi = self.ent.getroi(from_offset=self.ohash.offset)
+                if self.ohash.isdone and (not wasdone):
+                    # If the data resulted in completion of opportunustic hash
+                    # than log the new hash.
+                    self.log.write(str(self.ent) + ":" + self.ohash.result +
+                                   "\n")
 
     # Process a written chunk
     def written_parent_chunk(self, data, parentoffset):

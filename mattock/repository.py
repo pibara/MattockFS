@@ -59,30 +59,22 @@ except:  # pragma: no cover
 # Functor class for fadvise on an archive fd.
 class _FadviseFunctor:
     def __init__(self, fd):
-        print "Created FadviseFunctor"
         self.fd = fd
 
-    def __del__(self):
-        print "Deleting FadviseFunctor"
-
     def __call__(self, offset, size, willneed):
-        print "posix_fadvise", offset, size, willneed
         if willneed:
             posix_fadvise(self.fd, offset, size, POSIX_FADV_NORMAL)
         else:
             posix_fadvise(self.fd, offset, size, POSIX_FADV_DONTNEED)
-        print "posix_fadvise OK"
 
 
 # RAII class for keeping a file lock during sparse grow operations.
 class _RaiiFLock:
     def __init__(self, fd):
-        print "RAII lock"
         self.fd = fd
         fcntl.flock(self.fd, fcntl.LOCK_EX)
 
     def __del__(self):
-        print "RAII Unlock"
         fcntl.flock(self.fd, fcntl.LOCK_UN)
 
 
@@ -103,22 +95,17 @@ class _OpenFile:
 
     def __del__(self):
         # Remove from refcount stack on deletion.
-        try:
-            self.stack.remove_carvpath(carvpath=self.cp)
-        except Exception as e:
-            print "OOPS:", str(e)
+        self.stack.remove_carvpath(carvpath=self.cp)
 
     def pread(self, chunk):
         # Read the chunk from offset, os.pread would be better but does not
         # exist in python 2.
-        print "pread"
         os.lseek(self.fd, chunk.offset, 0)
         return os.read(self.fd, chunk.size)
 
     def pwrite(self, chunk, chunkdata):
         # Write a chunk to the proper offset. os.pwrite would be better but
         # does not exist in python 2.
-        print "pwrite"
         os.lseek(self.fd, chunk.offset, 0)
         os.write(self.fd, chunkdata)
         return
@@ -172,7 +159,6 @@ class Repository:
         # We start off with zero open files
         self.openfiles = {}
         # Open the underlying data file and create if needed.
-        print "open"
         self.fd = os.open(reppath,
                           (os.O_RDWR |
                            os.O_LARGEFILE |
@@ -196,14 +182,12 @@ class Repository:
               refcount_log=refcount_log)
 
     def __del__(self):
-        print "Deleting stacK"
         self.stack = None
-        print "Closing fd"
+        self.openfiles=None
         # On destruction close the underlying file.
         os.close(self.fd)
 
     def _grow(self, chunksize):
-        print "grow"
         # Use a file lock to atomically allocate a new chunk of
         # (at first sparse) file data.
         l = _RaiiFLock(fd=self.fd)
@@ -215,7 +199,6 @@ class Repository:
     # It multiple instances of MattockFS use the smae repository,
     # sync archive size with the underlying file size.
     def multi_sync(self):
-        print "multisync"
         cursize = os.lseek(self.fd, 0, os.SEEK_END)
         grown = cursize - self.top.size
         self.top.grow(chunk=grown)
@@ -390,7 +373,6 @@ class Repository:
         return -errno.EIO
 
     def flush(self):
-        print "fsync"
         return os.fsync(self.fd)
 
     # Close a file.
