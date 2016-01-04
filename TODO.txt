@@ -8,7 +8,7 @@ TODO for first beta:
   + longpathmap        (70%)       -         OK       OK     pep8
   + carvpath           (72%)       -         -        -      -
   + pymattockfs        (66%)       -         -        -      -
-  + refcount_stack     (61%)       -         -        -      -
+  + refcount_stack     (61%)       -         -        -      pep8
 
 Todo for second beta:
 * Unified logging facility.
