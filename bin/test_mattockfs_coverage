@@ -1,0 +1,2 @@
+#!/bin/bash
+coverage html --omit='/usr/local/lib/python2.7/dist-packages/redis-2.10.5-py2.7.egg/redis/*,/usr/local/lib/python2.7/dist-packages/fadvise/*'
