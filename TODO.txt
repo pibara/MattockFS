@@ -4,7 +4,7 @@ TODO for first beta:
   + provenance_log     (97%)            OK          pep8
   + anycast            (96%)            OK          -
   + opportunistic_hash (89%)            OK          pep8
-  + repository         (77%)            OK          -
+  + repository         (77%)            OK          pep8
   + carvpath           (72%)            TODO        -
   + longpathmap        (70%)            OK          pep8
   + pymattockfs        (66%)            TODO        -
