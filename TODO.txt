@@ -1,9 +1,10 @@
 TODO for first beta:
+* Track-down order of destruction bug.
 * Increase         code-coverage and cleanup+document code
   + provenance_log     (97%)            OK
   + anycast            (96%)            OK
   + opportunistic_hash (89%)            OK
-  + repository         (77%)            TODO
+  + repository         (77%)            OK
   + carvpath           (72%)            TODO
   + longpathmap        (70%)            OK
   + pymattockfs        (66%)            TODO

@@ -408,7 +408,7 @@ class MattockFS(fuse.Fuse):
       self.selectre = re.compile(r'^[SVDWC]{1,5}$')
       self.sortre = re.compile(r'^(K|[RrOHDdWS]{1,6})$')
       self.archive_dd = dd
-      self.rep=repository.Repository(self.archive_dd,self.context,ohash_log,refcount_log)
+      self.rep=repository.Repository(reppath=self.archive_dd,context=self.context,ohash_log=ohash_log,refcount_log=refcount_log)
       self.ms=anycast.Actors(rep=self.rep,journal=journal,provenance=provenance_log,context=self.context,stack=self.rep.stack,col=self.rep.col)
       self.topctl=TopCtl(self.rep,self.context)
       self.needinit=True
