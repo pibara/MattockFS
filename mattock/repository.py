@@ -183,7 +183,7 @@ class Repository:
 
     def __del__(self):
         self.stack = None
-        self.openfiles=None
+        self.openfiles = None
         # On destruction close the underlying file.
         os.close(self.fd)
 
