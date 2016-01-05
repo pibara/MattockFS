@@ -7,7 +7,7 @@ TODO for first beta:
   + repository         (77%)       -         OK       OK     pep8
   + longpathmap        (70%)       -         OK       OK     pep8
   + carvpath           (72%)       -         -        -      -
-  + pymattockfs        (66%)       -         -        -      -
+  + pymattockfs        (66%)       -         -        -      pep8
   + refcount_stack     (61%)       -         -        -      pep8
 
 Todo for second beta:
