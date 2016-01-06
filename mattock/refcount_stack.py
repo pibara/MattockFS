@@ -31,6 +31,7 @@
 import time
 
 
+# Default implementation of < for argument list.
 def _defaultlt(al1, al2):
     for index in range(0, len(al1)):
         if al1[index] < al2[index]:
@@ -40,19 +41,23 @@ def _defaultlt(al1, al2):
     return False
 
 
+# Sortable carvpath/arglist object that allows for custom sort to be used.
 class _CustomSortable:
     def __init__(self, carvpath, ltfunction, arglist):
         self.carvpath = carvpath
         self.ltfunction = ltfunction
         self.arglist = []
+        # Copy the values from the arglist that apply to the carvpath
         for somemap in arglist:
             if carvpath in somemap:
                 self.arglist.append(somemap[carvpath])
 
+    # Implemention of < that should make an array of these objects sortable.
     def __lt__(self, other):
-        return self.ltfunction(self.arglist, other.arglist)
+        return self.ltfunction(al1=self.arglist, al2=other.arglist)
 
 
+# The reference counting stack object.
 class CarvpathRefcountStack:
     def __init__(self, carvpathcontext, fadvise, ohashcollection,
                  refcount_log):
@@ -70,21 +75,24 @@ class CarvpathRefcountStack:
         self.fragmentrefstack.append(self.context.empty())
         self.log = open(refcount_log, "a", 0)
 
-    def carvpath_throttle_info(self, carvpath):
-        ent = self.context.parse(carvpath)
+    # Extract fadvise state infro on a single carvpath.
+    def carvpath_fadvise_info(self, carvpath):
+        ent = self.context.parse(path=carvpath)
         if (
           ent.totalsize == 0 or
           len(self.fragmentrefstack) == 0 or
           self.fragmentrefstack[0].totalsize == 0):
             overlapsize = 0
         else:
-            if len(self.fragmentrefstack) == 0:
-                return [0, ent.totalsize]
+            # Create a copy of the entity without any sparse in it.
             nonsparse = ent.copy(stripsparse=True)
-            overlapsize = nonsparse.overlap_size(self.fragmentrefstack[0])
+            # Calculate the overlap size between ent and refcount>0 data.
+            overlapsize = nonsparse.overlap_size(
+                            entity=self.fragmentrefstack[0])
         return [overlapsize, ent.totalsize - overlapsize]
 
-    def __str__(self):
+    # Serialize whole stack; for debug purposes only.
+    def __str__(self):  # pragma: no cover
         rval = ""
         for index in range(0, len(self.fragmentrefstack)):
             rval += ("   + L" +
@@ -100,29 +108,40 @@ class CarvpathRefcountStack:
                      "\n")
         return rval
 
-    def __hash__(self):
-        return hash(str(self))
+    # def __hash__(self):
+    #    return hash(str(self))
 
-    # Add a new entity to the box. Returns two entities:
+    # Add a new entity to the stack. Returns two entities:
     # 1) An entity with all fragments that went from zero to one reference
     #    count.(can be used for fadvise purposes)
     # 2) An entity with all fragments already in the box before add was
     #    invoked (can be used for opportunistic hashing purposes).
     def add_carvpath(self, carvpath):
         if carvpath in self.entityrefcount.keys():
+            # Each CarvPath exists on the stack only once.
             self.entityrefcount[carvpath] += 1
             ent = self.content[carvpath]
+            # Nothing was added.
             return [self.context.empty(), ent]
         else:
-            ent = self.context.parse(carvpath)
-            self.ohashcollection.add_carvpath(carvpath)
+            # A new carvpath entity needs a new opportunistic
+            # hashing state.
+            self.ohashcollection.add_carvpath(carvpath=carvpath)
+            # Create a sparse free entity from carvpath.
+            ent = self.context.parse(path=carvpath)
             ent.stripsparse()
             self.content[carvpath] = ent
+            # Start refcount at one for this carvpath
             self.entityrefcount[carvpath] = 1
-            r = self._stackextend(0, ent)
+            # Extend the stack with the non-sparse data from this carvpath.
+            r = self._stackextend(level=0, entity=ent)
             merged = r[0]
+            # Update the fadvise value for all refcount=0 -> refcount=1
+            # transitions.
             for fragment in merged:
-                self.fadvise(fragment.offset, fragment.size, True)
+                self.fadvise(offset=fragment.offset, size=fragment.size,
+                             willneed=True)
+            # Write to our refcount log file.
             self.log.write(str(time.time()) + ":+:" + str(merged)+"\n")
         return
 
@@ -132,76 +151,86 @@ class CarvpathRefcountStack:
     # 2) An entity with all fragments still remaining in the box.
     def remove_carvpath(self, carvpath):
         if carvpath not in self.entityrefcount.keys():
-            raise IndexError("Carvpath " + carvpath + " not found in box.")
+            raise IndexError("Carvpath " + carvpath +
+                             " not found on refcount stack.")
         self.entityrefcount[carvpath] -= 1
         if self.entityrefcount[carvpath] == 0:
+            # Reference count has reached zero, remove from content/refcount
             ent = self.content.pop(carvpath)
             del self.entityrefcount[carvpath]
-            self.ohashcollection.remove_carvpath(carvpath)
-            r = self._stackdiminish(len(self.fragmentrefstack)-1, ent)
+            # Remove carvpath as opportunistic hasing candidate
+            self.ohashcollection.remove_carvpath(carvpath=carvpath)
+            # Deminish the stack with the non-sparse parts of this carvpath.
+            r = self._stackdiminish(
+                        level=len(self.fragmentrefstack)-1,
+                        entity=ent)
             unmerged = r
             if unmerged is not None:
+                # If something has gone from refcount>0 to refcount=0,
+                # then update fadvise
                 for fragment in unmerged:
-                    self.fadvise(fragment.offset, fragment.size, False)
+                    self.fadvise(offset=fragment.offset, size=fragment.size,
+                                 willneed=False)
                 self.log.write(str(time.time()) + ":-:" + str(unmerged)+"\n")
         return
 
-    def _priority_customsort(self, params, ltfunction=_defaultlt,
+    # Pick the best job after custom sorting.
+    def _priority_custompick(self, params, ltfunction=_defaultlt,
                              intransit=None, reverse=False):
-        Rmap = {}
-        rmap = {}
-        omap = {}
-        dmap = {}
-        smap = {}
-        wmap = {}
+        # Set of maps to hand to use in custom sortable creation.
+        Rmap = {}  # R(efcount max)
+        rmap = {}  # r(efcount 1)
+        omap = {}  # O(ffset)
+        #          # FIXME: missing H
+        dmap = {}  # D(ensity maxrefcount)
+        #          # FIXME: missing 'd'
+        smap = {}  # S(ize smallest)
+        wmap = {}  # W(eighed average refcount)
+        # List of arguments for sorting, initially empty
         arglist = []
+        # Use intransit if its given, use all jobs if not.
         startset = intransit
         if startset is None:
             startset = set(self.content.keys())
         stacksize = len(self.fragmentrefstack)
+        # Process the seperate letters of the job selection policy string
         for letter in params:
             if letter == "R":
+                # Higest refcount level first down to the refcount=1 level
+                # untill we find some overlap.
                 looklevel = stacksize - 1
                 for index in range(looklevel, 0, -1):
                     hrentity = self.fragmentrefstack[index]
+                    # Search all overlaps at this level that are part of
+                    # the input set.
+                    bool somethingfound = False
                     for carvpath in startset:
                         if hrentity.overlaps(self.content[carvpath]):
                             Rmap[carvpath] = True
+                            somethingfound = True
                         else:
                             Rmap[carvpath] = False
-                    if len(Rmap) != 0:
+                    # If we have at least one match, break from for loop.
+                    if somethingfound:
                         break
+                # Append the Rmap to the argument list for use in sorting.
                 arglist.append(Rmap)
             else:
                 if letter == "r":
-                    if stacksize == 1:
+                    if stacksize > 0:
+                        # Only interested in refcount=1
                         hrentity = self.fragmentrefstack[0]
                         for carvpath in startset:
                             if hrentity.overlaps(self.content[carvpath]):
                                 rmap[carvpath] = True
                             else:
                                 rmap[carvpath] = False
-                        if len(rmap) != 0:
-                            break
-                    else:
-                        for index in range(1, stacksize):
-                            # f = lambda a, b: a and not b
-                            r = _fragapply(self.fragmentrefstack[index-1],
-                                           self.fragmentrefstack[index],
-                                           [lambda a, b: a and not b])
-                            hrentity = r[0]
-                            for carvpath in startset:
-                                if hrentity.overlaps(self.content[carvpath]):
-                                    rmap[carvpath] = True
-                                else:
-                                    rmap[carvpath] = False
-                            if len(rmap) != 0:
-                                break
                     arglist.append(rmap)
                 else:
-                    if letter == "O":
+                    if letter == "O":  # Offset
                         for carvpath in startset:
                             offset = None
+                            # Find fragment with the lowest offset.
                             for frag in self.content[carvpath].fragments:
                                 if (offset is None or
                                         frag.issparse is False and
@@ -210,26 +239,34 @@ class CarvpathRefcountStack:
                             omap[carvpath] = offset
                         arglist.append(omap)
                     else:
-                        if letter == "D":
+                        if letter == "D":  # Density
+                            # Start looking at top of stack
                             looklevel = stacksize - 1
                             for index in range(looklevel, 0, -1):
                                 hrentity = self.fragmentrefstack[index]
+                                hasmatch = False
                                 for carvpath in startset:
                                     if hrentity.overlaps(
                                       self.content[carvpath]):
+                                        # If overlaps: get+store density
                                         dmap[carvpath] = (
                                             self.content[carvpath].density(
-                                                hrentity))
+                                                entity=hrentity))
+                                        hasmatch = True
+                                    else:
+                                        dmap[carvpath] = 0.0
+                                if hasmatch:
+                                    break
                             arglist.append(dmap)
                         else:
-                            if letter == "S":
+                            if letter == "S":  # Size
                                 for carvpath in startset:
                                     if carvpath in self.content:
                                         smap[carvpath] = (
                                           self.content[carvpath].totalsize)
                                 arglist.append(smap)
                             else:
-                                if letter == "W":
+                                if letter == "W":  # Weighted average refcount
                                     for carvpath in startset:
                                         accumdensity = 0
                                         for index in range(
@@ -237,7 +274,8 @@ class CarvpathRefcountStack:
                                                len(self.fragmentrefstack)):
                                             accumdensity += (
                                               self.content[carvpath].density(
-                                                self.fragmentrefstack[index]))
+                                                entity=self.fragmentrefstack[
+                                                         index]))
                                         wmap[carvpath] = accumdensity
                                     arglist.append(wmap)
                                 else:
@@ -245,32 +283,34 @@ class CarvpathRefcountStack:
                                       "Invalid letter '" +
                                       letter +
                                       "' for pickspecial policy")
+        # Create a new array with CustomSortable objects.
         sortable = []
         for carvpath in startset:
             sortable.append(_CustomSortable(carvpath, ltfunction, arglist))
+        # Sort according to the pollicies.
         sortable.sort(reverse=reverse)
-        for wrapper in sortable:
-            yield wrapper.carvpath
+        return sortable[0]
 
-    def priority_custompick(self, params, ltfunction=_defaultlt,
-                            intransit=None, reverse=False):
-        for entity in self._priority_customsort(params, ltfunction, intransit,
-                                                reverse):
-            return entity  # A bit nasty but safes needles itterations.
-
+    # Extend the stack with fragments from entity.
+    # Recursive function starting at level zero.
     def _stackextend(self, level, entity):
+        # If level does not exist, create it as empty.
         if not (level < len(self.fragmentrefstack)):
             self.fragmentrefstack.append(self.context.empty())
         ent = self.fragmentrefstack[level]
+        # Merge with current level.
         res = ent.merge(entity)
         merged = res[1]
         unmerged = res[0]
+        # Recursively call self for next level with unmerged frags
         if (len(unmerged.fragments) != 0):
             self._stackextend(level + 1, unmerged)
         return [merged, unmerged]
 
+    # Deminish the stack with fragments from entity.
+    # Recursive function starting at highest level first.
     def _stackdiminish(self, level, entity):
-        # Start with unmerging at thiss level
+        # Start with unmerging at this level
         ent = self.fragmentrefstack[level]
         res = ent.unmerge(entity)
         unmerged = res[1]
@@ -282,7 +322,7 @@ class CarvpathRefcountStack:
         # If there are additional fragments to unmerge, look at processing
         # these
         if len(remaining.fragments) > 0:
-            # Should not happen at llevel zero.
+            # Should not happen at level zero.
             if level == 0:
                 raise RuntimeError(
                   "Data remaining after _stackdiminish at level 0")
@@ -290,6 +330,7 @@ class CarvpathRefcountStack:
             return self._stackdiminish(level - 1, remaining)
         else:
             if level == 0:
+                # At level zero, return the refcount1->refcount0 fragments.
                 return unmerged
             else:
                 return None

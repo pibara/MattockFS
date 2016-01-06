@@ -484,7 +484,7 @@ class CarvPathFile:
             return hashresult + ";" + offset
         if name == "user.fadvise_status":
             return ";".join(map(lambda x: str(x),
-                                self.actors.rep.stack.carvpath_throttle_info(
+                                self.actors.rep.stack.carvpath_fadvise_info(
                                   self.carvpath)))
 
     def setxattr(self, name, val):
