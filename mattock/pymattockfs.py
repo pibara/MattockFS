@@ -74,8 +74,12 @@ def defaultstat(mode=STAT_MODE_DIR_NOLIST, size=0):
     st.st_ctime = 0
     return st
 
+# Below is a set of helper structuring objects for different node types.
+# There are all constructed from the parsepath method.
 
-class NoEnt:
+
+# Invalid non existing entity, returns ENOENT on all methods.
+class NoEnt:  # pragma: no cover
     def getattr(self):
         return -errno.ENOENT
 
@@ -98,6 +102,7 @@ class NoEnt:
         return -errno.ENOENT
 
 
+# The file-system top directory.
 class TopDir:
     def getattr(self):
         return defaultstat(STAT_MODE_DIR)
@@ -113,23 +118,24 @@ class TopDir:
         yield fuse.Direntry("job")
         yield fuse.Direntry("mutable")
 
-    def readlink(self):
+    def readlink(self):  # pragma: no cover
         return -errno.EINVAL
 
-    def listxattr(self):
+    def listxattr(self):  # pragma: no xover
         return []
 
-    def getxattr(self, name, size):
+    def getxattr(self, name, size):  # pragma: no cover
         return -errno.ENODATA
 
-    def setxattr(self, name, val):
+    def setxattr(self, name, val):  # pragma: no cover
         return -errno.ENODATA
 
-    def open(self, flags, path):
+    def open(self, flags, path):  # pragma: no cover
         return -errno.EPERM
 
 
-class NoList:
+# One of the non listable directories.
+class NoList:  # pragma: no cover
     def getattr(self):
         return defaultstat(STAT_MODE_DIR_NOLIST)
 
@@ -152,6 +158,7 @@ class NoList:
         return -errno.EPERM
 
 
+# Top level mattockfs.ctl control file.
 class TopCtl:
     def __init__(self, rep, context):
         self.rep = rep
@@ -160,10 +167,10 @@ class TopCtl:
     def getattr(self):
         return defaultstat(STAT_MODE_FILE_RO)
 
-    def opendir(self):
+    def opendir(self):  # pragma: no cover
         return -errno.ENOTDIR
 
-    def readlink(self):
+    def readlink(self):  # pragma: no cover
         return -errno.EINVAL
 
     def listxattr(self):
@@ -172,22 +179,25 @@ class TopCtl:
 
     def getxattr(self, name, size):
         if name == "user.fadvise_status":
+            # Get fadvice info from the repository.
             return ";".join(map(lambda x: str(x),
                                 self.rep.getTopThrottleInfo()))
         if name == "user.full_archive":
+            # Get the current full archive carvpath from the repository.
             return "carvpath/" + str(self.rep.top.topentity) + ".raw"
         return -errno.ENODATA
 
-    def setxattr(self, name, val):
+    def setxattr(self, name, val):  # pragma: no cover
         if name in ("user.fadvise_status",
                     "user.full_archive"):
             return -errno.EPERM
         return -errno.ENODATA
 
-    def open(self, flags, path):
+    def open(self, flags, path):  # pragma: no cover
         return -errno.EPERM
 
 
+# A valid actor control file under $MP/actor/
 class ActorCtl:
     def __init__(self, mod):
         self.mod = mod
@@ -195,10 +205,10 @@ class ActorCtl:
     def getattr(self):
         return defaultstat(STAT_MODE_FILE_RO)
 
-    def opendir(self):
+    def opendir(self):  # pragma: no cover
         return -errno.ENOTDIR
 
-    def readlink(self):
+    def readlink(self):  # pragma: no cover
         return -errno.EINVAL
 
     def listxattr(self):
@@ -211,19 +221,25 @@ class ActorCtl:
 
     def getxattr(self, name, size):
         if name == "user.weight":
+            # Actor object attribute
             return str(self.mod.weight)
         if name == "user.overflow":
+            # Actor object overflow attribute
             return str(self.mod.overflow)
         if name == "user.anycast_status":
+            # Fetch actor anycast status
             return ";".join(map(lambda x: str(x), self.mod.throttle_info()))
         if name == "user.worker_count":
+            # Number of workers active for this actor.
             return str(self.mod.worker_count())
         if name == "user.reset":
             return "0"
         if name == "user.register_worker":
             if size == 0:
+                # Don't register on listxattr !
                 return 82
             else:
+                # Only register a new worker on getxattr
                 return "worker/" + self.mod.register_worker() + ".ctl"
         return -errno.ENODATA
 
@@ -233,6 +249,7 @@ class ActorCtl:
                 asnum = int(val)
             except ValueError:
                 return 0
+            # Set weight for actor.
             self.mod.weight = asnum
             return 0
         if name == "user.overflow":
@@ -240,6 +257,7 @@ class ActorCtl:
                 asnum = int(val)
             except ValueError:
                 return 0
+            # Set overflow for actor.
             self.mod.overflow = asnum
             return 0
         if name in ("user.anycast_status",
@@ -248,14 +266,17 @@ class ActorCtl:
             return -errno.EPERM
         if name == "user.reset":
             if val == "1":
+                # Force-nregister all of the actor's active workers.
                 self.mod.reset()
             return 0
         return -errno.ENODATA
 
-    def open(self, flags, path):
+    def open(self, flags, path):  # pragma: no cover
         return -errno.EPERM
 
 
+# Version of the actor control with reduced priviledges.
+# Meant for use by workers of other actors that need to do routing tasks.
 class ActorInf:
     def __init__(self, mod):
         self.mod = mod
@@ -263,10 +284,10 @@ class ActorInf:
     def getattr(self):
         return defaultstat(STAT_MODE_FILE_RO)
 
-    def opendir(self):
+    def opendir(self):  # pragma: no cover
         return -errno.ENOTDIR
 
-    def readlink(self):
+    def readlink(self):  # pragma: no cover
         return -errno.EINVAL
 
     def listxattr(self):
@@ -284,10 +305,11 @@ class ActorInf:
             return -errno.EPERM
         return -errno.ENODATA
 
-    def open(self, flags, path):
+    def open(self, flags, path):  # pragma: no cover
         return -errno.EPERM
 
 
+# Valid worker control-file under $MP/worker/
 class WorkerCtl:
     def __init__(self, worker, sortre, selectre):
         self.worker = worker
@@ -297,10 +319,10 @@ class WorkerCtl:
     def getattr(self):
         return defaultstat(STAT_MODE_FILE_RO)
 
-    def opendir(self):
+    def opendir(self):  # pragma: no cover
         return -errno.ENOTDIR
 
-    def readlink(self):
+    def readlink(self):  # pragma: no cover
         return -errno.EINVAL
 
     def listxattr(self):
@@ -318,8 +340,11 @@ class WorkerCtl:
             return "0"
         if name == "user.accept_job":
             if size == 0:
+                # Don't accidently accept jobs with listxattr.
                 return 77
             else:
+                # Accept a new job for worker and tranfer responsibility to
+                # worker.
                 job = self.worker.accept_job()
                 if job is None:
                     return -errno.ENODATA
@@ -330,25 +355,30 @@ class WorkerCtl:
         if name == "user.job_select_policy":
             ok = bool(self.sortre.search(val))
             if ok:
+                # Set the job select pollicy for this worker.
                 self.worker.job_select_policy = val
             return 0
         if name == "user.actor_select_policy":
             ok = bool(self.selectre.search(val))
             if ok:
+                # For a load balancer: set the module select policy.
                 self.worker.module_select_policy = val
             return 0
         if name == "user.unregister":
             if val == "1":
+                # Unregister as worker. A worker should do this prior
+                # to process exit!
                 self.worker.unregister()
             return 0
-        if name == "user.accept_job":
+        if name == "user.accept_job":  # pragma: no cover
             return -errno.EPERM
         return -errno.ENODATA
 
-    def open(self, flags, path):
+    def open(self, flags, path):  # pragma: no cover
         return -errno.EPERM
 
 
+# Valid job control-file under $MP/job/
 class JobCtl:
     def __init__(self, job):
         self.job = job
@@ -356,10 +386,10 @@ class JobCtl:
     def getattr(self):
         return defaultstat(STAT_MODE_FILE_RO)
 
-    def opendir(self):
+    def opendir(self):  # pragma: no cover
         return -errno.ENOTDIR
 
-    def readlink(self):
+    def readlink(self):  # pragma: no cover
         return -errno.EINVAL
 
     def listxattr(self):
@@ -372,10 +402,13 @@ class JobCtl:
 
     def getxattr(self, name, size):
         if name == "user.routing_info":
-            return self.job.actorname + ";" + self.job.router_state
-        if name == "user.submit_child":
+            # Compose routing info string from actor name, router state
+            # and mime_type.
+            return (self.job.actorname + ";" + self.job.router_state +
+                    ";" + self.job.mime_type)
+        if name == "user.submit_child":  # pragma: no cover
             return ""
-        if name == "user.allocate_mutable":
+        if name == "user.allocate_mutable":  # pragma: no cover
             return ""
         if name == "user.current_mutable":
             rval = self.job.get_mutable()
@@ -384,12 +417,17 @@ class JobCtl:
             return "mutable/" + rval + ".dat"
         if name == "user.frozen_mutable":
             if size == 0:
+                # Don't accidentaly freeze a mutable with listxattr
                 return 81
+            # Freeze mutable, updates no longer permitted, sparse cap
+            # invalidated.
             frozen = self.job.get_frozen_mutable()
             if frozen is not None:
                 return "carvpath/" + self.job.get_frozen_mutable() + ".dat"
             return -errno.ENODATA
         if name == "user.job_carvpath":
+            # Get the carvapth of the job data with extension as indicated by
+            # worker that initiated the tool chain.
             return ("carvpath/" +
                     self.job.carvpath + "." + self.job.file_extension)
         return -errno.ENODATA
@@ -399,27 +437,32 @@ class JobCtl:
             if ";" in val:
                 parts = val.split(";")
                 if self.job.actors.validactorname(parts[0]):
-                    self.job.next_hop(parts[0], parts[1])
+                    # Mark job as done for this module and forward to next
+                    # actor in tool chain.
+                    self.job.next_hop(actor=parts[0], state=parts[1])
             return 0
         if name == "user.submit_child":
             parts = val.split(";")
             if len(parts) == 5:
                 # carvpath, nexthop, routerstate, mime, ext
-                self.job.submit_child(parts[0], parts[1], parts[2], parts[3],
-                                      parts[4])
+                self.job.submit_child(carvpath=parts[0], nexthop=parts[1],
+                                      routerstate=parts[2], mimetype=parts[3],
+                                      extension=parts[4])
             return 0
         if name == "user.allocate_mutable":
-            self.job.create_mutable(int(val))
+            # Create a mutable of the given size.
+            self.job.create_mutable(msize=int(val))
             return 0
         if name in ("user.frozen_mutable",
-                    "user.job_carvpath"):
+                    "user.job_carvpath"):  # pragma: no cover
             return -errno.EPERM
         return -errno.ENODATA
 
-    def open(self, flags, path):
+    def open(self, flags, path):  # pragma: no cover
         return -errno.EPERM
 
 
+# A valid mutable data temporary under $MP/mutable
 class MutableCtl:
     def __init__(self, carvpath, rep, context):
         self.rep = rep
@@ -427,45 +470,50 @@ class MutableCtl:
         self.context = context
 
     def getattr(self):
+        # Return base stat with proper size attribute.
         size = self.context.parse(self.carvpath).totalsize
         return defaultstat(STAT_MODE_FILE_RO, size)
 
-    def opendir(self):
+    def opendir(self):  # pragma: no cover
         return -errno.ENOTDIR
 
-    def readlink(self):
+    def readlink(self):  # pragma: no cover
         return -errno.EINVAL
 
-    def listxattr(self):
+    def listxattr(self):  # pragma: no cover
         return []
 
-    def getxattr(self, name, size):
+    def getxattr(self, name, size):  # pragma: no cover
         return -errno.ENODATA
 
-    def setxattr(self, name, val):
+    def setxattr(self, name, val):  # pragma: no cover
         return -errno.ENODATA
 
     def open(self, flags, path):
-        return self.rep.open(self.carvpath, path)
+        # Register path and carvpath as opened.
+        return self.rep.open(carvpath=self.carvpath, path=path)
 
 
+# Normal CarvPath file under $MP/carvath/
 class CarvPathFile:
     def __init__(self, carvpath, rep, context, actors):
         self.carvpath = carvpath
         self.rep = rep
         self.context = context
         self.actors = actors
+        # Can't open a file with any of these flags set.
         self.badflags = (os.O_WRONLY | os.O_RDWR | os.O_APPEND | os.O_CREAT |
                          os.O_TRUNC | os.O_EXCL)
 
     def getattr(self):
+        # Return standard read only file stat with proper size attribute.
         size = self.context.parse(self.carvpath).totalsize
         return defaultstat(STAT_MODE_FILE_RO, size)
 
-    def opendir(self):
+    def opendir(self):  # pragma: no cover
         return -errno.ENOTDIR
 
-    def readlink(self):
+    def readlink(self):  # pragma: no cover
         return -errno.EINVAL
 
     def listxattr(self):
@@ -476,6 +524,8 @@ class CarvPathFile:
         if name == "user.opportunistic_hash":
             offset = "0"
             hashresult = ""
+            # Return opportunistic hashing info if carvpath in any active
+            # toolchain.
             if self.carvpath in self.actors.rep.stack.ohashcollection.ohash:
                 ohash = self.actors.rep.stack.ohashcollection.ohash[
                           self.carvpath].ohash
@@ -483,22 +533,26 @@ class CarvPathFile:
                 hashresult = ohash.result
             return hashresult + ";" + offset
         if name == "user.fadvise_status":
+            # Return fadvise status for this single carvpath.
             return ";".join(map(lambda x: str(x),
                                 self.actors.rep.stack.carvpath_fadvise_info(
-                                  self.carvpath)))
+                                  carvpath=self.carvpath)))
 
-    def setxattr(self, name, val):
+    def setxattr(self, name, val):  # pragma: no cover
         if name in ("user.opportunistic_hash",
                     "user.fadvise_status"):
             return -errno.EPERM
         return -errno.ENODATA
 
     def open(self, flags, path):
+        # Make sure file is opened read-only
         if (flags & self.badflags) != 0:
             return -errno.EPERM
+        # Register file as opened with the repository.
         return self.rep.open(self.carvpath, path)
 
 
+# For two (and more) level CarvPaths, symbolic link at level two.
 class CarvPathLink:
     def __init__(self, cp, ext):
         if ext is None:
@@ -509,34 +563,36 @@ class CarvPathLink:
     def getattr(self):
         return defaultstat(STAT_MODE_LINK)
 
-    def opendir(self):
+    def opendir(self):  # pragma: no cover
         return -errno.ENOTDIR
 
     def readlink(self):
         return self.link
 
-    def listxattr(self):
+    def listxattr(self):  # pragma: no cover
         return []
 
-    def getxattr(self, name, size):
+    def getxattr(self, name, size):  # pragma: no cover
         return -errno.ENODATA
 
-    def setxattr(self, name, val):
+    def setxattr(self, name, val):  # pragma: no cover
         return -errno.ENODATA
 
-    def open(self, flags, path):
+    def open(self, flags, path):  # pragma: no cover
         return -errno.EPERM
 
 
+# The actual FUSE MattockFS file-system.
 class MattockFS(fuse.Fuse):
     def __init__(self, dash_s_do, version, usage, dd, lpdb, journal,
                  provenance_log, ohash_log, refcount_log):
         super(MattockFS, self).__init__(version=version, usage=usage,
                                         dash_s_do=dash_s_do)
         self.longpathdb = lpdb
-        self.context = carvpath.Context(self.longpathdb)
+        self.context = carvpath.Context(lpmap=self.longpathdb)
         self.topdir = TopDir()
         self.nolistdir = NoList()
+        # Regular expressions for select policies.
         self.selectre = re.compile(r'^[SVDWC]{1,5}$')
         self.sortre = re.compile(r'^(K|[RrOHDdWS]{1,6})$')
         self.archive_dd = dd
@@ -552,51 +608,64 @@ class MattockFS(fuse.Fuse):
             context=self.context,
             stack=self.rep.stack,
             col=self.rep.col)
-        self.topctl = TopCtl(self.rep, self.context)
+        self.topctl = TopCtl(rep=self.rep, context=self.context)
         self.needinit = True
 
+    # Helper used by multiple fuse hooks to create one of the node type
+    # objects above.
     def parsepath(self, path):
         if path == "/":
             return self.topdir
         tokens = path[1:].split("/")
+        # MattockFS goes 3 levels deep at most.
         if len(tokens) > 3:
             return None
+        # These are the only possible level one token values.
         if tokens[0] in ("carvpath",
                          "actor",
                          "worker",
                          "job",
                          "mutable",
                          "mattockfs.ctl"):
+            # Only the carvpath directory does to 3 levels deep.
             if len(tokens) > 2 and tokens[0] != "carvpath":
                 return NoEnt()
             if len(tokens) == 1:
                 if tokens[0] == "mattockfs.ctl":
                     return self.topctl
+                # All level 1 directories are unlistable.
                 return self.nolistdir
             if tokens[0] == "carvpath":
                 lastpart = tokens[1].split(".")
+                # At most one dot in valid carvpath.
                 if len(lastpart) > 2:
                     return NoEnt()
                 topcp = lastpart[0]
-                if not self.rep.validcarvpath(topcp):
+                # The level 2 token (without extension) must be valid carvpath
+                if not self.rep.validcarvpath(cp=topcp):
                     return NoEnt()
                 if len(tokens) == 2:
                     if len(lastpart) == 2:
-                        return CarvPathFile(topcp, self.rep,
-                                            self.context, self.ms)
-                    if len(lastpart) > 2:
-                        return NoEnt()
+                        # Anything with an extension is a file.
+                        return CarvPathFile(carvpath=topcp,
+                                            rep=self.rep,
+                                            context=self.context,
+                                            actors=self.ms)
+                    # Without an extension its a directory for a multi level
+                    # carvpath annotation to be resolved.
                     return self.nolistdir
                 # must be 3 now
                 lastpart = tokens[2].split(".")
+                # Again, only one dot in a valid carvpath.
                 if len(lastpart) > 2:
                     return NoEnt()
                 ext = None
                 if len(lastpart) == 2:
                     ext = lastpart[1]
-                link = self.rep.flatten(topcp, lastpart[0])
+                # Flatten the multi-level carvpath into a single level one.
+                link = self.rep.flatten(basecp=topcp, subcp=lastpart[0])
                 if link is not None:
-                    return CarvPathLink(link, ext)
+                    return CarvPathLink(cp=link, ext=ext)
                 return NoEnt()
             lastpart = tokens[1].split(".")
             if len(lastpart) != 2:
@@ -605,67 +674,83 @@ class MattockFS(fuse.Fuse):
             extension = lastpart[1]
             if extension == "ctl":
                 if tokens[0] == "actor":
-                    if self.ms.validactorname(handle):
-                        return ActorCtl(self.ms[handle])
+                    if self.ms.validactorname(actorname=handle):
+                        return ActorCtl(mod=self.ms[handle])
                     return NoEnt()
                 if tokens[0] == "worker":
-                    if self.ms.validworkercap(handle):
-                        return WorkerCtl(self.ms.workers[handle], self.sortre,
-                                         self.selectre)
+                    if self.ms.validworkercap(handle=handle):
+                        return WorkerCtl(worker=self.ms.workers[handle],
+                                         sortre=self.sortre,
+                                         selectre=self.selectre)
                     return NoEnt()
                 if tokens[0] == "job":
-                    if self.ms.validjobcap(handle):
-                        return JobCtl(self.ms.jobs[handle])
+                    if self.ms.validjobcap(handle=handle):
+                        return JobCtl(job=self.ms.jobs[handle])
                     return NoEnt()
                 return NoEnt()
             if extension == "dat" and tokens[0] == "mutable":
-                if self.ms.validnewdatacap(handle):
-                    return MutableCtl(self.ms.newdata[handle], self.rep,
-                                      self.context)
+                if self.ms.validnewdatacap(handle=handle):
+                    return MutableCtl(carvpath=self.ms.newdata[handle],
+                                      rep=self.rep,
+                                      contexy=self.context)
             if extension == "inf" and tokens[0] == "actor":
-                if self.ms.validactorname(handle):
-                    return ActorInf(self.ms[handle])
+                if self.ms.validactorname(actorname=handle):
+                    # Reduced priviledge version of the actor ctl file.
+                    return ActorInf(mod=self.ms[handle])
                 return NoEnt()
             return NoEnt()
         return NoEnt()
 
+    # Forward getattr to parsepath result.
     def getattr(self, path):
         return self.parsepath(path).getattr()
 
+    # Do nothing on setattr.
     def setattr(self, path, hmm):
         return 0
 
+    # Forward
     def opendir(self, path):
         return self.parsepath(path).opendir()
 
+    # Forward
     def readdir(self, path, offset):
         return self.parsepath(path).readdir()
 
+    # Do nothing on releasedir.
     def releasedir(self, path):
         return 0
 
+    # Forward
     def readlink(self, path):
         return self.parsepath(path).readlink()
 
+    # Forward
     def listxattr(self, path, huh):
         return self.parsepath(path).listxattr()
 
     def getxattr(self, path, name, size):
         rval = self.parsepath(path).getxattr(name, size)
         if size == 0:
+            # If field size is requested but forwarding yields string:
+            # convert to size.
             if not isinstance(rval, int):
                 rval = len(rval)
         return rval
 
+    # Forward
     def setxattr(self, path, name, val, more):
         return self.parsepath(path).setxattr(name, val)
 
     def main(self, args=None):
         fuse.Fuse.main(self, args)
 
+    # Forward
     def open(self, path, flags):
         rval = self.parsepath(path).open(flags, path)
         return rval
+
+    # Forward open file operations to repository.
 
     def release(self, path, fh):
         return self.rep.close(path)
@@ -677,6 +762,7 @@ class MattockFS(fuse.Fuse):
         rval = self.rep.write(path, offset, data)
         return rval
 
+    # We don't allow any truncating.
     def truncate(self, path, len, fh=None):
         return -errno.EPERM
 
@@ -684,8 +770,11 @@ class MattockFS(fuse.Fuse):
         self.rep.flush()
 
 
-def run():
+# File-system startup
+def run(mattockitem="0"):
     mattockdir = "/var/mattock"
+    # Make sure the required directory structure exists for archive log and
+    # mount.
     if not os.path.isdir(mattockdir):
         print ("ERROR: ",
                mattockdir,
@@ -703,7 +792,7 @@ def run():
                        mattockdir,
                        "should be owned by the mattockfs user")
                 sys.exit()
-    mattockitem = "0"
+    # Now look at the specified mattock item (default "0" and its files)
     mp = mattockdir + "/mnt/" + mattockitem
     if not os.path.isdir(mp):
         try:
@@ -714,11 +803,16 @@ def run():
                    ";",
                    mattockdir + "/mnt should be owned by the mattockfs user")
             sys.exit()
+    # The raw archive that MattockFS runs on top of.
     dd = mattockdir + "/archive/" + mattockitem + ".dd"
+    # Journal file and provenance log.
     journal = mattockdir + "/log/" + mattockitem + ".journal"
     provenance_log = mattockdir + "/log/" + mattockitem + ".provenance"
+    # Log for opportunistic hashing results.
     ohash_log = mattockdir + "/log/" + mattockitem + ".ohash"
+    # Debugging log for reference count logging.
     refcount_log = mattockdir + "/log/" + mattockitem + ".refcount"
+    # Mountpoint.
     mp = mattockdir + "/mnt/" + mattockitem
     sys.argv.append(mp)
     mattockfs = MattockFS(
@@ -734,6 +828,7 @@ def run():
     mattockfs.parse(errex=1)
     mattockfs.flags = 0
     mattockfs.multithreaded = 0
+    # Actually run the file system.
     mattockfs.main()
 
 if __name__ == '__main__':
