@@ -27,7 +27,7 @@ def test_bogus_path(base):
 
 
 def test_add_data_to_job(job):
-    imutable = job.childdata(1000000)
+    mutable = job.childdata(1000000)
     with open(mutable, "r+") as f:
         f.seek(0)
         f.write("harhar")
@@ -65,6 +65,7 @@ def test_anycast_coverage(mp):
     if kickstartjob is None:
         print ("FAIL: polling kickstart should always yield a job," +
                "None returned")
+        return
     if kickstartjob.frozen_childdata() is not None:
         print ("FAIL: shouldn't be able to freeze child data that was never" +
                "allocated.")
@@ -95,6 +96,7 @@ def test_anycast_coverage(mp):
     lbjob = loadbalance.poll_job()
     if lbjob is None:
         print "FAIL: Problem fetching job with loadbalance"
+        return
     else:
         lbjob.forward("bar", "routerstate789")
     if kickstartjob.frozen_childdata() is None:

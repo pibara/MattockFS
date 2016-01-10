@@ -174,16 +174,80 @@ class CarvpathRefcountStack:
                 self.log.write(str(time.time()) + ":-:" + str(unmerged)+"\n")
         return
 
+    def _create_sortmap_R(self, startset):
+        Rmap = {}
+        # Higest refcount level first down to the refcount=1 level
+        # untill we find some overlap.
+        stacksize = len(self.fragmentrefstack)
+        looklevel = stacksize - 1
+        somethingfound = False
+        for index in range(looklevel, 0, -1):
+            hrentity = self.fragmentrefstack[index]
+            # Search all overlaps at this level that are part of
+            # the input set.
+            for carvpath in startset:
+                if hrentity.overlaps(self.content[carvpath]):
+                    Rmap[carvpath] = True
+                    somethingfound = True
+                else:
+                    Rmap[carvpath] = False
+            # If we have at least one match, break from for loop.
+            if somethingfound:
+                break
+        if stacksize == 0:
+            for carvpath in startset:
+                Rmap[carvpath]=False  
+        return Rmap
+
+    def _create_sortmap_r(self, startset):
+        rmap = {}
+        stacksize = len(self.fragmentrefstack)
+        if stacksize > 0:
+            # Only interested in refcount=1
+            hrentity = self.fragmentrefstack[0]
+            for carvpath in startset:
+                if hrentity.overlaps(self.content[carvpath]):
+                    rmap[carvpath] = True
+                else:
+                    rmap[carvpath] = False
+        else:
+            for carvpath in startset:
+                rmap[catvpath] = False
+        return rmap
+
+    def _create_sortmap_O(self, startset):
+        omap = {}
+        for carvpath in startset:
+            offset = None
+            # Find fragment with the lowest offset.
+            for frag in self.content[carvpath].fragments:
+                if (offset is None or frag.issparse is False and frag.offset < offset):
+                    offset = frag.offset
+            omap[carvpath] = offset
+        return omap
+
+    def _create_sortmap_D(self, startset):
+        pass
+
+    def _create_sortmap_S(self, startset):
+        pass
+
+    def _create_sortmap_W(self, startset):
+        pass
+
+    def _create_sortmap_d(self, startset):
+        pass
+
+    def _create_sortmap_H(self, startset):
+        pass
+
     # Pick the best job after custom sorting.
-    def _priority_custompick(self, params, ltfunction=_defaultlt,
+    def priority_custompick(self, params, ltfunction=_defaultlt,
                              intransit=None, reverse=False):
         # Set of maps to hand to use in custom sortable creation.
-        Rmap = {}  # R(efcount max)
-        rmap = {}  # r(efcount 1)
-        omap = {}  # O(ffset)
-        #          # FIXME: missing H
-        dmap = {}  # D(ensity maxrefcount)
-        #          # FIXME: missing 'd'
+        hmap = {}  # H(ashing offset)
+        Dmap = {}  # D(ensity maxrefcount)
+        dmap = {}  # d(ensity refcount > 0)
         smap = {}  # S(ize smallest)
         wmap = {}  # W(eighed average refcount)
         # List of arguments for sorting, initially empty
@@ -196,48 +260,13 @@ class CarvpathRefcountStack:
         # Process the seperate letters of the job selection policy string
         for letter in params:
             if letter == "R":
-                # Higest refcount level first down to the refcount=1 level
-                # untill we find some overlap.
-                looklevel = stacksize - 1
-                for index in range(looklevel, 0, -1):
-                    hrentity = self.fragmentrefstack[index]
-                    # Search all overlaps at this level that are part of
-                    # the input set.
-                    bool somethingfound = False
-                    for carvpath in startset:
-                        if hrentity.overlaps(self.content[carvpath]):
-                            Rmap[carvpath] = True
-                            somethingfound = True
-                        else:
-                            Rmap[carvpath] = False
-                    # If we have at least one match, break from for loop.
-                    if somethingfound:
-                        break
-                # Append the Rmap to the argument list for use in sorting.
-                arglist.append(Rmap)
+                arglist.append(self._create_sortmap_R(startset=startset))
             else:
                 if letter == "r":
-                    if stacksize > 0:
-                        # Only interested in refcount=1
-                        hrentity = self.fragmentrefstack[0]
-                        for carvpath in startset:
-                            if hrentity.overlaps(self.content[carvpath]):
-                                rmap[carvpath] = True
-                            else:
-                                rmap[carvpath] = False
-                    arglist.append(rmap)
+                    arglist.append(self._create_sortmap_r(startset=startset))
                 else:
                     if letter == "O":  # Offset
-                        for carvpath in startset:
-                            offset = None
-                            # Find fragment with the lowest offset.
-                            for frag in self.content[carvpath].fragments:
-                                if (offset is None or
-                                        frag.issparse is False and
-                                        frag.offset < offset):
-                                    offset = frag.offset
-                            omap[carvpath] = offset
-                        arglist.append(omap)
+                        arglist.append(self._create_sortmap_O(startset=startset)) 
                     else:
                         if letter == "D":  # Density
                             # Start looking at top of stack
@@ -249,15 +278,15 @@ class CarvpathRefcountStack:
                                     if hrentity.overlaps(
                                       self.content[carvpath]):
                                         # If overlaps: get+store density
-                                        dmap[carvpath] = (
+                                        Dmap[carvpath] = (
                                             self.content[carvpath].density(
                                                 entity=hrentity))
                                         hasmatch = True
                                     else:
-                                        dmap[carvpath] = 0.0
+                                        Dmap[carvpath] = 0.0
                                 if hasmatch:
                                     break
-                            arglist.append(dmap)
+                            arglist.append(Dmap)
                         else:
                             if letter == "S":  # Size
                                 for carvpath in startset:
@@ -279,10 +308,30 @@ class CarvpathRefcountStack:
                                         wmap[carvpath] = accumdensity
                                     arglist.append(wmap)
                                 else:
-                                    raise RuntimeError(
-                                      "Invalid letter '" +
-                                      letter +
-                                      "' for pickspecial policy")
+                                    if letter == "d": #Density
+                                        if stacksize > 0:
+                                            for carvpath in startset:
+                                                l=self.fragmentrefstack[0]
+                                                for carvpath in startset:
+                                                    if l.overlaps(
+                                                      self.content[carvpath]):
+                                                        dmap[carvpath] = (
+                                                          self.content[carvpath].density(
+                                                            entity=l))
+                                                    else:
+                                                        dmap[carvpath] = 0.0
+                                        arglist.append(dmap)
+                                    else:
+                                        if letter == "H":
+                                            for carvpath in startset:
+                                                offset = None
+                                                hmap[carvpath] = self.ohashcollection.hashing_offset(carvpath)
+                                            arglist.append(hmap)
+                                        else:
+                                            raise RuntimeError(
+                                              "Invalid letter '" +
+                                              letter +
+                                              "' for pickspecial policy")
         # Create a new array with CustomSortable objects.
         sortable = []
         for carvpath in startset:

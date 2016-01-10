@@ -86,7 +86,7 @@ class _CarvPathFile:
 # Object representing a private Job control file under $MP/job/<CAP>.ctl
 class _Job:
     def __init__(self, mp, job_ctl, context):
-        self.isdone is False  # Keep from doing same cleanup twice.
+        self.isdone = False  # Keep from doing same cleanup twice.
         self.mp = mp
         self.ctl = xattr.xattr(job_ctl)
         # Proactively fetch routing state from previous actor.
@@ -210,11 +210,11 @@ class _Context:
     def poll_job(self):
         try:
             job = self.worker_ctl["user.accept_job"]
-            return _Job(mp=self.mountpoint,
-                        job_ctl=self.mountpoint + "/" + job,
-                        context=self.context)
         except:
             return None
+        return _Job(mp=self.mountpoint,
+                    job_ctl=self.mountpoint + "/" + job,
+                    context=self.context)
 
     # Get the next job, if non is available, keep polling until one is.
     def get_job(self):

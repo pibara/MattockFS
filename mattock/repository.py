@@ -115,7 +115,9 @@ class _OpenFile:
         readent = self.entity.subentity(
           childent=carvpath._Entity(lpmap=self.entity.longpathmap,
                                     maxfstoken=self.entity.maxfstoken,
-                                    a1=[carvpath.Fragment(offset, size)]),
+                                    fragments=[carvpath.Fragment(
+                                        offset=offset,
+                                        size=size)]),
           truncate=True)
         # Start with empty result.
         result = b''
@@ -123,7 +125,8 @@ class _OpenFile:
             datachunk = self.pread(chunk=chunk)  # Read chunk from  offset
             result += datachunk  # Add chunk to result.
             self.ohashcollection.lowlevel_read_data(
-              offset=chunk.offset, data=datachunk)  # Do opportunistic hasing
+              offset=chunk.offset,
+              data=datachunk)  # Do opportunistic hasing
             #                                         if possible.
         return result
 
@@ -133,7 +136,9 @@ class _OpenFile:
         writeent = self.entity.subentity(
           childent=carvpath._Entity(lpmap=self.entity.longpathmap,
                                     maxfstoken=self.entity.maxfstoken,
-                                    a1=[carvpath.Fragment(offset, size)]),
+                                    fragments=[carvpath.Fragment(
+                                        offset=offset,
+                                        size=size)]),
           truncate=True)
         # Start of at a zero data index wigin our writale entity.
         dataindex = 0
@@ -212,8 +217,9 @@ class Repository:
         # chunk.
         cp = str(carvpath._Entity(lpmap=self.context.longpathmap,
                                   maxfstoken=self.context.maxfstoken,
-                                  a1=[carvpath.Fragment(chunkoffset,
-                                                        chunksize)]))
+                                  fragments=[
+                                     carvpath.Fragment(offset=chunkoffset,
+                                                       size=chunksize)]))
         return cp
 
     # Return the size of the part of the repository with a refcount > 0
@@ -273,7 +279,7 @@ class Repository:
             # Ask the reference counting stack for the best carvpath for the
             # pollicy.
             bestcp = self.stack.priority_custompick(params=sort_policy,
-                                                    intransit=cp2key.keys())
+                                                    intransit=cp2key.keys()).carvpath
             # Return the anycast entry.
             return cp2key[bestcp]
         return None

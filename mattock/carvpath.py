@@ -53,17 +53,20 @@ class Fragment:
     # or with an offset and size.
     # A fragment carvpath token string is formatted like '<offset>+<size>',
     # for example : '2048+512'
-    def __init__(self, a1, a2=None):
-        if isinstance(a1, str):
-            (self.offset, self.size) = map(int, a1.split('+'))
+    def __init__(self, offset=None, size=None, fragpath=None):
+        if fragpath is None:
+            if offset is None or size is None:
+                raise RuntimeError(
+                       "No valid arguments for Fragment constructor")
+            self.offset = offset
+            self.size = size
         else:
-            self.offset = a1
-            self.size = a2
+            (self.offset, self.size) = map(int, fragpath.split('+'))
 
     def copy(self):
         if self.size > 0:
-            return Fragment(self.offset, self.size)
-        return Sparse(0)
+            return Fragment(offset=self.offset, size=self.size)
+        return Sparse(size=0)
 
     # Casting Fragment to a carvpath string
     def __str__(self):
@@ -122,14 +125,17 @@ class Sparse:
     # with a size.
     # A sparse carvpath token string has the form 'S<size>',
     # for example: 'S8192'
-    def __init__(self, a1):
-        if isinstance(a1, str):
-            self.size = int(a1[1:])
+    def __init__(self, size=None, sparsepath=None):
+        if size is None:
+            if sparsepath is None:
+                raise RuntimeError(
+                        "No valid arguments for Fragment constructor")
+            self.size = int(sparsepath[1:])
         else:
-            self.size = a1
+            self.size = size
 
     def copy(self):
-        return Sparse(self.size)
+        return Sparse(size=self.size)
 
     # Casting to a carvpath string
     def __str__(self):
@@ -174,11 +180,13 @@ class Sparse:
 # carvpath fragment/sparse token.
 def _asfrag(fragstring):
     if fragstring[0] == 'S':
-        return Sparse(fragstring)
+        return Sparse(sparsepath=fragstring)
     else:
-        rval = Fragment(fragstring)
+        rval = Fragment(fragpath=fragstring)
+        # If we have a zero size fragment, represent as
+        # zero size sparse instead.
         if rval.size == 0:
-            return Sparse("S0")
+            return Sparse(size=0)
         return rval
 
 
@@ -193,50 +201,44 @@ class _Entity:
     # An _Entity carvpath consists of one or more Fragment and/or Sparse
     # carvpath tokens seperated by a '_' character.for example:
     #  '0+4096_S8192_4096+4096'
-    def __init__(self, lpmap, maxfstoken, a1=None):
+    def __init__(self, lpmap, maxfstoken, carvpath=None, fragments=None):
         self.longpathmap = lpmap
         self.maxfstoken = maxfstoken
-        fragments = []
+        if fragments is None:
+            fragments = []
         self.fragments = []
-        if isinstance(a1, str):
+        if carvpath is not None:
             # Any carvpath starting with a capital D must be looked up in our
             # longtoken database
-            if a1[0] == 'D':
-                carvpath = self.longpathmap[a1]
-            else:
-                carvpath = a1
+            if carvpath[0] == 'D':
+                carvpath = self.longpathmap[carvpath]
             # Apply  _asfrag helper function to each fragment in the carvpath
             # and use it to initialize our fragments list
             fragments = map(_asfrag, carvpath.split("_"))
-        else:
-            if isinstance(a1, list):
-                # Take the list of fragments as handed in the constructor
-                fragments = a1
-            else:
-                if a1 is None:
-                    # We are creating an empty zero fragment entity here
-                    fragments = []
-                else:
-                    raise TypeError(
-                     'Entity constructor needs string or list of fragments ' +
-                     str(a1))
         self.totalsize = 0
+        # Add the fragments one at a time.
         for frag in fragments:
-            self.unaryplus(frag)
+            self.unaryplus(other=frag)
 
+    # Copy with or without sparse sections.
     def copy(self, stripsparse=False):
         if stripsparse:
             fragments = []
             for frag in self.fragments:
                 if frag.issparse() == False:
                     fragments.append(frag.copy())
-            return _Entity(self.longpathmap, self.maxfstoken, fragments)
+            return _Entity(lpmap=self.longpathmap,
+                           maxfstoken=self.maxfstoken,
+                           fragments=fragments)
         else:
             return _Entity(
-                    self.longpathmap,
-                    self.maxfstoken,
-                    copy.deepcopy(self.fragments))
+                    lpmap=self.longpathmap,
+                    maxfstoken=self.maxfstoken,
+                    fragments=copy.deepcopy(self.fragments))
 
+    # Use a secure hash function to get a shorter representation of carvpath.
+    # Than register the shorter representation  in redis so we can find the
+    # original carvpath back from other processes.
     def _asdigest(self, path):
         rval = "D" + blake2b(path.encode(), digest_size=32).hexdigest()
         self.longpathmap[rval] = path
@@ -256,9 +258,9 @@ class _Entity:
     # by creating a first fragment with offset zero.
     def grow(self, chunksize):
         if len(self.fragments) == 0:
-            self.fragments.append(Fragment(0, chunksize))
+            self.fragments.append(Fragment(offset=0, size=chunksize))
         else:
-            self.fragments[-1].grow(chunksize)
+            self.fragments[-1].grow(sz=chunksize)
         self.totalsize += chunksize
 
     # Casting to a carvpath string
@@ -279,27 +281,37 @@ class _Entity:
     def __hash__(self):
         return hash(str(self))
 
+    # Implementation of < for Entity objects
     def __lt__(self, other):
+        # Empty entities have the lowest value
         if self.totalsize == 0 and other.totalsize > 0:
             return True
         if other.totalsize == 0:
             return False
+        # Compare at most the number of fragments determined by the
+        # entity with the fewest fragments.
         ownfragcount = len(self.fragments)
         otherfragcount = len(other.fragments)
         sharedfragcount = ownfragcount
+        if otherfragcount < sharedfragcount:
+            sharedfragcount = otherfragcount
         for index in range(0, sharedfragcount):
+            # Sparse entries have a lower value than fragments.
             if (self.fragments[index].issparse() !=
                other.fragments[index].issparse()):
                 return self.fragments[index].issparse()
             if (not self.issparse()):
+                # Lower fragment offset means lower sort value.
                 if (self.fragments[index].offset !=
                    other.fragments[index].offset):
                     return (self.fragments[index].offset <
                             other.fragments[index].offset)
+            # Lower fragment/sparse size means lower sort value.
             if self.fragments[index].size != other.fragments[index].size:
                 return (self.fragments[index].size <
                         other.fragments[index].size)
-        return False
+        # If eny of the entities has less fragments, the sort value is lower
+        return (ownfragcount < otherfragcount)
 
     def __gt__(self, other):
         return other < self
@@ -313,17 +325,24 @@ class _Entity:
     def __eq__(self, other):
         if not isinstance(other, _Entity):
             return False
+        # Total sizes need to be the same
         if self.totalsize != other.totalsize:
             return False
+        # Number of fragments need to be the same
         if len(self.fragments) != len(other.fragments):
             return False
+        # And every fragment needs to be the same as that fragment in the
+        # other entity.
         for index in range(0, len(self.fragments)):
+            # Either both need to be fragments or both have to be sparse.
             if (self.fragments[index].issparse() !=
                     other.fragments[index].issparse()):
                 return False
+            # For fragments the offset needs to be the same.
             if ((not self.fragments[index].issparse()) and
                self.fragments[index].offset != other.fragments[index].offset):
                 return False
+            # Finaly the size of fragment/sparse must be the same.
             if self.fragments[index].size != other.fragments[index].size:
                 return False
         return True
@@ -332,12 +351,12 @@ class _Entity:
         return not self == other
 
     # Python does not allow overloading of any operator+= ; this method
-    # pretends it does.
+    # pretends it does. Implements : ent += other.
     def unaryplus(self, other):
         if isinstance(other, _Entity):
             # We can either append a whole Entity
             for index in range(0, len(other.fragments)):
-                self.unaryplus(other.fragments[index])
+                self.unaryplus(other=other.fragments[index])
         else:
             # Or a single fragment.
             # If the new fragment is directly adjacent and of the same type,
@@ -349,7 +368,7 @@ class _Entity:
                 self.fragments[-1].size) ==
                other.getoffset())):
                 self.fragments[-1] = self.fragments[-1].copy()
-                self.fragments[-1].grow(other.size)
+                self.fragments[-1].grow(sz=other.size)
             else:
                 # Otherwise we append the new fragment.
                 self.fragments.append(other)
@@ -359,9 +378,9 @@ class _Entity:
     # Appending two entities together, merging the tails if possible.
     def __add__(self, other):
         # Express a+b in terms of operator+=
-        rval = _Entity(self.longpathmap, self.maxfstoken)
-        rval.unaryplus(this)
-        rval.unaryplus(other)
+        rval = _Entity(lpmap=self.longpathmap, maxfstoken=self.maxfstoken)
+        rval.unaryplus(other=this)
+        rval.unaryplus(other=other)
         return rval
 
     # Helper generator function for getting the per-fragment chunks for a
@@ -397,11 +416,11 @@ class _Entity:
                 # Yield the proper type of fragment
                 if chunksize > 0:
                     if parentfrag.issparse():
-                        yield Sparse(chunksize)
+                        yield Sparse(size=chunksize)
                     else:
                         yield Fragment(
-                               parentfrag.getoffset()+startoffset-start,
-                               chunksize)
+                               offset=parentfrag.getoffset()+startoffset-start,
+                               size=chunksize)
                     # Update startsize for the rest of our data
                     startsize -= chunksize
                 # Update the startoffset for the rest of our data
@@ -415,19 +434,19 @@ class _Entity:
 
     # Get the projection of an entity as sub entity of an other entity.
     def subentity(self, childent, truncate=False):
-        subentity = _Entity(self.longpathmap, self.maxfstoken)
+        subentity = _Entity(lpmap=self.longpathmap, maxfstoken=self.maxfstoken)
         for childfrag in childent.fragments:
             if childfrag.issparse():
-                subentity.unaryplus(childfrag)
+                subentity.unaryplus(other=childfrag)
             else:
-                for subfrag in self._subchunk(childfrag.offset,
-                                              childfrag.size,
-                                              truncate):
-                    subentity.unaryplus(subfrag)
+                for subfrag in self._subchunk(offset=childfrag.offset,
+                                              size=childfrag.size,
+                                              truncate=truncate):
+                    subentity.unaryplus(other=subfrag)
         return subentity
 
     # Python has no operator=, so we use assigtoself
-    def assigtoself(self, other):
+    def assigntoself(self, other):
         self.fragments = other.fragments
         self.totalsize = other.totalsize
 
@@ -436,44 +455,46 @@ class _Entity:
     # This is meant to be used for reference counting purposes inside of
     # the Box.
     def stripsparse(self):
-        newfragment = _Entity(self.longpathmap, self.maxfstoken)
+        newfragment = _Entity(lpmap=self.longpathmap,
+                              maxfstoken=self.maxfstoken)
         nosparse = []
         for i in range(len(self.fragments)):
             if self.fragments[i].issparse() == False:
                 nosparse.append(self.fragments[i])
         fragments = sorted(nosparse)
         for i in range(len(fragments)):
-            newfragment.unaryplus(fragments[i])
-        self.assigtoself(newfragment)
+            newfragment.unaryplus(other=fragments[i])
+        self.assigntoself(other=newfragment)
 
     # Merge an other sorted/striped entity and return two entities: One with
     # all fragments left unused and one with the fragments used for merging
     # into self.
     def merge(self, entity):
         rval = _merge_entities(self, entity)
-        self.assigtoself(rval[0])
+        self.assigntoself(other=rval[0])
         return rval[1:]
 
     # Opposit of the merge function.
     def unmerge(self, entity):
         rval = _unmerge_entities(self, entity)
-        self.assigtoself(rval[0])
+        self.assigntoself(other=rval[0])
         return rval[1:]
 
     def overlaps(self, entity):
-        return _fragapply(self, entity, (lambda a, b: a and b))
+        return _fragapply(ent1=self, ent2=entity, test=(lambda a, b: a and b))
 
     def overlap_size(self, entity):
         size1 = self.totalsize + entity.totalsize
         tent = entity.copy()
-        tent.merge(self)
+        tent.merge(entity=self)
         return size1 - tent.totalsize
 
     def density(self, entity):
-        r = _fragapply(self, entity, [(lambda a, b: a and b)])
+        r = _fragapply(ent1=self, ent2=entity, bflist=[(lambda a, b: a and b)])
         rval = float(r[0].totalsize)/float(self.totalsize)
         return rval
 
+    # The range of interest (roi)
     def getroi(self, from_offset):
         coffset = 0
         start = None
@@ -496,14 +517,14 @@ class _Entity:
 # Helper functions for mapping merge and unmerge to the higher order
 # _fragapply function.
 def _merge_entities(ent1, ent2):
-    return _fragapply(ent1, ent2, [
+    return _fragapply(ent1=ent1, ent2=ent2, bflist=[
               (lambda a, b: a or b),
               (lambda a, b: a and b),
               (lambda a, b: (not a) and b)])
 
 
 def _unmerge_entities(ent1, ent2):
-    return _fragapply(ent1, ent2, [
+    return _fragapply(ent1=ent1, ent2=ent2, bflist=[
               (lambda a, b: a and (not b)),
               (lambda a, b: (not a) and b),
               (lambda a, b: a and b)])
@@ -512,13 +533,11 @@ def _unmerge_entities(ent1, ent2):
 # Helper function for applying boolean lambda's to each ent1/ent2 overlapping
 # or non-overlapping fragment and returning an Entity with all fragments that
 # resolved to true for the coresponding lambda.
-def _fragapply(ent1, ent2, bflist):
+def _fragapply(ent1, ent2, bflist=None, test=None):
     # If our third argument is a lambda, use it as test instead.
-    if callable(bflist):
-        test = bflist
+    if test is not None:
         testmode = True
     else:
-        test = None
         testmode = False
     chunks = []
     foreignfragcount = len(ent2.fragments)
@@ -604,7 +623,8 @@ def _fragapply(ent1, ent2, bflist):
     # Create an array with Entity objects, one per lambda.
     rval = []
     for index in range(0, len(bflist)):
-        rval.append(_Entity(ent1.longpathmap, ent1.maxfstoken))
+        rval.append(_Entity(lpmap=ent1.longpathmap,
+                            maxfstoken=ent1.maxfstoken))
     # Fill each entity with fragments depending on the appropriate lambda
     # invocation result.
     for index in range(0, len(chunks)):
@@ -614,7 +634,7 @@ def _fragapply(ent1, ent2, bflist):
         oldforeign = chunks[index][3]
         for index2 in range(0, len(bflist)):
             if bflist[index2](oldown, oldforeign):
-                rval[index2].unaryplus(Fragment(off, size))
+                rval[index2].unaryplus(other=Fragment(offset=off, size=size))
     return rval
 
 
@@ -625,7 +645,10 @@ class _Top:
     # Context::make_top instead.
     def __init__(self, lpmap, maxfstoken, size=0):
         self.size = size
-        self.topentity = _Entity(lpmap, maxfstoken, [Fragment(0, size)])
+        self.topentity = _Entity(lpmap=lpmap,
+                                 maxfstoken=maxfstoken,
+                                 fragments=[Fragment(offset=0,
+                                                     size=size)])
 
     # Get this Top object as an Entity.
     def entity():
@@ -636,12 +659,12 @@ class _Top:
     # entities to exist within the extended bounds.
     def grow(self, chunk):
         self.size += chunk
-        self.topentity.grow(chunk)
+        self.topentity.grow(chunksize=chunk)
 
     # Test if a given Entity is valid within the bounds of the Top data size.
     def test(self, child):
         try:
-            b = self.topentity.subentity(child)
+            b = self.topentity.subentity(childent=child)
         except IndexError:
             return False
         return True
@@ -668,9 +691,11 @@ class Context:
     def parse(self, path):
         levelmin = None
         for level in path.split("/"):
-            level = _Entity(self.longpathmap, self.maxfstoken, level)
+            level = _Entity(lpmap=self.longpathmap,
+                            maxfstoken=self.maxfstoken,
+                            carvpath=level)
             if levelmin is not None:
-                level = levelmin.subentity(level)
+                level = levelmin.subentity(childent=level)
             levelmin = level
         return level
 
@@ -679,7 +704,7 @@ class Context:
         return _Top(self.longpathmap, self.maxfstoken, size)
 
     def empty(self):
-        return _Entity(self.longpathmap, self.maxfstoken)
+        return _Entity(lpmap=self.longpathmap, maxfstoken=self.maxfstoken)
 
 
 class _Test:  # pragma: no cover
@@ -690,7 +715,7 @@ class _Test:  # pragma: no cover
         a = self.context.parse(pin1)
         b = self.context.parse(pin2)
         c = self.context.parse(pout)
-        a.unaryplus(b)
+        a.unaryplus(other=b)
         if (a != c):
             print("FAIL: '" + pin1 + " + " + pin2 + " = " + str(a) +
                   "' expected='" + pout + "'")
@@ -757,7 +782,7 @@ class _Test:  # pragma: no cover
         b = context.parse(p2)
         b.stripsparse()
         c = context.parse(pout)
-        d = a.merge(b)
+        d = a.merge(entity=b)
         if a != c:
             print("FAIL : "+str(a)+"  "+str(d[0]) + " ;  "+str(d[1]))
         else:

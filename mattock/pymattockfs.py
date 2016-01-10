@@ -692,7 +692,7 @@ class MattockFS(fuse.Fuse):
                 if self.ms.validnewdatacap(handle=handle):
                     return MutableCtl(carvpath=self.ms.newdata[handle],
                                       rep=self.rep,
-                                      contexy=self.context)
+                                      context=self.context)
             if extension == "inf" and tokens[0] == "actor":
                 if self.ms.validactorname(actorname=handle):
                     # Reduced priviledge version of the actor ctl file.
