@@ -8,7 +8,7 @@ TODO for first beta:
   + longpathmap        (70%)       -         OK       OK     pep8
   + carvpath           (70%)       -         OK       OK     pep8
   + pymattockfs        (70%)       -         OK       OK     pep8
-  + refcount_stack     (62%)       -         -        OK     pep8
+  + refcount_stack     (62%)       -         OK       OK     pep8
   + api                (78%)       -         OK       OK     pep8
   + test_mattockfs     (87%)       -         NO       NO     pep8
 

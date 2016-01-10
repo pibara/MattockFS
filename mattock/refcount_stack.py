@@ -227,29 +227,75 @@ class CarvpathRefcountStack:
         return omap
 
     def _create_sortmap_D(self, startset):
-        pass
+        Dmap = {}
+        stacksize = len(self.fragmentrefstack)
+        looklevel = stacksize - 1
+        for index in range(looklevel, 0, -1):
+            hrentity = self.fragmentrefstack[index]
+            hasmatch = False
+            for carvpath in startset:
+                if hrentity.overlaps(
+                  self.content[carvpath]):
+                    # If overlaps: get+store density
+                    Dmap[carvpath] = (
+                        self.content[carvpath].density(
+                            entity=hrentity))
+                    hasmatch = True
+                else:
+                    Dmap[carvpath] = 0.0
+            if hasmatch:
+                break
+        return Dmap
 
     def _create_sortmap_S(self, startset):
-        pass
+        smap = {}
+        for carvpath in startset:
+            if carvpath in self.content:
+                smap[carvpath] = (self.content[carvpath].totalsize)
+        return smap
 
     def _create_sortmap_W(self, startset):
-        pass
+        wmap = {}
+        for carvpath in startset:
+            accumdensity = 0
+            for index in range(
+                   0,
+                   len(self.fragmentrefstack)):
+                accumdensity += (
+                  self.content[carvpath].density(
+                    entity=self.fragmentrefstack[
+                             index]))
+            wmap[carvpath] = accumdensity
+        return wmap
 
     def _create_sortmap_d(self, startset):
-        pass
+        dmap = {}
+        stacksize = len(self.fragmentrefstack)
+        if stacksize > 0:
+            for carvpath in startset:
+                l=self.fragmentrefstack[0]
+                for carvpath in startset:
+                    if l.overlaps(
+                      self.content[carvpath]):
+                        dmap[carvpath] = (
+                            self.content[carvpath].density(
+                              entity=l))
+                    else:
+                        dmap[carvpath] = 0.0
+        return dmap
 
     def _create_sortmap_H(self, startset):
-        pass
+        hmap = {}
+        for carvpath in startset:
+            offset = None
+            hmap[carvpath] = self.ohashcollection.hashing_offset(carvpath)
+        return hmap
 
     # Pick the best job after custom sorting.
     def priority_custompick(self, params, ltfunction=_defaultlt,
                              intransit=None, reverse=False):
         # Set of maps to hand to use in custom sortable creation.
         hmap = {}  # H(ashing offset)
-        Dmap = {}  # D(ensity maxrefcount)
-        dmap = {}  # d(ensity refcount > 0)
-        smap = {}  # S(ize smallest)
-        wmap = {}  # W(eighed average refcount)
         # List of arguments for sorting, initially empty
         arglist = []
         # Use intransit if its given, use all jobs if not.
@@ -269,64 +315,19 @@ class CarvpathRefcountStack:
                         arglist.append(self._create_sortmap_O(startset=startset)) 
                     else:
                         if letter == "D":  # Density
-                            # Start looking at top of stack
-                            looklevel = stacksize - 1
-                            for index in range(looklevel, 0, -1):
-                                hrentity = self.fragmentrefstack[index]
-                                hasmatch = False
-                                for carvpath in startset:
-                                    if hrentity.overlaps(
-                                      self.content[carvpath]):
-                                        # If overlaps: get+store density
-                                        Dmap[carvpath] = (
-                                            self.content[carvpath].density(
-                                                entity=hrentity))
-                                        hasmatch = True
-                                    else:
-                                        Dmap[carvpath] = 0.0
-                                if hasmatch:
-                                    break
-                            arglist.append(Dmap)
+                            arglist.append(self._create_sortmap_O(startset=startset))
                         else:
                             if letter == "S":  # Size
-                                for carvpath in startset:
-                                    if carvpath in self.content:
-                                        smap[carvpath] = (
-                                          self.content[carvpath].totalsize)
-                                arglist.append(smap)
+                                arglist.append(self._create_sortmap_S(startset=startset))
                             else:
                                 if letter == "W":  # Weighted average refcount
-                                    for carvpath in startset:
-                                        accumdensity = 0
-                                        for index in range(
-                                               0,
-                                               len(self.fragmentrefstack)):
-                                            accumdensity += (
-                                              self.content[carvpath].density(
-                                                entity=self.fragmentrefstack[
-                                                         index]))
-                                        wmap[carvpath] = accumdensity
-                                    arglist.append(wmap)
+                                    arglist.append(self._create_sortmap_W(startset=startset))
                                 else:
                                     if letter == "d": #Density
-                                        if stacksize > 0:
-                                            for carvpath in startset:
-                                                l=self.fragmentrefstack[0]
-                                                for carvpath in startset:
-                                                    if l.overlaps(
-                                                      self.content[carvpath]):
-                                                        dmap[carvpath] = (
-                                                          self.content[carvpath].density(
-                                                            entity=l))
-                                                    else:
-                                                        dmap[carvpath] = 0.0
-                                        arglist.append(dmap)
+                                        arglist.append(self._create_sortmap_d(startset=startset))
                                     else:
                                         if letter == "H":
-                                            for carvpath in startset:
-                                                offset = None
-                                                hmap[carvpath] = self.ohashcollection.hashing_offset(carvpath)
-                                            arglist.append(hmap)
+                                            arglist.append(self._create_sortmap_H(startset=startset))
                                         else:
                                             raise RuntimeError(
                                               "Invalid letter '" +
