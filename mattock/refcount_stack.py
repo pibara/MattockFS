@@ -196,7 +196,7 @@ class CarvpathRefcountStack:
                 break
         if stacksize == 0:
             for carvpath in startset:
-                Rmap[carvpath]=False  
+                Rmap[carvpath] = False
         return Rmap
 
     def _create_sortmap_r(self, startset):
@@ -221,7 +221,8 @@ class CarvpathRefcountStack:
             offset = None
             # Find fragment with the lowest offset.
             for frag in self.content[carvpath].fragments:
-                if (offset is None or frag.issparse is False and frag.offset < offset):
+                if (offset is None or frag.issparse is False and
+                   frag.offset < offset):
                     offset = frag.offset
             omap[carvpath] = offset
         return omap
@@ -273,7 +274,7 @@ class CarvpathRefcountStack:
         stacksize = len(self.fragmentrefstack)
         if stacksize > 0:
             for carvpath in startset:
-                l=self.fragmentrefstack[0]
+                l = self.fragmentrefstack[0]
                 for carvpath in startset:
                     if l.overlaps(
                       self.content[carvpath]):
@@ -293,7 +294,7 @@ class CarvpathRefcountStack:
 
     # Pick the best job after custom sorting.
     def priority_custompick(self, params, ltfunction=_defaultlt,
-                             intransit=None, reverse=False):
+                            intransit=None, reverse=False):
         # Set of maps to hand to use in custom sortable creation.
         hmap = {}  # H(ashing offset)
         # List of arguments for sorting, initially empty
@@ -312,22 +313,32 @@ class CarvpathRefcountStack:
                     arglist.append(self._create_sortmap_r(startset=startset))
                 else:
                     if letter == "O":  # Offset
-                        arglist.append(self._create_sortmap_O(startset=startset)) 
+                        arglist.append(
+                          self._create_sortmap_O(startset=startset))
                     else:
                         if letter == "D":  # Density
-                            arglist.append(self._create_sortmap_D(startset=startset))
+                            arglist.append(self._create_sortmap_D(
+                                               startset=startset))
                         else:
                             if letter == "S":  # Size
-                                arglist.append(self._create_sortmap_S(startset=startset))
+                                arglist.append(
+                                  self._create_sortmap_S(
+                                    startset=startset))
                             else:
                                 if letter == "W":  # Weighted average refcount
-                                    arglist.append(self._create_sortmap_W(startset=startset))
+                                    arglist.append(
+                                      self._create_sortmap_W(
+                                        startset=startset))
                                 else:
-                                    if letter == "d": #Density
-                                        arglist.append(self._create_sortmap_d(startset=startset))
+                                    if letter == "d":  # Density
+                                        arglist.append(
+                                          self._create_sortmap_d(
+                                            startset=startset))
                                     else:
                                         if letter == "H":
-                                            arglist.append(self._create_sortmap_H(startset=startset))
+                                            arglist.append(
+                                              self._create_sortmap_H(
+                                                startset=startset))
                                         else:
                                             raise RuntimeError(
                                               "Invalid letter '" +

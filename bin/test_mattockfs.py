@@ -86,7 +86,7 @@ def test_anycast_coverage(mp):
         if status["set_volume"] != 2000000:
             print("FAIL: unexpected set volume", status["set_volume"],
                   "expected 20000")
-    foo = mp.register_worker("foo","RDOWHS")
+    foo = mp.register_worker("foo", "RDOWHS")
     foo.actor_set_overflow(0)
     foo.actor_set_weight(1000)
     lbjob = foo.poll_job()
@@ -114,28 +114,29 @@ def test_anycast_coverage(mp):
     except:
         pass
 
+
 def test_carvpath(mp):
     # Look at the archive as a whole
-    whole=mp.full_archive()
+    whole = mp.full_archive()
     # If there is data in the archive, we test opportunistic hashing.
     if whole.as_entity().totalsize > 8000:
-        sub1=whole["500+1800_3000+1000.gif"]
-        sub2=whole["0+8000.dat"]
-        sub3=whole["500+1800_S19000_3000+1000.gif"]
-        fp=mp.full_path(sub3.as_entity())
-        if fp == None:
+        sub1 = whole["500+1800_3000+1000.gif"]
+        sub2 = whole["0+8000.dat"]
+        sub3 = whole["500+1800_S19000_3000+1000.gif"]
+        fp = mp.full_path(sub3.as_entity())
+        if fp is None:
             print "ERR: No full path"
         # Open all three files
-        f1=open(sub1.as_path(),"r")
-        f2=open(sub2.as_path(),"r")
-        f3=open(sub3.as_path(),"r")
-        #Read only from file two
-        a=f2.read()
+        f1 = open(sub1.as_path(), "r")
+        f2 = open(sub2.as_path(), "r")
+        f3 = open(sub3.as_path(), "r")
+        # Read only from file two
+        a = f2.read()
         # If everything is iree, both files should have been hashed now.
         print sub1.opportunistic_hash()
         print sub2.opportunistic_hash()
         print sub3.opportunistic_hash()
-        sub4=whole["7000+3512.dat"]
+        sub4 = whole["7000+3512.dat"]
         print sub4.fadvise_status()
         print "openf:", mp.fadvise_status()
         f1.close()
@@ -147,7 +148,7 @@ def test_carvpath(mp):
                 "_1212+100_1313+100_1414+100_1515+100_1616+100_1717" +
                 "+100_1818+100_1919+100_2020+100_2121+100_2222+100_" +
                 "2323+100_2424+100")
-        sub4=whole[str1]
+        sub4 = whole[str1]
         print sub4.as_path()
     else:
         print "Skipping carvpath test, to little data in the archive."
@@ -157,10 +158,10 @@ mp = MountPoint("/var/mattock/mnt/0")
 test_bogus_path("/var/mattock/mnt/0")
 test_anycast_coverage(mp)
 # Record the starting situation.
-fadvise_start=mp.fadvise_status()
-worker_count_start={}
-anycast_status_start={}
-for actorname in ["kickstart","har","bar","baz"]:
+fadvise_start = mp.fadvise_status()
+worker_count_start = {}
+anycast_status_start = {}
+for actorname in ["kickstart", "har", "bar", "baz"]:
     worker_count_start[actorname] = mp.worker_count(actorname)
     anycast_status_start[actorname] = mp.anycast_status(actorname)
 test_carvpath(mp)

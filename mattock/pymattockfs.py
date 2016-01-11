@@ -110,7 +110,7 @@ class TopDir:
     def opendir(self):  # pragma: no cover
         return 0
 
-    def readdir(self):  #pragma: no cover
+    def readdir(self):  # pragma: no cover
         yield fuse.Direntry("mattockfs.ctl")
         yield fuse.Direntry("carvpath")
         yield fuse.Direntry("actor")
@@ -516,7 +516,7 @@ class CarvPathFile:
     def readlink(self):  # pragma: no cover
         return -errno.EINVAL
 
-    def listxattr(self):  # pragma: no cover 
+    def listxattr(self):  # pragma: no cover
         return ["user.opportunistic_hash",
                 "user.fadvise_status"]
 

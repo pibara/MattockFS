@@ -278,8 +278,10 @@ class Repository:
                 cp2key[cp] = anycastkey
             # Ask the reference counting stack for the best carvpath for the
             # pollicy.
-            bestcp = self.stack.priority_custompick(params=sort_policy,
-                                                    intransit=cp2key.keys()).carvpath
+            bestcp = (
+              self.stack.priority_custompick(params=sort_policy,
+                                             intransit=cp2key.keys()).carvpath
+              )
             # Return the anycast entry.
             return cp2key[bestcp]
         return None

@@ -1,4 +1,4 @@
-#nycast_best!/usr/bin/python
+#!/usr/bin/python
 # Copyright (c) 2015, Rob J Meijer.
 # Copyright (c) 2015, University College Dublin
 # All rights reserved.
