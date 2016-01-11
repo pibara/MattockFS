@@ -104,13 +104,13 @@ class NoEnt:  # pragma: no cover
 
 # The file-system top directory.
 class TopDir:
-    def getattr(self):
+    def getattr(self):  # pragma: no cover
         return defaultstat(STAT_MODE_DIR)
 
-    def opendir(self):
+    def opendir(self):  # pragma: no cover
         return 0
 
-    def readdir(self):
+    def readdir(self):  #pragma: no cover
         yield fuse.Direntry("mattockfs.ctl")
         yield fuse.Direntry("carvpath")
         yield fuse.Direntry("actor")
@@ -121,7 +121,7 @@ class TopDir:
     def readlink(self):  # pragma: no cover
         return -errno.EINVAL
 
-    def listxattr(self):  # pragma: no xover
+    def listxattr(self):  # pragma: no cover
         return []
 
     def getxattr(self, name, size):  # pragma: no cover
@@ -173,7 +173,7 @@ class TopCtl:
     def readlink(self):  # pragma: no cover
         return -errno.EINVAL
 
-    def listxattr(self):
+    def listxattr(self):  # pragma: no cover
         return ["user.fadvise_status",
                 "user.full_archive"]
 
@@ -211,7 +211,7 @@ class ActorCtl:
     def readlink(self):  # pragma: no cover
         return -errno.EINVAL
 
-    def listxattr(self):
+    def listxattr(self):  # pragma: no cover
         return ["user.weight",
                 "user.overflow",
                 "user.anycast_status",
@@ -290,7 +290,7 @@ class ActorInf:
     def readlink(self):  # pragma: no cover
         return -errno.EINVAL
 
-    def listxattr(self):
+    def listxattr(self):  # pragma: no cover
         return ["user.anycast_status", "user.worker_count"]
 
     def getxattr(self, name, size):
@@ -325,7 +325,7 @@ class WorkerCtl:
     def readlink(self):  # pragma: no cover
         return -errno.EINVAL
 
-    def listxattr(self):
+    def listxattr(self):  # pragma: no cover
         return ["user.job_select_policy",
                 "user.actor_select_policy",
                 "user.unregister",
@@ -392,7 +392,7 @@ class JobCtl:
     def readlink(self):  # pragma: no cover
         return -errno.EINVAL
 
-    def listxattr(self):
+    def listxattr(self):  # pragma: no cover
         return ["user.routing_info",
                 "user.submit_child",
                 "user.allocate_mutable",
@@ -516,7 +516,7 @@ class CarvPathFile:
     def readlink(self):  # pragma: no cover
         return -errno.EINVAL
 
-    def listxattr(self):
+    def listxattr(self):  # pragma: no cover 
         return ["user.opportunistic_hash",
                 "user.fadvise_status"]
 

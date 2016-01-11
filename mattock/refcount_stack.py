@@ -181,7 +181,7 @@ class CarvpathRefcountStack:
         stacksize = len(self.fragmentrefstack)
         looklevel = stacksize - 1
         somethingfound = False
-        for index in range(looklevel, 0, -1):
+        for index in range(looklevel, -1, -1):
             hrentity = self.fragmentrefstack[index]
             # Search all overlaps at this level that are part of
             # the input set.
@@ -230,7 +230,7 @@ class CarvpathRefcountStack:
         Dmap = {}
         stacksize = len(self.fragmentrefstack)
         looklevel = stacksize - 1
-        for index in range(looklevel, 0, -1):
+        for index in range(looklevel, -1, -1):
             hrentity = self.fragmentrefstack[index]
             hasmatch = False
             for carvpath in startset:
@@ -315,7 +315,7 @@ class CarvpathRefcountStack:
                         arglist.append(self._create_sortmap_O(startset=startset)) 
                     else:
                         if letter == "D":  # Density
-                            arglist.append(self._create_sortmap_O(startset=startset))
+                            arglist.append(self._create_sortmap_D(startset=startset))
                         else:
                             if letter == "S":  # Size
                                 arglist.append(self._create_sortmap_S(startset=startset))

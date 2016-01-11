@@ -1,16 +1,10 @@
 TODO for first beta:
 * Increase         code-coverage and cleanup+document code
     FILE               COVERAGE SUFFICIENT  CLEANUP COMMENTS LINT
-  + anycast            (96%)       YES       OK       OK     pep8
-  + opportunistic_hash (89%)       YES       OK       OK     pep8
   + provenance_log     (97%)       -         OK       OK     pep8
-  + repository         (76%)       -         OK       OK     pep8
-  + longpathmap        (70%)       -         OK       OK     pep8
-  + carvpath           (70%)       -         OK       OK     pep8
-  + pymattockfs        (70%)       -         OK       OK     pep8
-  + refcount_stack     (62%)       -         OK       OK     pep8
-  + api                (78%)       -         OK       OK     pep8
-  + test_mattockfs     (87%)       -         NO       NO     pep8
+  + repository         (83%)       -         OK       OK     pep8
+  + longpathmap        (80%)       -         OK       OK     pep8
+  + pymattockfs        (84%)       -         OK       OK     pep8
 
 Todo for second beta:
 * Unified logging facility.
