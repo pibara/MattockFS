@@ -24,6 +24,14 @@ def test_bogus_path(base):
             f.close()
         except:
             pass
+    for boguspath in ("job/foo/bar.dat","carvpath/foo/bar/baz.gif"):
+        path = (base + "/" + boguspath)
+        try:
+            f = open(path, "r")
+            print "FAIL: Bogus file not suposed to exist ;", path
+            f.close()
+        except:
+            pass
 
 
 def test_add_data_to_job(job):
@@ -92,6 +100,7 @@ def test_anycast_coverage(mp):
     lbjob = foo.poll_job()
     mp.actor_reset("foo")
     loadbalance = mp.register_worker("loadbalance")
+    loadbalance.set_actor_select_policy("VWC")
     lbjob = loadbalance.poll_job()
     if lbjob is None:
         print "FAIL: Problem fetching job with loadbalance"

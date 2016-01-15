@@ -214,8 +214,6 @@ class ActorCtl:
     def listxattr(self):  # pragma: no cover
         return ["user.weight",
                 "user.overflow",
-                "user.anycast_status",
-                "user.worker_count",
                 "user.reset",
                 "user.register_worker"]
 
@@ -226,12 +224,6 @@ class ActorCtl:
         if name == "user.overflow":
             # Actor object overflow attribute
             return str(self.mod.overflow)
-        if name == "user.anycast_status":
-            # Fetch actor anycast status
-            return ";".join(map(lambda x: str(x), self.mod.throttle_info()))
-        if name == "user.worker_count":
-            # Number of workers active for this actor.
-            return str(self.mod.worker_count())
         if name == "user.reset":
             return "0"
         if name == "user.register_worker":
@@ -260,9 +252,7 @@ class ActorCtl:
             # Set overflow for actor.
             self.mod.overflow = asnum
             return 0
-        if name in ("user.anycast_status",
-                    "user.worker_count",
-                    "user.register_worker"):
+        if name in ("user.register_worker"):
             return -errno.EPERM
         if name == "user.reset":
             if val == "1":
@@ -300,7 +290,7 @@ class ActorInf:
             return str(self.mod.worker_count())
         return -errno.ENODATA
 
-    def setxattr(self, name, val):
+    def setxattr(self, name, val):  # pragma: no cover
         if name in ("user.anycast_status", "user.worker_count"):
             return -errno.EPERM
         return -errno.ENODATA
@@ -331,7 +321,7 @@ class WorkerCtl:
                 "user.unregister",
                 "user.accept_job"]
 
-    def getxattr(self, name, size):
+    def getxattr(self, name, size):  # pragma: no cover
         if name == "user.job_select_policy":
             return self.worker.job_select_policy
         if name == "user.actor_select_policy":
