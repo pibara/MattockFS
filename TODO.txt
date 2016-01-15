@@ -3,7 +3,6 @@ TODO for first beta:
     FILE               COVERAGE SUFFICIENT  CLEANUP COMMENTS LINT
   + provenance_log     (97%)       -         OK       OK     pep8
   + repository         (83%)       -         OK       OK     pep8
-  + longpathmap        (80%)       -         OK       OK     pep8
   + pymattockfs        (84%)       -         OK       OK     pep8
 
 Todo for second beta:

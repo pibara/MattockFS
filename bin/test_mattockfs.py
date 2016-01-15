@@ -149,7 +149,14 @@ def test_carvpath(mp):
                 "+100_1818+100_1919+100_2020+100_2121+100_2222+100_" +
                 "2323+100_2424+100")
         sub4 = whole[str1]
-        print sub4.as_path()
+        digestpath = sub4.as_path() + ".dd"
+        if  len(digestpath) - digestpath.rfind("/") != 69:
+            print "ERROR: unexpected length of digest path: ",digestpath
+        try:
+            f = open(digestpath, "r")
+            f.close()
+        except:
+            print "ERROR: unable to open ", digestpath
     else:
         print "Skipping carvpath test, to little data in the archive."
 
