@@ -36,6 +36,7 @@ def test_bogus_path(base):
 
 def test_add_data_to_job(job):
     mutable = job.childdata(1000000)
+    print mutable
     with open(mutable, "r+") as f:
         f.seek(0)
         f.write("harhar")
@@ -187,6 +188,36 @@ def test_carvpath(mp):
     except:
         pass
 
+def do_kickstart(mp):
+    beforecount = mp.worker_count("kickstart")
+    context = mp.register_worker("kickstart","K")
+    aftercount = mp.worker_count("kickstart")
+    if aftercount - beforecount != 1:
+        print "ERROR, module count messed up", beforecount, "->", aftercount
+    kickstartjob = context.poll_job()
+    if kickstartjob == None:
+        print "ERROR, kickstart jobs should be creatable out of thin air"
+        return
+    har_pre_status = mp.anycast_status("har")
+    fadvise_pre_status = mp.fadvise_status()
+    for time in range(0,5):
+        mutabledata = kickstartjob.childdata(1234567)
+        with open(mutabledata,"r") as f:
+            f.seek(0)
+            f.write("harhar")
+            f.seek(1234500)
+            f.write("HARHAR")
+            if time == 2:
+                f.seek(1000000)
+                f.write("poison") 
+        frozenmutable = kickstartjob.frozen_childdata()
+        kickstartjob.childsubmit(frozenmutable,"har","t1:l11","x-mattock/harhar","har")
+    kickstartjob.done()
+    har_post_status = mp.anycast_status("har") 
+    fadvise_post_status = mp.fadvise_status()
+    print har_pre_status,har_post_status
+    print fadvise_pre_status,fadvise_post_status
+
 # The standard place for our MattockFS mountpoint in the initial release.
 mp = MountPoint("/var/mattock/mnt/0")
 test_bogus_path("/var/mattock/mnt/0")
@@ -199,51 +230,8 @@ for actorname in ["kickstart", "har", "bar", "baz"]:
     worker_count_start[actorname] = mp.worker_count(actorname)
     anycast_status_start[actorname] = mp.anycast_status(actorname)
 test_carvpath(mp)
+do_kickstart(mp)
 
-# print "======= Testing kickstarting API walkthrough  ========="
-# print "Initial actor worker count kickstart     :",mp.worker_count(
-#         "kickstart")
-# context=mp.register_worker("kickstart","K")
-# print "After kickstart actor worker registration:",mp.worker_count(
-#         "kickstart")
-# kickstartjob=context.poll_job()
-# print "Job info:"
-# print " * carvpath      = " + kickstartjob.carvpath.as_file_path()
-# print " * router_state  = " + kickstartjob.router_state
-# print "Creating new mutable entities within job context"
-# for time in range(0,3):
-#  mutabledata=kickstartjob.childdata(1234567)
-#  print " * mutabledata =", mutabledata
-#  print "Writing to mutable file"
-#  with open(mutabledata,"r+") as f:
-#    f.seek(0)
-#    f.write("harhar")
-#    #The file can very well be sparse if we want it to.
-#    f.seek(1234500)
-#    f.write("HARHAR")
-#    if time == 2:
-#      f.seek(1000000)
-#      f.write("poison")
-# Once we are done writing the data, we freeze it and get a carvpath back.
-#  print "Freezing mutable file"
-#  frozenmutable=kickstartjob.frozen_childdata()
-#  print " * Carvpath =", frozenmutable
-#  print "Submitting child carvpath to har"
-# Fetching fadvise status for har for reference
-#  pre_status=mp.anycast_status("har")
-#  kickstartjob.childsubmit(frozenmutable,"har","t1:l11","x-mattock/harhar",
-#                                       "har")
-# print "Marking parent job as done"
-# kickstartjob.done()
-# print "Fetching global fadvise status:"
-# print " * old  :", fadvise_start
-# print " * new  :", mp.fadvise_status()
-# The child entity has been submitted to the har actor now, lets check the
-#     anycast status for that actor.
-# print "Checking anycast status for har actor"
-# print " * old anycast status = ",pre_status
-# print " * new anycast status = ",mp.anycast_status("har")
-#
 # From now, we pretend we are a har worker
 # print "Processing the generated job as har"
 # context=mp.register_worker("har")
