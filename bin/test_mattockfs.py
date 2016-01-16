@@ -142,16 +142,26 @@ def test_carvpath(mp):
         # Read only from file two
         a = f2.read()
         # If everything is iree, both files should have been hashed now.
-        print sub1.opportunistic_hash()
-        print sub2.opportunistic_hash()
-        print sub3.opportunistic_hash()
+        if len(sub1.opportunistic_hash()["hash"]) != 64:
+            print "Opportunistic hashing error 1: ", sub1.opportunistic_hash()
+        if len(sub2.opportunistic_hash()["hash"]) != 64:
+            print "Opportunistic hashing error 2: ", sub2.opportunistic_hash()
+        if len(sub3.opportunistic_hash()["hash"]) != 64:
+            print "Opportunistic hashing error 3: ", sub3.opportunistic_hash()
         sub4 = whole["7000+3512.dat"]
-        print sub4.fadvise_status()
-        print "openf:", mp.fadvise_status()
+        if sub4.fadvise_status()["normal"] != 1000:
+            print "Issue with expected fadvise overlap of 1000", sub4.fadvise_status()
+        if sub4.fadvise_status()["dontneed"] != 2512:
+            print "Issue with expected fadvise non-overlap region of 2512", sub4.fadvise_status()
+        beforeclose = mp.fadvise_status()
         f1.close()
         f2.close()
         f3.close()
-        print "closf:", mp.fadvise_status()
+        afterclose = mp.fadvise_status()
+        if beforeclose["normal"] - afterclose["normal"] != 8000:
+            print "Unexpected difference in normal", beforeclose, afterclose
+        if afterclose["dontneed"] - beforeclose["dontneed"] != 8000:
+            print "Unexpected diference in dontneed", beforeclose, afterclose
         str1 = ("0+100_101+100_202+100_303+100_404+100_505+100_" +
                 "606+100_707+100_808+100_909+100_1010+100_1111+100" +
                 "_1212+100_1313+100_1414+100_1515+100_1616+100_1717" +
@@ -305,3 +315,4 @@ test_carvpath(mp)
 # print "Comparing anycast state start and end:"
 # print anycast_status_start
 # print anycast_status_end
+print "If all tests succeeded, this should be the only output line"
