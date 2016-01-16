@@ -44,25 +44,37 @@ import longpathmap
 class _CarvPathFile:
     def __init__(self, mp, cp, context):
         self.mp = mp
-        self.carvpath = cp
+        dotpos = cp.rfind(".")
+        if dotpos == -1:
+            self.dir_carvpath = cp
+            self.file_carvpath = cp + ".dat"
+        else:
+            self.dir_carvpath = cp.split(".")[0]
+            self.file_carvpath = cp
         self.context = context
-        self.xa = xattr.xattr(mp + "/" + self.carvpath)
+        filpath = mp + "/" + self.file_carvpath
+        if not os.path.isfile(filpath):
+            raise IndexError("Invalid CarvPath " + cp)
+        self.xa = xattr.xattr(filpath)
 
     # Get the path of the pseudo file.
-    def as_path(self):
-        return self.mp + "/" + self.carvpath
+    def as_file_path(self):
+        return self.mp + "/" + self.file_carvpath
+
+    def as_dir_path(self):
+        return self.mp + "/" + self.dir_carvpath
 
     # Get as CarvPath entity.
     def as_entity(self):
-        return self.context.parse(self.carvpath.split("/")[-1].split(".")[0])
+        return self.context.parse(self.dir_carvpath.split("/")[-1])
 
     # Using a valid nested carvpath, get a sub CarvPath as CarvPathFile object.
     def __getitem__(self, cp):
         # Compose a two level CarvPath.
-        twolevel = self.mp + "/" + self.carvpath.split(".")[0]+"/"+cp
+        twolevel = self.mp + "/" + self.dir_carvpath + "/" + cp
         # Turn it into a single level CarvPath by asking MattockFS for the
         # symbolic link.
-        symlink = (self.mp + "/" + self.carvpath.split(".")[0] + "/" +
+        symlink = (self.mp + "/" + self.dir_carvpath + "/" +
                    os.readlink(twolevel))
         # The symlink contains '..' at first, update to canonical.
         absolute_symlink = os.path.abspath(symlink)
@@ -82,6 +94,9 @@ class _CarvPathFile:
         st = self.xa["user.fadvise_status"].split(";")
         return {"normal": int(st[0]), "dontneed": int(st[1])}
 
+    # Retreive the size of the entity.
+    def file_size(self):
+        return self.as_entity().totalsize
 
 # Object representing a private Job control file under $MP/job/<CAP>.ctl
 class _Job:
@@ -266,6 +281,10 @@ class MountPoint:
     def full_archive(self):
         return _CarvPathFile(self.mountpoint,
                              self.main_ctl["user.full_archive"], self.context)
+
+    # Directly designate a carvpath.
+    def __getitem__(self,cp):
+        return _CarvPathFile(self.mountpoint,"carvpath/"+cp,self.context)
 
     # Request the number of workers currently active for named actor/module.
     def worker_count(self, actorname):

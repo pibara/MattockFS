@@ -228,11 +228,6 @@ class Repository:
             return 0
         return self.stack.fragmentrefstack[0].totalsize
 
-    # Size of the complete archive.
-    def full_archive_size(self):
-        self.multi_sync()
-        return self.top.size
-
     # Check if a given carvpath is valid and possible within the repository
     # size.
     def validcarvpath(self, cp):

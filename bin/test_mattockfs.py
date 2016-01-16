@@ -136,9 +136,9 @@ def test_carvpath(mp):
         if fp is None:
             print "ERR: No full path"
         # Open all three files
-        f1 = open(sub1.as_path(), "r")
-        f2 = open(sub2.as_path(), "r")
-        f3 = open(sub3.as_path(), "r")
+        f1 = open(sub1.as_file_path(), "r")
+        f2 = open(sub2.as_file_path(), "r")
+        f3 = open(sub3.as_file_path(), "r")
         # Read only from file two
         a = f2.read()
         # If everything is iree, both files should have been hashed now.
@@ -156,9 +156,9 @@ def test_carvpath(mp):
                 "606+100_707+100_808+100_909+100_1010+100_1111+100" +
                 "_1212+100_1313+100_1414+100_1515+100_1616+100_1717" +
                 "+100_1818+100_1919+100_2020+100_2121+100_2222+100_" +
-                "2323+100_2424+100")
+                "2323+100_2424+100.dd")
         sub4 = whole[str1]
-        digestpath = sub4.as_path() + ".dd"
+        digestpath = sub4.as_file_path()
         if  len(digestpath) - digestpath.rfind("/") != 69:
             print "ERROR: unexpected length of digest path: ",digestpath
         try:
@@ -168,6 +168,14 @@ def test_carvpath(mp):
             print "ERROR: unable to open ", digestpath
     else:
         print "Skipping carvpath test, to little data in the archive."
+    fullsize = mp.full_archive().file_size()
+    sizelow = fullsize - 50
+    borderpath = str(sizelow) + "+100.dat"
+    try:
+        bogus2=mp[borderpath]
+        print "ERROR: a sub file beyond archive size should not exist.",borderpath
+    except:
+        pass
 
 # The standard place for our MattockFS mountpoint in the initial release.
 mp = MountPoint("/var/mattock/mnt/0")
@@ -190,7 +198,7 @@ test_carvpath(mp)
 #         "kickstart")
 # kickstartjob=context.poll_job()
 # print "Job info:"
-# print " * carvpath      = " + kickstartjob.carvpath.as_path()
+# print " * carvpath      = " + kickstartjob.carvpath.as_file_path()
 # print " * router_state  = " + kickstartjob.router_state
 # print "Creating new mutable entities within job context"
 # for time in range(0,3):
@@ -241,7 +249,7 @@ test_carvpath(mp)
 #    print "OK; Fetched job, there should be an opportunistic hash over
 #               the sparse data!"
 # Get the path of our job data.
-#    print " * carvpath      = "+harjob.carvpath.as_path()
+#    print " * carvpath      = "+harjob.carvpath.as_file_path()
 #    print " * hash   = ",harjob.carvpath.opportunistic_hash()
 #    print " * fadvise= ",harjob.carvpath.fadvise_status()
 # If all data was accessed, the opportunistic hash should be there.
@@ -264,7 +272,7 @@ test_carvpath(mp)
 #  if barjob == None:
 #    print "ERROR, polling the bar context returned None"
 #  else:
-#    print " * carvpath      = "+barjob.carvpath.as_path()
+#    print " * carvpath      = "+barjob.carvpath.as_file_path()
 #    print " * routing_info : ", barjob.router_state
 #    print " * hash   = ",barjob.carvpath.opportunistic_hash()
 #    print " * fadvise= ",barjob.carvpath.fadvise_status()

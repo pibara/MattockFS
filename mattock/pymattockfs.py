@@ -527,6 +527,7 @@ class CarvPathFile:
             return ";".join(map(lambda x: str(x),
                                 self.actors.rep.stack.carvpath_fadvise_info(
                                   carvpath=self.carvpath)))
+        return -errno.ENODATA
 
     def setxattr(self, name, val):  # pragma: no cover
         if name in ("user.opportunistic_hash",
@@ -721,6 +722,8 @@ class MattockFS(fuse.Fuse):
 
     def getxattr(self, path, name, size):
         rval = self.parsepath(path).getxattr(name, size)
+        if isinstance(rval,int) and rval < 0:
+            return rval 
         if size == 0:
             # If field size is requested but forwarding yields string:
             # convert to size.
