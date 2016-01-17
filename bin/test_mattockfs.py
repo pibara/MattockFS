@@ -36,7 +36,6 @@ def test_bogus_path(base):
 
 def test_add_data_to_job(job):
     mutable = job.childdata(1000000)
-    print mutable
     with open(mutable, "r+") as f:
         f.seek(0)
         f.write("harhar")
@@ -201,22 +200,23 @@ def do_kickstart(mp):
     har_pre_status = mp.anycast_status("har")
     fadvise_pre_status = mp.fadvise_status()
     for time in range(0,5):
-        mutabledata = kickstartjob.childdata(1234567)
-        with open(mutabledata,"r") as f:
-            f.seek(0)
-            f.write("harhar")
-            f.seek(1234500)
-            f.write("HARHAR")
-            if time == 2:
-                f.seek(1000000)
-                f.write("poison") 
+        if time == 2:
+            test_add_poisoned_data_to_job(kickstartjob)
+        else:
+            test_add_data_to_job(kickstartjob)
         frozenmutable = kickstartjob.frozen_childdata()
         kickstartjob.childsubmit(frozenmutable,"har","t1:l11","x-mattock/harhar","har")
     kickstartjob.done()
     har_post_status = mp.anycast_status("har") 
     fadvise_post_status = mp.fadvise_status()
-    print har_pre_status,har_post_status
-    print fadvise_pre_status,fadvise_post_status
+    if har_post_status["set_size"] - har_pre_status["set_size"] != 5:
+        print "ERROR, wrong set size diff (should be 5):", har_pre_status, har_post_status
+    if har_post_status["set_volume"] - har_pre_status["set_volume"] != 5000000:
+        print "ERROR, wrong set volume diff (should be 5000000):", har_pre_status, har_post_status
+    if fadvise_pre_status["dontneed"] != fadvise_post_status["dontneed"]:
+        print "ERROR, dontneed should not have changed", fadvise_pre_status,fadvise_post_status
+    if fadvise_post_status["normal"] - fadvise_pre_status["normal"] != 5000000:
+        print "ERROR, normal should have grown 5M", fadvise_pre_status,fadvise_post_status
 
 # The standard place for our MattockFS mountpoint in the initial release.
 mp = MountPoint("/var/mattock/mnt/0")

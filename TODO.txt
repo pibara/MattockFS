@@ -1,5 +1,4 @@
 TODO for first beta:
-* Find+solve mutable data bug
 * Increase         code-coverage and cleanup+document code
     FILE               COVERAGE SUFFICIENT  CLEANUP COMMENTS LINT
   + provenance_log     (97%)       -         OK       OK     pep8
