@@ -2,8 +2,6 @@ TODO for first beta:
 * Look into packaging issued (pip?/apt?/docker?)
 
 Possibly todo before we go into paper writing mode for a while :
-* Port the base API to C++
-* Example code with libewf (semi kickstart)
 * Example code with libtsk (semi mmls module)
 
 
@@ -14,6 +12,7 @@ Todo after first beta:
 * Unified logging facility.
 * Refactor sorting to picking.
 * Restore state from journal.
+* Port the base API to C++
 * Port the base API to Perl
 * Port the base API to NodeJs
 * Port the base API to Rust

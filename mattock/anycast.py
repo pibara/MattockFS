@@ -540,7 +540,7 @@ class Actors:
             return False
         if len(actorname) > 40:
             return False
-        if not actorname.isalpha() and actorname.islower():
+        if not (actorname[0].isalpha() and actorname.isalnum() and actorname.islower()):
             return False
         return True
 

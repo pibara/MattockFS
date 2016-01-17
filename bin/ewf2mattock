@@ -1,0 +1,55 @@
+#!/usr/bin/python
+# NOTE: This script is meant mainly for testing purposes.
+#       It does not respect mattock throttling considerations
+from mattock.api import MountPoint
+import pyewf
+import sys
+import json
+
+ewffiles = sys.argv[1:]
+if len(ewffiles) == 0:
+    print "Please specify EWF file to use."
+else:
+    mp = MountPoint("/var/mattock/mnt/0")
+    context = mp.register_worker("ewf2mattock","K")
+    handle = pyewf.handle()
+    handle.open(ewffiles)
+    kickjob = context.poll_job()
+    meta = {}
+    meta["hashes"] = handle.get_hash_values()
+    meta["header"] = handle.get_header_values()
+    meta["size"] = handle.get_media_size()
+    metajson = json.dumps(meta)
+    mutable = kickjob.childdata(len(metajson))
+    with open(mutable, "r+") as f:
+        f.seek(0)
+        f.write(metajson)
+    meta_carvpath = kickjob.frozen_childdata()
+    kickjob.childsubmit(carvpath=meta_carvpath,
+                        nextactor="dsm",
+                        routerstate="",
+                        mimetype="mattock-meta/ewf",
+                        extension="meta")
+    print "Meta forwarded to dsm as", meta_carvpath
+    remaining = handle.get_media_size()
+    mutable = kickjob.childdata(remaining)
+    with open(mutable, "r+") as f:
+        f.seek(0)
+        while remaining > 0:
+            if remaining > 1048576:
+                chunk = 1048576
+                remaining -= chunk
+            else:
+                chunk = remaining
+                remaining = 0
+            data = handle.read(chunk)
+            f.write(data)
+    handle.close()
+    img_carvpath = kickjob.frozen_childdata()
+    kickjob.childsubmit(carvpath=meta_carvpath,
+                        nextactor="mmls",
+                        routerstate="",
+                        mimetype="application/disk-img",
+                        extension="dd")
+    print "Image forwarded to mmls as", img_carvpath
+    kickjob.done()
