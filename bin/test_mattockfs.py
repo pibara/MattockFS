@@ -24,7 +24,7 @@ def test_bogus_path(base):
             f.close()
         except:
             pass
-    for boguspath in ("job/foo/bar.dat","carvpath/foo/bar/baz.gif"):
+    for boguspath in ("job/foo/bar.dat", "carvpath/foo/bar/baz.gif"):
         path = (base + "/" + boguspath)
         try:
             f = open(path, "r")
@@ -81,12 +81,18 @@ def test_anycast_coverage(mp):
     test_add_poisoned_data_to_job(kickstartjob)
     test_add_data_to_job(kickstartjob)
     path = kickstartjob.frozen_childdata()
-    kickstartjob.childsubmit(path, "foo", "routerstate123",
-                             "x-mattock/testdata", "data")
+    kickstartjob.childsubmit(carvpath=path,
+                             nextactor="foo",
+                             routerstate="routerstate123",
+                             mimetype="x-mattock/testdata",
+                             extension="data")
     test_add_data_to_job(kickstartjob)
     path = kickstartjob.frozen_childdata()
-    kickstartjob.childsubmit(path, "foo", "routerstate234",
-                             "x-mattock/testdata", "data")
+    kickstartjob.childsubmit(carvpath=path,
+                             nextactor="foo",
+                             routerstate="routerstate234",
+                             mimetype="x-mattock/testdata",
+                             extension="data")
     status = mp.anycast_status("foo")
     if status["set_size"] != 2:
         print "FAIL: unexpected set size", status["set_size"], "expected 2"
@@ -98,7 +104,8 @@ def test_anycast_coverage(mp):
     foo.actor_set_overflow(0)
     foo.actor_set_weight(1000)
     lbjob = foo.poll_job()
-    mp.actor_reset("foo")
+    lbjob.done()
+    # mp.actor_reset("foo")
     loadbalance = mp.register_worker("loadbalance")
     loadbalance.set_actor_select_policy("VWC")
     lbjob = loadbalance.poll_job()
@@ -107,7 +114,7 @@ def test_anycast_coverage(mp):
         return
     else:
         lbjob.forward("bar", "routerstate789")
-        do_bar(mp,times=1)
+        do_bar(mp, times=1)
     if kickstartjob.frozen_childdata() is None:
         print "FAIL: freezing a mutable should yield a non-None value."
     try:
@@ -151,9 +158,11 @@ def test_carvpath(mp):
             print "Opportunistic hashing error 3: ", sub3.opportunistic_hash()
         sub4 = whole["7000+3512.dat"]
         if sub4.fadvise_status()["normal"] != 1000:
-            print "Issue with expected fadvise overlap of 1000", sub4.fadvise_status()
+            print ("Issue with expected fadvise overlap of 1000 " +
+                   sub4.fadvise_status())
         if sub4.fadvise_status()["dontneed"] != 2512:
-            print "Issue with expected fadvise non-overlap region of 2512", sub4.fadvise_status()
+            print ("Issue with expected fadvise non-overlap region of 2512" +
+                   sub4.fadvise_status())
         beforeclose = mp.fadvise_status()
         f1.close()
         f2.close()
@@ -170,8 +179,8 @@ def test_carvpath(mp):
                 "2323+100_2424+100.dd")
         sub4 = whole[str1]
         digestpath = sub4.as_file_path()
-        if  len(digestpath) - digestpath.rfind("/") != 69:
-            print "ERROR: unexpected length of digest path: ",digestpath
+        if len(digestpath) - digestpath.rfind("/") != 69:
+            print "ERROR: unexpected length of digest path: ", digestpath
         try:
             f = open(digestpath, "r")
             f.close()
@@ -183,81 +192,107 @@ def test_carvpath(mp):
     sizelow = fullsize - 50
     borderpath = str(sizelow) + "+100.dat"
     try:
-        bogus2=mp[borderpath]
-        print "ERROR: a sub file beyond archive size should not exist.",borderpath
+        bogus2 = mp[borderpath]
+        print ("ERROR: a sub file beyond archive size should not exist." +
+               borderpath)
     except:
         pass
 
+
 def do_kickstart(mp):
     beforecount = mp.worker_count("kickstart")
-    context = mp.register_worker("kickstart","K")
+    context = mp.register_worker("kickstart", "K")
     aftercount = mp.worker_count("kickstart")
     if aftercount - beforecount != 1:
         print "ERROR, module count messed up", beforecount, "->", aftercount
     kickstartjob = context.poll_job()
-    if kickstartjob == None:
+    if kickstartjob is None:
         print "ERROR, kickstart jobs should be creatable out of thin air"
         return
     har_pre_status = mp.anycast_status("har")
     fadvise_pre_status = mp.fadvise_status()
-    for time in range(0,5):
+    for time in range(0, 5):
         if time == 2:
             test_add_poisoned_data_to_job(kickstartjob)
         else:
             test_add_data_to_job(kickstartjob)
         frozenmutable = kickstartjob.frozen_childdata()
-        kickstartjob.childsubmit(frozenmutable,"har","t1:l11","x-mattock/harhar","har")
+        kickstartjob.childsubmit(carvpath=frozenmutable,
+                                 nextactor="har",
+                                 routerstate="t1:l11",
+                                 mimetype="x-mattock/harhar",
+                                 extension="har")
     kickstartjob.done()
-    har_post_status = mp.anycast_status("har") 
+    har_post_status = mp.anycast_status("har")
     fadvise_post_status = mp.fadvise_status()
     if har_post_status["set_size"] - har_pre_status["set_size"] != 5:
-        print "ERROR, wrong set size diff (should be 5):", har_pre_status, har_post_status
+        print ("ERROR, wrong set size diff (should be 5): " +
+               str(har_pre_status) +
+               " :: " +
+               str(har_post_status))
     if har_post_status["set_volume"] - har_pre_status["set_volume"] != 5000000:
-        print "ERROR, wrong set volume diff (should be 5000000):", har_pre_status, har_post_status
+        print ("ERROR, wrong set volume diff (should be 5000000): " +
+               str(har_pre_status) +
+               " :: " +
+               str(har_post_status))
     if fadvise_pre_status["dontneed"] != fadvise_post_status["dontneed"]:
-        print "ERROR, dontneed should not have changed", fadvise_pre_status,fadvise_post_status
+        print ("ERROR, dontneed should not have changed " +
+               str(fadvise_pre_status) +
+               " :: " +
+               str(fadvise_post_status))
     if fadvise_post_status["normal"] - fadvise_pre_status["normal"] != 5000000:
-        print "ERROR, normal should have grown 5M", fadvise_pre_status,fadvise_post_status
+        print ("ERROR, normal should have grown 5M " +
+               str(fadvise_pre_status) +
+               " :: " +
+               str(fadvise_post_status))
+
 
 def do_har(mp):
-    context=mp.register_worker("har")
+    context = mp.register_worker("har")
     context.actor_set_weight(7)
     context.actor_set_overflow(3)
     ohcount = 0
-    for time in range(0,5):
+    for time in range(0, 5):
         harjob = context.poll_job()
-        if harjob == None:
-            print "ERROR, unable to fetch har job",time
+        if harjob is None:
+            print "ERROR, unable to fetch har job", time
             return
         if len(harjob.carvpath.opportunistic_hash()["hash"]) == 64:
             ohcount += 1
-        harjob.childsubmit("123+1000_S9000_234+1000_S9000_345+9000_S99000_456"
-                           "+9000_S999000_567+9000_678+9000_S1000000_789+9000"
-                           "_S2000000_1234+8000_S3000000_2345+8000_S4000000_"
-                           "3456+8000_S5000000_4567+8000_S6000000_5678+8000_"
-                           "S7000000_6789+8000_S8000000",
-                          "bar","t9:l4","x-mattock/silly-sparse","sparse")
-        harjob.forward("baz","t18:l6")
+        harjob.childsubmit(carvpath="123+1000_S9000_234+1000_S9000_345+9000_"
+                           "S99000_456+9000_S999000_567+9000_678+9000_"
+                           "S1000000_789+9000_S2000000_1234+8000_S3000000_"
+                           "2345+8000_S4000000_3456+8000_S5000000_4567+8000_"
+                           "S6000000_5678+8000_S7000000_6789+8000_S8000000",
+                           nextactor="bar",
+                           routerstate="t9:l4",
+                           mimetype="x-mattock/silly-sparse",
+                           extension="sparse")
+        harjob.forward("baz", "t18:l6")
     if ohcount != 4:
-        print "ERROR, expected 4 succesfull opportunistic hashes instead of",ohcount
+        print ("ERROR, expected 4 succesfull opportunistic hashes NOT : " +
+               str(ohcount))
+
 
 def do_bar(mp, times=5):
-    context=mp.register_worker("bar")
-    for time in range(0,times):
+    context = mp.register_worker("bar")
+    for time in range(0, times):
         barjob = context.poll_job()
-        if barjob == None:
+        if barjob is None:
             print "ERROR, polling the bar context", time, "returned None"
             return
         barjob.done()
 
+
 def do_baz(mp):
-    context=mp.register_worker("baz")
-    for time in range(0,5):
+    context = mp.register_worker("baz")
+    for time in range(0, 5):
         bazjob = context.poll_job()
-        if bazjob == None:
+        if bazjob is None:
             print "ERROR, polling the baz", time, "returned None"
             return
         bazjob.done()
+
 
 # The standard place for our MattockFS mountpoint in the initial release.
 mp = MountPoint("/var/mattock/mnt/0")
@@ -275,14 +310,15 @@ do_kickstart(mp)
 do_har(mp)
 do_bar(mp)
 do_baz(mp)
-fadvise_end=mp.fadvise_status()
-worker_count_end={}
-anycast_status_end={}
-for actorname in ["kickstart","har","bar","baz"]:
+fadvise_end = mp.fadvise_status()
+worker_count_end = {}
+anycast_status_end = {}
+for actorname in ["kickstart", "har", "bar", "baz"]:
     if worker_count_start[actorname] != mp.worker_count(actorname):
-        print "ERROR: worker count changed for",actorname
-    if anycast_status_start[actorname]["set_size"] != mp.anycast_status(actorname)["set_size"]:
-        print "ERROR: anycast set size changed for",actorname
+        print "ERROR: worker count changed for", actorname
+    if (anycast_status_start[actorname]["set_size"] !=
+       mp.anycast_status(actorname)["set_size"]):
+        print "ERROR: anycast set size changed for", actorname
 # print "Comparing start fadvise to end fadvise state"
 if fadvise_end["dontneed"] - fadvise_start["dontneed"] != 5000000:
     print "ERROR, unexpexted fadvise changes", fadvise_start, fadvise_end

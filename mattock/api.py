@@ -98,6 +98,7 @@ class _CarvPathFile:
     def file_size(self):
         return self.as_entity().totalsize
 
+
 # Object representing a private Job control file under $MP/job/<CAP>.ctl
 class _Job:
     def __init__(self, mp, job_ctl, context):
@@ -283,8 +284,8 @@ class MountPoint:
                              self.main_ctl["user.full_archive"], self.context)
 
     # Directly designate a carvpath.
-    def __getitem__(self,cp):
-        return _CarvPathFile(self.mountpoint,"carvpath/"+cp,self.context)
+    def __getitem__(self, cp):
+        return _CarvPathFile(self.mountpoint, "carvpath/"+cp, self.context)
 
     # Request the number of workers currently active for named actor/module.
     def worker_count(self, actorname):

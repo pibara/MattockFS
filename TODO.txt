@@ -1,8 +1,5 @@
 TODO for first beta:
-* Track down missing provenance log records bug
-* Record executable and user in provenance log.
 * Look into packaging issued (pip?/apt?/docker?)
-* Last check for pep8 compliance
 
 Possibly todo before we go into paper writing mode for a while :
 * Port the base API to C++
