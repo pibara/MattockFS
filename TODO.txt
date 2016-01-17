@@ -1,15 +1,22 @@
 TODO for first beta:
 * Track down missing provenance log records bug
+* Record executable and user in provenance log.
+* Look into packaging issued (pip?/apt?/docker?)
+* Last check for pep8 compliance
 
-Todo for second beta:
+Possibly todo before we go into paper writing mode for a while :
+* Port the base API to C++
+* Example code with libewf (semi kickstart)
+* Example code with libtsk (semi mmls module)
+
+
+==== There will be a long pause in development after above is done,
+==== I'll be working on my paper for a few months.
+
+Todo after first beta:
 * Unified logging facility.
-* Record process executable and user in provenance log.
 * Refactor sorting to picking.
 * Restore state from journal.
-* Look into packaging issues (pip?/apt?)
-
-After second beta:
-* Port the base API to C++
 * Port the base API to Perl
 * Port the base API to NodeJs
 * Port the base API to Rust
