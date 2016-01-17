@@ -293,6 +293,7 @@ class Job:
                         carvpath,
                         mimetype,
                         parentcp=self.carvpath,
+                        parentjob=self.provenance.log[0]["job"],
                         extension=self.file_extension,
                         journal=self.journal,
                         provenance_log=self.actors.provenance_log)

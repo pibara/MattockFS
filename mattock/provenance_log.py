@@ -40,6 +40,8 @@ class ProvenanceLog:
     def __init__(self, jobid, actor, router_state, carvpath, mimetype,
                  extension, parentcp=None, parentjob=None, journal=None,
                  provenance_log=None, restore=False):
+        if parentjob == jobid:
+            parentjob = None
         self.log = []  # Start with an empty provenance log.
         self.journal = journal  # This is a handle to a journal file
         self.provenance = provenance_log  # File handle for storing provenance

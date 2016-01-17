@@ -107,6 +107,7 @@ def test_anycast_coverage(mp):
         return
     else:
         lbjob.forward("bar", "routerstate789")
+        do_bar(mp,times=1)
     if kickstartjob.frozen_childdata() is None:
         print "FAIL: freezing a mutable should yield a non-None value."
     try:
@@ -236,10 +237,27 @@ def do_har(mp):
                            "3456+8000_S5000000_4567+8000_S6000000_5678+8000_"
                            "S7000000_6789+8000_S8000000",
                           "bar","t9:l4","x-mattock/silly-sparse","sparse")
+        harjob.forward("baz","t18:l6")
     if ohcount != 4:
         print "ERROR, expected 4 succesfull opportunistic hashes instead of",ohcount
-    harjob.forward("baz","t18:l6")
 
+def do_bar(mp, times=5):
+    context=mp.register_worker("bar")
+    for time in range(0,times):
+        barjob = context.poll_job()
+        if barjob == None:
+            print "ERROR, polling the bar context", time, "returned None"
+            return
+        barjob.done()
+
+def do_baz(mp):
+    context=mp.register_worker("baz")
+    for time in range(0,5):
+        bazjob = context.poll_job()
+        if bazjob == None:
+            print "ERROR, polling the baz", time, "returned None"
+            return
+        bazjob.done()
 
 # The standard place for our MattockFS mountpoint in the initial release.
 mp = MountPoint("/var/mattock/mnt/0")
@@ -255,44 +273,17 @@ for actorname in ["kickstart", "har", "bar", "baz"]:
 test_carvpath(mp)
 do_kickstart(mp)
 do_har(mp)
-
-# context=mp.register_worker("bar")
-# for time in range(0,3):
-#  barjob = context.poll_job()
-#  if barjob == None:
-#    print "ERROR, polling the bar context returned None"
-#  else:
-#    print " * carvpath      = "+barjob.carvpath.as_file_path()
-#    print " * routing_info : ", barjob.router_state
-#    print " * hash   = ",barjob.carvpath.opportunistic_hash()
-#    print " * fadvise= ",barjob.carvpath.fadvise_status()
-#    barjob.done()
-#    print
-# We become a baz worker and process the written-to entity.
-# print "Doing nothing as baz"
-# context=mp.register_worker("baz")
-# for time in range(0,3):
-#    bazjob = context.poll_job()
-#    if bazjob == None:
-#      print "ERROR, polling the baz returned None"
-#    else:
-#      print " * routing_info : ", bazjob.router_state
-#      bazjob.done()
-# context=None
-# print "Done"
-# fadvise_end=mp.fadvise_status()
-# worker_count_end={}
-# anycast_status_end={}
-# for actorname in ["kickstart","har","bar","baz"]:
-#  worker_count_end[actorname] = mp.worker_count(actorname)
-#  anycast_status_end[actorname] = mp.anycast_status(actorname)
+do_bar(mp)
+do_baz(mp)
+fadvise_end=mp.fadvise_status()
+worker_count_end={}
+anycast_status_end={}
+for actorname in ["kickstart","har","bar","baz"]:
+    if worker_count_start[actorname] != mp.worker_count(actorname):
+        print "ERROR: worker count changed for",actorname
+    if anycast_status_start[actorname]["set_size"] != mp.anycast_status(actorname)["set_size"]:
+        print "ERROR: anycast set size changed for",actorname
 # print "Comparing start fadvise to end fadvise state"
-# print fadvise_start
-# print fadvise_end
-# print "Comparing worker count start and end:"
-# print worker_count_start
-# print worker_count_end
-# print "Comparing anycast state start and end:"
-# print anycast_status_start
-# print anycast_status_end
+if fadvise_end["dontneed"] - fadvise_start["dontneed"] != 5000000:
+    print "ERROR, unexpexted fadvise changes", fadvise_start, fadvise_end
 print "If all tests succeeded, this should be the only output line"

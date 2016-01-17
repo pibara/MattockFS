@@ -1,7 +1,5 @@
 TODO for first beta:
-* Increase         code-coverage and cleanup+document code
-    FILE               COVERAGE SUFFICIENT  CLEANUP COMMENTS LINT
-  + provenance_log     (97%)       -         OK       OK     pep8
+* Track down missing provenance log records bug
 
 Todo for second beta:
 * Unified logging facility.
