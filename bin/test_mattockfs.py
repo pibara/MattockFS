@@ -218,6 +218,29 @@ def do_kickstart(mp):
     if fadvise_post_status["normal"] - fadvise_pre_status["normal"] != 5000000:
         print "ERROR, normal should have grown 5M", fadvise_pre_status,fadvise_post_status
 
+def do_har(mp):
+    context=mp.register_worker("har")
+    context.actor_set_weight(7)
+    context.actor_set_overflow(3)
+    ohcount = 0
+    for time in range(0,5):
+        harjob = context.poll_job()
+        if harjob == None:
+            print "ERROR, unable to fetch har job",time
+            return
+        if len(harjob.carvpath.opportunistic_hash()["hash"]) == 64:
+            ohcount += 1
+        harjob.childsubmit("123+1000_S9000_234+1000_S9000_345+9000_S99000_456"
+                           "+9000_S999000_567+9000_678+9000_S1000000_789+9000"
+                           "_S2000000_1234+8000_S3000000_2345+8000_S4000000_"
+                           "3456+8000_S5000000_4567+8000_S6000000_5678+8000_"
+                           "S7000000_6789+8000_S8000000",
+                          "bar","t9:l4","x-mattock/silly-sparse","sparse")
+    if ohcount != 4:
+        print "ERROR, expected 4 succesfull opportunistic hashes instead of",ohcount
+    harjob.forward("baz","t18:l6")
+
+
 # The standard place for our MattockFS mountpoint in the initial release.
 mp = MountPoint("/var/mattock/mnt/0")
 test_bogus_path("/var/mattock/mnt/0")
@@ -231,39 +254,8 @@ for actorname in ["kickstart", "har", "bar", "baz"]:
     anycast_status_start[actorname] = mp.anycast_status(actorname)
 test_carvpath(mp)
 do_kickstart(mp)
+do_har(mp)
 
-# From now, we pretend we are a har worker
-# print "Processing the generated job as har"
-# context=mp.register_worker("har")
-# To allow load-balancing, we can set some metrics on the actor.
-# context.actor_set_weight(7)
-# context.actor_set_overflow(3)
-# Lets poll the job we just submitted when we were kickstart.
-# for time in range(0,3):
-#  harjob=context.poll_job()
-#  if harjob == None:
-#    print "ERROR, polling the har returned None"
-#  else:
-#    print "OK; Fetched job, there should be an opportunistic hash over
-#               the sparse data!"
-# Get the path of our job data.
-#    print " * carvpath      = "+harjob.carvpath.as_file_path()
-#    print " * hash   = ",harjob.carvpath.opportunistic_hash()
-#    print " * fadvise= ",harjob.carvpath.fadvise_status()
-# If all data was accessed, the opportunistic hash should be there.
-#    print " * opportunistic_hash    =",harjob.carvpath.opportunistic_hash()
-# We can pick a subchunk of our input data and submit it as child data.
-#          No questions asked.
-#    print "Submit sub-carvpath 123+1000 as child entity to bar"
-#    harjob.childsubmit("123+1000_S9000_234+1000_S9000_345+9000_S99000_456+
-# 9000_S999000_567+9000_678+9000_S1000000_789+9000_S2000000_1234+8000_S3000000
-# _2345+8000_S4000000_3456+8000_S5000000_4567+8000_S6000000_5678+8000_S7000000
-# _6789+8000_S8000000","bar","t9:l4","x-mattock/silly-sparse","sparse")
-# We are not done yet with our input data, we forward it to an other actor.
-#    print "Forward parent entity to baz"
-#    harjob.forward("baz","t18:l6")
-# Now we become a bar worker and process the subchunk entity.
-# print "Doing nothing as bar"
 # context=mp.register_worker("bar")
 # for time in range(0,3):
 #  barjob = context.poll_job()
