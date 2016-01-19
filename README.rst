@@ -4,7 +4,7 @@ MattockFS is a computer forensics actor-framework component, computer forensic d
 
 MattockFS provides the following facilities to future actor-model based computer forensic frameworks:
 
-* Lab-side privilege-separation equivalent of Sealed Digital Evidence Bags. After creation, repository data is made immutable, thus guarding the integrity of the data from unintended write access by untrusted modules.
+* **Lab-side privilege-separation equivalent of Sealed Digital Evidence Bags.** After creation, repository data is made immutable, thus guarding the integrity of the data from unintended write access by untrusted modules.
 * Trusted provenance logs. Actors/workers roles in the processing of digital evidence chunks are logged to a provenence log, leaving no opportunity for untrusted modules to falsify or corrupt provenance logs.
 * CarvPath based access to frozen (immutable) data. Multi-layer CarvPath based access in the same way as provided by CarvFs.
 * Domain specific actors oriented localhost message bus. MattockFS provides an Anycast message bus aimed specifically at use by a computer forensics framework and the concept of toolchains. This is basically the same functionality that used to be provided by the Anycast-Relay in the Open Computer Forensics Architecture.
