@@ -1,4 +1,5 @@
-==MattockFS Computer Forensics File-System
+MattockFS Computer Forensics File-System
+========================================
 
 MattockFS is a computer forensics actor-framework component, computer forensic data-repository and message-bus implemented as Fuse based user space file system. It is based partially on CarvFs and the AnyCast-relay from the Open Computer Forensics Architecture (OCFA). MattockFS uses CarvPath annotations to designate frozen repository data in the same way that CarvFS does. MattockFS was designed to address some of the shortcomings of OCFA in respect to disk-cache misses and access control, and as such aims to become an essential foundational component in future actor-model based computer forensic frameworks. MattockFS is not a complete computer forensics framework, rather MattockFS provides essential features that a computer forensics framework may build upon.
 
@@ -21,7 +22,8 @@ More detailed ingo can be found here:
 
 http://pibara.github.io/MattockFS/
 
-==Install
+Install
+=======
 
 If you want to install MattockFS on your (Ubuntu) system, run the script ubuntu_setup.
 This script will do the following:
