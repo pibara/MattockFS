@@ -1,15 +1,5 @@
-TODO for first beta:
-* Look into packaging issued (pip?/apt?/docker?)
-
-Possibly todo before we go into paper writing mode for a while :
-
+Todo for after paper is on track:
 * Example code with libtsk (semi mmls module)
-
-
-==== There will be a long pause in development after above is done,
-==== I'll be working on my paper for a few months.
-
-Todo after first beta:
 * Unified logging facility.
 * Refactor sorting to picking.
 * Restore state from journal.
