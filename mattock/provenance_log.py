@@ -32,6 +32,7 @@
 #
 import time
 import json
+from pyblake2 import blake2b
 
 
 # This class keeps track of provenance info during the lifetime of a CarvPath
@@ -39,7 +40,9 @@ import json
 class ProvenanceLog:
     def __init__(self, jobid, actor, router_state, carvpath, mimetype,
                  extension, parentcp=None, parentjob=None, journal=None,
-                 provenance_log=None, restore=False):
+                 provenance_log=None, restore=False, user=None, command=None):
+        if parentjob == jobid:
+            parentjob = None
         self.log = []  # Start with an empty provenance log.
         self.journal = journal  # This is a handle to a journal file
         self.provenance = provenance_log  # File handle for storing provenance
@@ -55,6 +58,10 @@ class ProvenanceLog:
         # If there was a parent job: make note of it in the creation record.
         if parentjob is not None:
             rec["parent_job"] = parentjob
+        if user is not None:
+            rec["user"] = user
+        if command is not None:
+            rec["command"] = command
         # Store our first record in the provenance log array.
         self.log.append(rec)
         # Don't log to journal if constructed in restore mode.
@@ -62,6 +69,7 @@ class ProvenanceLog:
             # Use the carvpath and first job-id as unique identifier within the
             # journal log.
             key = carvpath + "-" + jobid
+            key = blake2b(key.encode(), digest_size=32).hexdigest()
             # Create a journal log record
             journal_rec = {"type": "NEW", "key": key, "provenance": rec}
             # Write the record synchonously to the journal.

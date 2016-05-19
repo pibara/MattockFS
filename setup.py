@@ -19,8 +19,8 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 
 setup(
     name='mattock',
-    version='1.0.9',
-    description='The MattockFS Computer Forensics Framework Filesystem',
+    version='1.1.0',
+    description='The MattockFS Computer Forensics Framework Filesystem and Actor API',
     long_description=long_description,
     url='https://github.com/pibara/MattockFS',
     author='Rob J Meijer',
@@ -38,7 +38,6 @@ setup(
         'Environment :: No Input/Output (Daemon)'
     ],
     keywords='computer forensics',
-    install_requires=['pyblake2','fuse-python','redis','fadvise'],
-    
+    install_requires=['pyblake2','fuse-python','redis','fadvise','xattr'],
     packages=find_packages(exclude=['bin']),
 )

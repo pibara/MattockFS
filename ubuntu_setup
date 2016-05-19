@@ -1,6 +1,6 @@
 #!/bin/bash -x
 #first, install fuse and Redis dependencies using apt-get.
-sudo apt-get install -y fuse redis-server
+sudo apt-get install -y fuse redis-server python-setuptools libpython-dev python-fuse python-libewf
 #Use regular setup to install the code and most python dependencies.
 python ./setup.py build
 sudo python ./setup.py install 

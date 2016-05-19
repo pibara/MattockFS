@@ -1,19 +1,8 @@
-TODO for first beta:
-* Increase         code-coverage and cleanup+document code
-    FILE               COVERAGE SUFFICIENT  CLEANUP COMMENTS LINT
-  + provenance_log     (97%)       -         OK       OK     pep8
-  + repository         (83%)       -         OK       OK     pep8
-  + longpathmap        (80%)       -         OK       OK     pep8
-  + pymattockfs        (84%)       -         OK       OK     pep8
-
-Todo for second beta:
+Todo for after paper is on track:
+* Example code with libtsk (semi mmls module)
 * Unified logging facility.
-* Record process executable and user in provenance log.
 * Refactor sorting to picking.
 * Restore state from journal.
-* Look into packaging issues (pip?/apt?)
-
-After second beta:
 * Port the base API to C++
 * Port the base API to Perl
 * Port the base API to NodeJs

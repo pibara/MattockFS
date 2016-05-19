@@ -42,7 +42,7 @@ import sys
 import copy
 import os
 import longpathmap
-
+import pwd
 
 fuse.fuse_python_api = (0, 2)
 
@@ -199,8 +199,9 @@ class TopCtl:
 
 # A valid actor control file under $MP/actor/
 class ActorCtl:
-    def __init__(self, mod):
+    def __init__(self, mod, fs):
         self.mod = mod
+        self.fs = fs
 
     def getattr(self):
         return defaultstat(STAT_MODE_FILE_RO)
@@ -214,8 +215,6 @@ class ActorCtl:
     def listxattr(self):  # pragma: no cover
         return ["user.weight",
                 "user.overflow",
-                "user.anycast_status",
-                "user.worker_count",
                 "user.reset",
                 "user.register_worker"]
 
@@ -226,12 +225,6 @@ class ActorCtl:
         if name == "user.overflow":
             # Actor object overflow attribute
             return str(self.mod.overflow)
-        if name == "user.anycast_status":
-            # Fetch actor anycast status
-            return ";".join(map(lambda x: str(x), self.mod.throttle_info()))
-        if name == "user.worker_count":
-            # Number of workers active for this actor.
-            return str(self.mod.worker_count())
         if name == "user.reset":
             return "0"
         if name == "user.register_worker":
@@ -240,7 +233,16 @@ class ActorCtl:
                 return 82
             else:
                 # Only register a new worker on getxattr
-                return "worker/" + self.mod.register_worker() + ".ctl"
+                context = self.fs.GetContext()
+                user = pwd.getpwuid(context["uid"])[0]
+                path = "/proc/" + str(context["pid"]) + "/cmdline"
+                cmd = []
+                with open(path, "r") as f:
+                    cmd = f.read().split("\0")[:-1]
+                rval = ("worker/" +
+                        self.mod.register_worker(user=user, command=cmd) +
+                        ".ctl")
+                return rval
         return -errno.ENODATA
 
     def setxattr(self, name, val):
@@ -260,9 +262,7 @@ class ActorCtl:
             # Set overflow for actor.
             self.mod.overflow = asnum
             return 0
-        if name in ("user.anycast_status",
-                    "user.worker_count",
-                    "user.register_worker"):
+        if name in ("user.register_worker"):
             return -errno.EPERM
         if name == "user.reset":
             if val == "1":
@@ -300,7 +300,7 @@ class ActorInf:
             return str(self.mod.worker_count())
         return -errno.ENODATA
 
-    def setxattr(self, name, val):
+    def setxattr(self, name, val):  # pragma: no cover
         if name in ("user.anycast_status", "user.worker_count"):
             return -errno.EPERM
         return -errno.ENODATA
@@ -331,7 +331,7 @@ class WorkerCtl:
                 "user.unregister",
                 "user.accept_job"]
 
-    def getxattr(self, name, size):
+    def getxattr(self, name, size):  # pragma: no cover
         if name == "user.job_select_policy":
             return self.worker.job_select_policy
         if name == "user.actor_select_policy":
@@ -537,6 +537,7 @@ class CarvPathFile:
             return ";".join(map(lambda x: str(x),
                                 self.actors.rep.stack.carvpath_fadvise_info(
                                   carvpath=self.carvpath)))
+        return -errno.ENODATA
 
     def setxattr(self, name, val):  # pragma: no cover
         if name in ("user.opportunistic_hash",
@@ -675,7 +676,7 @@ class MattockFS(fuse.Fuse):
             if extension == "ctl":
                 if tokens[0] == "actor":
                     if self.ms.validactorname(actorname=handle):
-                        return ActorCtl(mod=self.ms[handle])
+                        return ActorCtl(mod=self.ms[handle], fs=self)
                     return NoEnt()
                 if tokens[0] == "worker":
                     if self.ms.validworkercap(handle=handle):
@@ -731,6 +732,8 @@ class MattockFS(fuse.Fuse):
 
     def getxattr(self, path, name, size):
         rval = self.parsepath(path).getxattr(name, size)
+        if isinstance(rval, int) and rval < 0:
+            return rval
         if size == 0:
             # If field size is requested but forwarding yields string:
             # convert to size.

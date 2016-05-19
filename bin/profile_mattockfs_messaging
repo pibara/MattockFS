@@ -1,0 +1,59 @@
+#!/usr/bin/python
+# Copyright (c) 2015, Rob J Meijer.
+# Copyright (c) 2015, University College Dublin
+# All rights reserved.
+#
+# This is a simple example script that embeds four fake workers.
+# Normaly each worker will run in its own process with its own script or
+# program.
+# First we import the minimal python API
+from mattock.api import MountPoint
+from random import randint
+import sys
+import time
+count=0
+
+def do_kickstart(mp):
+    global count
+    context = mp.register_worker("kickstart", "K")
+    kickstartjob = context.poll_job()
+    for time1 in range(0, 1000):
+        starttime = time.time()
+        count = count + 1
+        datapath = str(randint(0,38000000000)) + "+" +  str(4096*randint(1,1024)) + ".data"
+        kickstartjob.childsubmit(carvpath=datapath,
+                                 nextactor="har",
+                                 routerstate="t1:l11",
+                                 mimetype="x-mattock/harhar",
+                                 extension="test")
+        cost = round((time.time() - starttime),6)
+        #print "kickstart",count,cost 
+    kickstartjob.done()
+
+def do_har(mp,pol):
+    global count
+    context = mp.register_worker("har",pol)
+    context.actor_set_weight(7)
+    context.actor_set_overflow(3)
+    ohcount = 0
+    for time1 in range(0, 100):
+        starttime=time.time()
+        for time2 in range(0, 100):
+            count = count - 1
+            harjob = context.poll_job()
+            if harjob == None:
+                return
+            harjob.done()
+        cost = 10 * round((time.time() - starttime),6)
+        print "har",pol,count + 100 ,cost 
+        if cost >300:
+            print "Abandoning pol=",pol
+            return
+
+mp = MountPoint("/var/mattock/mnt/0")
+#d W r
+for policy in ["R","O","D","S","H"]:
+  do_har(mp,"S")
+  count=0
+  do_kickstart(mp)
+  do_har(mp,policy)

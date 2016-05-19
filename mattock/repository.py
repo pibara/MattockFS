@@ -100,8 +100,11 @@ class _OpenFile:
     def pread(self, chunk):
         # Read the chunk from offset, os.pread would be better but does not
         # exist in python 2.
-        os.lseek(self.fd, chunk.offset, 0)
-        return os.read(self.fd, chunk.size)
+        if chunk.issparse():
+            return "\0" * chunk.size
+        else:
+            os.lseek(self.fd, chunk.offset, 0)
+            return os.read(self.fd, chunk.size)
 
     def pwrite(self, chunk, chunkdata):
         # Write a chunk to the proper offset. os.pwrite would be better but
@@ -124,10 +127,11 @@ class _OpenFile:
         for chunk in readent:  # One entity chunk at a time.
             datachunk = self.pread(chunk=chunk)  # Read chunk from  offset
             result += datachunk  # Add chunk to result.
-            self.ohashcollection.lowlevel_read_data(
-              offset=chunk.offset,
-              data=datachunk)  # Do opportunistic hasing
-            #                                         if possible.
+            if not chunk.issparse():
+                self.ohashcollection.lowlevel_read_data(
+                  offset=chunk.offset,
+                  data=datachunk)  # Do opportunistic hasing
+                  #                  if possible.
         return result
 
     def write(self, offset, data):
@@ -227,11 +231,6 @@ class Repository:
         if len(self.stack.fragmentrefstack) == 0:
             return 0
         return self.stack.fragmentrefstack[0].totalsize
-
-    # Size of the complete archive.
-    def full_archive_size(self):
-        self.multi_sync()
-        return self.top.size
 
     # Check if a given carvpath is valid and possible within the repository
     # size.

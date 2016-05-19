@@ -24,6 +24,14 @@ def test_bogus_path(base):
             f.close()
         except:
             pass
+    for boguspath in ("job/foo/bar.dat", "carvpath/foo/bar/baz.gif"):
+        path = (base + "/" + boguspath)
+        try:
+            f = open(path, "r")
+            print "FAIL: Bogus file not suposed to exist ;", path
+            f.close()
+        except:
+            pass
 
 
 def test_add_data_to_job(job):
@@ -73,12 +81,18 @@ def test_anycast_coverage(mp):
     test_add_poisoned_data_to_job(kickstartjob)
     test_add_data_to_job(kickstartjob)
     path = kickstartjob.frozen_childdata()
-    kickstartjob.childsubmit(path, "foo", "routerstate123",
-                             "x-mattock/testdata", "data")
+    kickstartjob.childsubmit(carvpath=path,
+                             nextactor="foo",
+                             routerstate="routerstate123",
+                             mimetype="x-mattock/testdata",
+                             extension="data")
     test_add_data_to_job(kickstartjob)
     path = kickstartjob.frozen_childdata()
-    kickstartjob.childsubmit(path, "foo", "routerstate234",
-                             "x-mattock/testdata", "data")
+    kickstartjob.childsubmit(carvpath=path,
+                             nextactor="foo",
+                             routerstate="routerstate234",
+                             mimetype="x-mattock/testdata",
+                             extension="data")
     status = mp.anycast_status("foo")
     if status["set_size"] != 2:
         print "FAIL: unexpected set size", status["set_size"], "expected 2"
@@ -90,14 +104,17 @@ def test_anycast_coverage(mp):
     foo.actor_set_overflow(0)
     foo.actor_set_weight(1000)
     lbjob = foo.poll_job()
-    mp.actor_reset("foo")
+    lbjob.done()
+    # mp.actor_reset("foo")
     loadbalance = mp.register_worker("loadbalance")
+    loadbalance.set_actor_select_policy("VWC")
     lbjob = loadbalance.poll_job()
     if lbjob is None:
         print "FAIL: Problem fetching job with loadbalance"
         return
     else:
         lbjob.forward("bar", "routerstate789")
+        do_bar(mp, times=1)
     if kickstartjob.frozen_childdata() is None:
         print "FAIL: freezing a mutable should yield a non-None value."
     try:
@@ -127,31 +144,155 @@ def test_carvpath(mp):
         if fp is None:
             print "ERR: No full path"
         # Open all three files
-        f1 = open(sub1.as_path(), "r")
-        f2 = open(sub2.as_path(), "r")
-        f3 = open(sub3.as_path(), "r")
+        f1 = open(sub1.as_file_path(), "r")
+        f2 = open(sub2.as_file_path(), "r")
+        f3 = open(sub3.as_file_path(), "r")
         # Read only from file two
         a = f2.read()
         # If everything is iree, both files should have been hashed now.
-        print sub1.opportunistic_hash()
-        print sub2.opportunistic_hash()
-        print sub3.opportunistic_hash()
+        if len(sub1.opportunistic_hash()["hash"]) != 64:
+            print "Opportunistic hashing error 1: ", sub1.opportunistic_hash()
+        if len(sub2.opportunistic_hash()["hash"]) != 64:
+            print "Opportunistic hashing error 2: ", sub2.opportunistic_hash()
+        if len(sub3.opportunistic_hash()["hash"]) != 64:
+            print "Opportunistic hashing error 3: ", sub3.opportunistic_hash()
         sub4 = whole["7000+3512.dat"]
-        print sub4.fadvise_status()
-        print "openf:", mp.fadvise_status()
+        if sub4.fadvise_status()["normal"] != 1000:
+            print ("Issue with expected fadvise overlap of 1000 " +
+                   sub4.fadvise_status())
+        if sub4.fadvise_status()["dontneed"] != 2512:
+            print ("Issue with expected fadvise non-overlap region of 2512" +
+                   sub4.fadvise_status())
+        beforeclose = mp.fadvise_status()
         f1.close()
         f2.close()
         f3.close()
-        print "closf:", mp.fadvise_status()
+        afterclose = mp.fadvise_status()
+        if beforeclose["normal"] - afterclose["normal"] != 8000:
+            print "Unexpected difference in normal", beforeclose, afterclose
+        if afterclose["dontneed"] - beforeclose["dontneed"] != 8000:
+            print "Unexpected diference in dontneed", beforeclose, afterclose
         str1 = ("0+100_101+100_202+100_303+100_404+100_505+100_" +
                 "606+100_707+100_808+100_909+100_1010+100_1111+100" +
                 "_1212+100_1313+100_1414+100_1515+100_1616+100_1717" +
                 "+100_1818+100_1919+100_2020+100_2121+100_2222+100_" +
-                "2323+100_2424+100")
+                "2323+100_2424+100.dd")
         sub4 = whole[str1]
-        print sub4.as_path()
+        digestpath = sub4.as_file_path()
+        if len(digestpath) - digestpath.rfind("/") != 69:
+            print "ERROR: unexpected length of digest path: ", digestpath
+        try:
+            f = open(digestpath, "r")
+            f.close()
+        except:
+            print "ERROR: unable to open ", digestpath
     else:
         print "Skipping carvpath test, to little data in the archive."
+    fullsize = mp.full_archive().file_size()
+    sizelow = fullsize - 50
+    borderpath = str(sizelow) + "+100.dat"
+    try:
+        bogus2 = mp[borderpath]
+        print ("ERROR: a sub file beyond archive size should not exist." +
+               borderpath)
+    except:
+        pass
+
+
+def do_kickstart(mp):
+    beforecount = mp.worker_count("kickstart")
+    context = mp.register_worker("kickstart", "K")
+    aftercount = mp.worker_count("kickstart")
+    if aftercount - beforecount != 1:
+        print "ERROR, module count messed up", beforecount, "->", aftercount
+    kickstartjob = context.poll_job()
+    if kickstartjob is None:
+        print "ERROR, kickstart jobs should be creatable out of thin air"
+        return
+    har_pre_status = mp.anycast_status("har")
+    fadvise_pre_status = mp.fadvise_status()
+    for time in range(0, 5):
+        if time == 2:
+            test_add_poisoned_data_to_job(kickstartjob)
+        else:
+            test_add_data_to_job(kickstartjob)
+        frozenmutable = kickstartjob.frozen_childdata()
+        kickstartjob.childsubmit(carvpath=frozenmutable,
+                                 nextactor="har",
+                                 routerstate="t1:l11",
+                                 mimetype="x-mattock/harhar",
+                                 extension="har")
+    kickstartjob.done()
+    har_post_status = mp.anycast_status("har")
+    fadvise_post_status = mp.fadvise_status()
+    if har_post_status["set_size"] - har_pre_status["set_size"] != 5:
+        print ("ERROR, wrong set size diff (should be 5): " +
+               str(har_pre_status) +
+               " :: " +
+               str(har_post_status))
+    if har_post_status["set_volume"] - har_pre_status["set_volume"] != 5000000:
+        print ("ERROR, wrong set volume diff (should be 5000000): " +
+               str(har_pre_status) +
+               " :: " +
+               str(har_post_status))
+    if fadvise_pre_status["dontneed"] != fadvise_post_status["dontneed"]:
+        print ("ERROR, dontneed should not have changed " +
+               str(fadvise_pre_status) +
+               " :: " +
+               str(fadvise_post_status))
+    if fadvise_post_status["normal"] - fadvise_pre_status["normal"] != 5000000:
+        print ("ERROR, normal should have grown 5M " +
+               str(fadvise_pre_status) +
+               " :: " +
+               str(fadvise_post_status))
+
+
+def do_har(mp):
+    context = mp.register_worker("har")
+    context.actor_set_weight(7)
+    context.actor_set_overflow(3)
+    ohcount = 0
+    for time in range(0, 5):
+        harjob = context.poll_job()
+        if harjob is None:
+            print "ERROR, unable to fetch har job", time
+            return
+        if len(harjob.carvpath.opportunistic_hash()["hash"]) == 64:
+            ohcount += 1
+        harjob.childsubmit(carvpath="123+1000_S9000_234+1000_S9000_345+9000_"
+                           "S99000_456+9000_S999000_567+9000_678+9000_"
+                           "S1000000_789+9000_S2000000_1234+8000_S3000000_"
+                           "2345+8000_S4000000_3456+8000_S5000000_4567+8000_"
+                           "S6000000_5678+8000_S7000000_6789+8000_S8000000",
+                           nextactor="bar",
+                           routerstate="t9:l4",
+                           mimetype="x-mattock/silly-sparse",
+                           extension="sparse")
+        harjob.forward("baz", "t18:l6")
+    if ohcount != 4:
+        print ("ERROR, expected 4 succesfull opportunistic hashes NOT : " +
+               str(ohcount))
+
+
+def do_bar(mp, times=5):
+    context = mp.register_worker("bar")
+    for time in range(0, times):
+        barjob = context.poll_job()
+        if barjob is None:
+            print "ERROR, polling the bar context", time, "returned None"
+            return
+        barjob.done()
+
+
+def do_baz(mp):
+    context = mp.register_worker("baz")
+    for time in range(0, 5):
+        bazjob = context.poll_job()
+        if bazjob is None:
+            print "ERROR, polling the baz", time, "returned None"
+            return
+        bazjob.done()
+
 
 # The standard place for our MattockFS mountpoint in the initial release.
 mp = MountPoint("/var/mattock/mnt/0")
@@ -165,119 +306,20 @@ for actorname in ["kickstart", "har", "bar", "baz"]:
     worker_count_start[actorname] = mp.worker_count(actorname)
     anycast_status_start[actorname] = mp.anycast_status(actorname)
 test_carvpath(mp)
-
-# print "======= Testing kickstarting API walkthrough  ========="
-# print "Initial actor worker count kickstart     :",mp.worker_count(
-#         "kickstart")
-# context=mp.register_worker("kickstart","K")
-# print "After kickstart actor worker registration:",mp.worker_count(
-#         "kickstart")
-# kickstartjob=context.poll_job()
-# print "Job info:"
-# print " * carvpath      = " + kickstartjob.carvpath.as_path()
-# print " * router_state  = " + kickstartjob.router_state
-# print "Creating new mutable entities within job context"
-# for time in range(0,3):
-#  mutabledata=kickstartjob.childdata(1234567)
-#  print " * mutabledata =", mutabledata
-#  print "Writing to mutable file"
-#  with open(mutabledata,"r+") as f:
-#    f.seek(0)
-#    f.write("harhar")
-#    #The file can very well be sparse if we want it to.
-#    f.seek(1234500)
-#    f.write("HARHAR")
-#    if time == 2:
-#      f.seek(1000000)
-#      f.write("poison")
-# Once we are done writing the data, we freeze it and get a carvpath back.
-#  print "Freezing mutable file"
-#  frozenmutable=kickstartjob.frozen_childdata()
-#  print " * Carvpath =", frozenmutable
-#  print "Submitting child carvpath to har"
-# Fetching fadvise status for har for reference
-#  pre_status=mp.anycast_status("har")
-#  kickstartjob.childsubmit(frozenmutable,"har","t1:l11","x-mattock/harhar",
-#                                       "har")
-# print "Marking parent job as done"
-# kickstartjob.done()
-# print "Fetching global fadvise status:"
-# print " * old  :", fadvise_start
-# print " * new  :", mp.fadvise_status()
-# The child entity has been submitted to the har actor now, lets check the
-#     anycast status for that actor.
-# print "Checking anycast status for har actor"
-# print " * old anycast status = ",pre_status
-# print " * new anycast status = ",mp.anycast_status("har")
-#
-# From now, we pretend we are a har worker
-# print "Processing the generated job as har"
-# context=mp.register_worker("har")
-# To allow load-balancing, we can set some metrics on the actor.
-# context.actor_set_weight(7)
-# context.actor_set_overflow(3)
-# Lets poll the job we just submitted when we were kickstart.
-# for time in range(0,3):
-#  harjob=context.poll_job()
-#  if harjob == None:
-#    print "ERROR, polling the har returned None"
-#  else:
-#    print "OK; Fetched job, there should be an opportunistic hash over
-#               the sparse data!"
-# Get the path of our job data.
-#    print " * carvpath      = "+harjob.carvpath.as_path()
-#    print " * hash   = ",harjob.carvpath.opportunistic_hash()
-#    print " * fadvise= ",harjob.carvpath.fadvise_status()
-# If all data was accessed, the opportunistic hash should be there.
-#    print " * opportunistic_hash    =",harjob.carvpath.opportunistic_hash()
-# We can pick a subchunk of our input data and submit it as child data.
-#          No questions asked.
-#    print "Submit sub-carvpath 123+1000 as child entity to bar"
-#    harjob.childsubmit("123+1000_S9000_234+1000_S9000_345+9000_S99000_456+
-# 9000_S999000_567+9000_678+9000_S1000000_789+9000_S2000000_1234+8000_S3000000
-# _2345+8000_S4000000_3456+8000_S5000000_4567+8000_S6000000_5678+8000_S7000000
-# _6789+8000_S8000000","bar","t9:l4","x-mattock/silly-sparse","sparse")
-# We are not done yet with our input data, we forward it to an other actor.
-#    print "Forward parent entity to baz"
-#    harjob.forward("baz","t18:l6")
-# Now we become a bar worker and process the subchunk entity.
-# print "Doing nothing as bar"
-# context=mp.register_worker("bar")
-# for time in range(0,3):
-#  barjob = context.poll_job()
-#  if barjob == None:
-#    print "ERROR, polling the bar context returned None"
-#  else:
-#    print " * carvpath      = "+barjob.carvpath.as_path()
-#    print " * routing_info : ", barjob.router_state
-#    print " * hash   = ",barjob.carvpath.opportunistic_hash()
-#    print " * fadvise= ",barjob.carvpath.fadvise_status()
-#    barjob.done()
-#    print
-# We become a baz worker and process the written-to entity.
-# print "Doing nothing as baz"
-# context=mp.register_worker("baz")
-# for time in range(0,3):
-#    bazjob = context.poll_job()
-#    if bazjob == None:
-#      print "ERROR, polling the baz returned None"
-#    else:
-#      print " * routing_info : ", bazjob.router_state
-#      bazjob.done()
-# context=None
-# print "Done"
-# fadvise_end=mp.fadvise_status()
-# worker_count_end={}
-# anycast_status_end={}
-# for actorname in ["kickstart","har","bar","baz"]:
-#  worker_count_end[actorname] = mp.worker_count(actorname)
-#  anycast_status_end[actorname] = mp.anycast_status(actorname)
+do_kickstart(mp)
+do_har(mp)
+do_bar(mp)
+do_baz(mp)
+fadvise_end = mp.fadvise_status()
+worker_count_end = {}
+anycast_status_end = {}
+for actorname in ["kickstart", "har", "bar", "baz"]:
+    if worker_count_start[actorname] != mp.worker_count(actorname):
+        print "ERROR: worker count changed for", actorname
+    if (anycast_status_start[actorname]["set_size"] !=
+       mp.anycast_status(actorname)["set_size"]):
+        print "ERROR: anycast set size changed for", actorname
 # print "Comparing start fadvise to end fadvise state"
-# print fadvise_start
-# print fadvise_end
-# print "Comparing worker count start and end:"
-# print worker_count_start
-# print worker_count_end
-# print "Comparing anycast state start and end:"
-# print anycast_status_start
-# print anycast_status_end
+if fadvise_end["dontneed"] - fadvise_start["dontneed"] != 5000000:
+    print "ERROR, unexpexted fadvise changes", fadvise_start, fadvise_end
+print "If all tests succeeded, this should be the only output line"

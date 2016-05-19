@@ -56,10 +56,12 @@ except ImportError:  # pragma: no cover
 
 # In-file-system representation of a worker.
 class Worker:
-    def __init__(self, actorname, workerhandle, actor):
+    def __init__(self, actorname, workerhandle, actor, user, command):
         self.actor = actor  # Refence to the actor this worker is instance of.
         self.actorname = actorname  # Name of the actor that we are worker for
         self.workerhandle = workerhandle  # Unique handle for this worker
+        self.user = user
+        self.command = command
         self.currentjob = None  # The job currently being processed by us.
         # When not set to "S", the module selection policy for load balancing.
         self.module_select_policy = "S"
@@ -105,6 +107,7 @@ class Worker:
               job_select_policy=self.job_select_policy)
         # Return the handle of our new current job.
         if self.currentjob is not None:
+            self.currentjob.worker = self
             return self.currentjob.jobhandle
         return None
 
@@ -293,14 +296,17 @@ class Job:
                         carvpath,
                         mimetype,
                         parentcp=self.carvpath,
-                        extension=self.file_extension,
+                        parentjob=self.provenance.log[0]["job"],
+                        extension=extension,
                         journal=self.journal,
-                        provenance_log=self.actors.provenance_log)
+                        provenance_log=self.actors.provenance_log,
+                        user=self.worker.user,
+                        command=self.worker.command)
         # Add new child job to the anycast set of the indicated nexthop actor.
         self.actors[nexthop].anycast_add(carvpath=carvpath,
                                          router_state=routerstate,
                                          mime_type=self.mime_type,
-                                         file_extension=self.file_extension,
+                                         file_extension=extension,
                                          provenance=provenance)
 
 
@@ -328,11 +334,11 @@ class Actor:
         self.rep = rep
 
     # Register an instance for this Actor
-    def register_worker(self):   # read-only extended attribute.
+    def register_worker(self, user, command):   # read-only extended attribute.
         rval = self.capgen(parentcap=self.secret)  # Generate worker sparsecap
         # Make a new worker and register in the workers map.
         self.workers[rval] = Worker(actorname=self.name, workerhandle=rval,
-                                    actor=self)
+                                    actor=self, user=user, command=command)
         # Also make the new worker part of a all-actors level lookup map.
         self.allworkers[rval] = self.workers[rval]
         return rval  # Return the sparse-cap.
@@ -391,7 +397,11 @@ class Actor:
     # Get a job to do a kickstart with.
     def get_kickjob(self):
         # Add job to own anycast set.
-        self.anycast_add("S0", "", "application/x-zerosize", "empty", None)
+        self.anycast_add(carvpath="S0",
+                         router_state="",
+                         mime_type="application/x-zerosize",
+                         file_extension="empty",
+                         provenance=None)
         # And pop it immediately.
         return self.anycast_pop("S")
 
@@ -530,7 +540,7 @@ class Actors:
             return False
         if len(actorname) > 40:
             return False
-        if not actorname.isalpha() and actorname.islower():
+        if not (actorname[0].isalpha() and actorname.isalnum() and actorname.islower()):
             return False
         return True
 
