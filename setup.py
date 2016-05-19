@@ -38,7 +38,7 @@ setup(
         'Environment :: No Input/Output (Daemon)'
     ],
     keywords='computer forensics',
-    install_requires=['pyblake2','fuse-python','redis'],
+    install_requires=['pyblake2','fuse-python','redis','fadvise'],
     
     packages=find_packages(exclude=['bin']),
 )
