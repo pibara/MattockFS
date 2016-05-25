@@ -46,7 +46,7 @@ else:
             f.write(data)
     handle.close()
     img_carvpath = kickjob.frozen_childdata()
-    kickjob.childsubmit(carvpath=meta_carvpath,
+    kickjob.childsubmit(carvpath=img_carvpath,
                         nextactor="mmls",
                         routerstate="",
                         mimetype="application/disk-img",
