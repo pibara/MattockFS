@@ -66,7 +66,7 @@ class Worker:
         # When not set to "S", the module selection policy for load balancing.
         self.module_select_policy = "S"
         # The pollicy for selecting the first job from the anycast set.
-        self.job_select_policy = "rdS"
+        self.job_select_policy = "H"
         self.valid = True  # Make sure we don't try to do cleanup twice.
 
     # Cleanup all pending state for the worker.
