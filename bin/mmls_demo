@@ -1,0 +1,55 @@
+#!/usr/bin/python
+# NOTE: This script is meant mainly for testing purposes.
+#       It does not respect mattock throttling considerations.
+#       The script was written primary to act as base example of the API.
+from mattock.api import MountPoint
+import pyewf
+import sys
+import json
+import os
+
+def mmls_process(cpent):
+    data=os.popen("mmls " + cpent.as_file_path()).read().split("\n")
+    for line in data:
+        if (len(line) > 55) and (line[3] == ":"):
+            r = {}
+            r["partition"] = line[0:3]
+            r["slot"] = line[6:13].rstrip(" ")
+            start = int(line[16:26])*512
+            length = int(line[42:52])*512
+            r["carvpath"] = str(start) + "+" + str(length)
+            r["description"] = line[55:]
+            yield r
+            
+
+
+mp = MountPoint("/var/mattock/mnt/0")
+context = mp.register_worker("mmls")
+for mmlsjob in context.get_job():
+    job_carvpath=mmlsjob.carvpath
+    job_rstate = mmlsjob.router_state
+    print "Processing",job_carvpath,job_rstate
+    meta={}
+    for partition in mmls_process(job_carvpath):
+        print "partition:" , partition
+        meta[partition["partition"]]=partition
+        if "(" in partition["description"]:
+            mmlsjob.childsubmit(carvpath=job_carvpath[partition["carvpath"]].as_file_path(),
+                                nextactor="tskfs",
+                                routerstate="",
+                                mimetype="application/file-system",
+                                extension="dd")
+    metajson = json.dumps(meta)
+    print metajson
+    mutable = mmlsjob.childdata(len(metajson))
+    with open(mutable, "r+") as f:
+        f.seek(0)
+        f.write(metajson)
+    meta_carvpath = mmlsjob.frozen_childdata()
+    mmlsjob.childsubmit(carvpath=meta_carvpath,
+                        nextactor="dsm",
+                        routerstate="",
+                        mimetype="mattock-meta/ptable",
+                        extension="meta")
+    mmlsjob.done()
+

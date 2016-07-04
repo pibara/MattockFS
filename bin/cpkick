@@ -1,0 +1,21 @@
+#!/usr/bin/python
+from mattock.api import MountPoint
+import pyewf
+import sys
+import json
+
+if len(sys.argv) <3 :
+    print "Please specify carvpath and module to use."
+else:
+    carvpath = sys.argv[1]
+    nextmodule = sys.argv[2]
+    mp = MountPoint("/var/mattock/mnt/0")
+    context = mp.register_worker("cpkick","K")
+    kickjob = context.poll_job()
+    kickjob.childsubmit(carvpath=carvpath,
+                        nextactor=nextmodule,
+                        routerstate="",
+                        mimetype="application/binary",
+                        extension="data")
+    print "Forwarded to",nextmodule,"as", carvpath
+    kickjob.done()
