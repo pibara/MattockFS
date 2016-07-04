@@ -25,4 +25,5 @@ else
 fi
 #Copy the start, stop and test scripts to /usr/local/bin
 sudo cp bin/* /usr/local/bin/
+sudo cp mattockfs.json /etc/
       

@@ -11,9 +11,6 @@ def get_instance_count():
         print "No config file found, running two default instances"
         return 2
 
-for instance in range(1,get_instance_count()):
-    newpid=os.fork()
-    if newpid == 0:
-        mattock.run(str(instance))
-        os._exit(0)
-mattock.run()
+for instance in range(0,get_instance_count()):
+    command = "fusermount -u /var/mattock/mnt/" + str(instance)
+    os.system(command)
