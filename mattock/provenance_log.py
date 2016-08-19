@@ -47,9 +47,11 @@ class ProvenanceLog:
         self.journal = journal  # This is a handle to a journal file
         self.provenance = provenance_log  # File handle for storing provenance
         #                                   log once done.
+        key = carvpath + "-" + jobid
+        key = blake2b(key.encode(), digest_size=32).hexdigest() 
         # Fill the first record in the provenance log with basic info.
         rec = {"job": jobid, "actor": actor, "router_state": router_state,
-               "carvpath": carvpath, "mime": mimetype, "extension": extension}
+               "carvpath": carvpath, "mime": mimetype, "extension": extension, "jkey": key }
         rec["time"] = time.time()  # Log creation time
         # If there was a parent carvpath: make a note of it in the creation
         # record.
@@ -66,10 +68,6 @@ class ProvenanceLog:
         self.log.append(rec)
         # Don't log to journal if constructed in restore mode.
         if restore is False:
-            # Use the carvpath and first job-id as unique identifier within the
-            # journal log.
-            key = carvpath + "-" + jobid
-            key = blake2b(key.encode(), digest_size=32).hexdigest()
             # Create a journal log record
             journal_rec = {"type": "NEW", "key": key, "provenance": rec}
             # Write the record synchonously to the journal.
@@ -82,7 +80,7 @@ class ProvenanceLog:
         rec["time"] = time.time()  # Make note of the time.
         self.log.append(rec)
         # Retreive the unique key to use in the journal.
-        key = self.log[0]["carvpath"] + "-" + self.log[0]["job"]
+        key = self.log[0]["jkey"]
         # Create a journal record.
         journal_rec = {"type": "FNL", "key": key}
         # Write it to the journal.
@@ -99,7 +97,7 @@ class ProvenanceLog:
         # Don't log to journal if invoked in  restore mode.
         if restore is False:
             # Retreive the unique key to use in the journal.
-            key = self.log[0]["carvpath"] + "-" + self.log[0]["job"]
+            key = self.log[0]["jkey"]
             # Create a journal record
             journal_rec = {"type": "UPD", "key": key,
                            "provenance": {"jobid": jobid, "actor": actor,
