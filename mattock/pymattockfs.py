@@ -179,7 +179,7 @@ class TopCtl:
 
     def getxattr(self, name, size):
         if name == "user.fadvise_status":
-            # Get fadvice info from the repository.
+            # Get fadvise info from the repository.
             return ";".join(map(lambda x: str(x),
                                 self.rep.getTopThrottleInfo()))
         if name == "user.full_archive":
@@ -518,7 +518,8 @@ class CarvPathFile:
 
     def listxattr(self):  # pragma: no cover
         return ["user.opportunistic_hash",
-                "user.fadvise_status"]
+                "user.fadvise_status",
+                "user.force_fadvise"]
 
     def getxattr(self, name, size):
         if name == "user.opportunistic_hash":
@@ -537,9 +538,15 @@ class CarvPathFile:
             return ";".join(map(lambda x: str(x),
                                 self.actors.rep.stack.carvpath_fadvise_info(
                                   carvpath=self.carvpath)))
+        if name == "user.force_fadvise":
+             return -errno.EPERM
         return -errno.ENODATA
 
     def setxattr(self, name, val):  # pragma: no cover
+        if name == "user.force_fadvise":
+            if self.rep.stack.carvpath_force_fadvise(self.carvpath,val) == True:
+                return 0
+            return -errno.EINVAL 
         if name in ("user.opportunistic_hash",
                     "user.fadvise_status"):
             return -errno.EPERM

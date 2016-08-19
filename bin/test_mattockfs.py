@@ -189,6 +189,7 @@ def test_carvpath(mp):
     else:
         print "Skipping carvpath test, to little data in the archive."
     fullsize = mp.full_archive().file_size()
+    mp.full_archive().force_fadvise("sequential")
     sizelow = fullsize - 50
     borderpath = str(sizelow) + "+100.dat"
     try:

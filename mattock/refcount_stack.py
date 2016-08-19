@@ -75,6 +75,33 @@ class CarvpathRefcountStack:
         self.fragmentrefstack.append(self.context.empty())
         self.log = open(refcount_log, "a", 0)
 
+    #Bypass Refcount stack to force fadvise to underlying data chunks
+    def carvpath_force_fadvise(self,carvpath,adv_string):
+        adv_string = adv_string.upper()
+        if "_" in adv_string:
+          adv_string = adv_string[adv_string.rindex("_")+1:]
+        if adv_string in ["NORMAL","RANDOM","SEQUENTIAL","WILLNEED","DONTNEED","NOREUSE"]:
+          ent = self.context.parse(path=carvpath)
+          ent.stripsparse()
+          for fragment in ent:
+              if adv_string == "NORMAL":
+                self.fadvise.normal(offset=fragment.offset, size=fragment.size)
+              if adv_string == "DONTNEED":
+                self.fadvise(offset=fragment.offset, size=fragment.size,
+                             willneed=False)
+              if adv_string == "WILLNEED":
+                self.fadvise(offset=fragment.offset, size=fragment.size,
+                             willneed=True)
+              if adv_string == "RANDOM":
+                self.fadvise.random(offset=fragment.offset, size=fragment.size)
+              if adv_string == "SEQUENTIAL":
+                self.fadvise.sequential(offset=fragment.offset, size=fragment.size)
+              if adv_string == "NOREUSE":
+                self.fadvise.noreuse(offset=fragment.offset, size=fragment.size)
+          return True 
+        else:
+          return False
+
     # Extract fadvise state infro on a single carvpath.
     def carvpath_fadvise_info(self, carvpath):
         ent = self.context.parse(path=carvpath)

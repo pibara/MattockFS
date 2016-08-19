@@ -38,12 +38,16 @@ import opportunistic_hash
 
 
 try:
-    from os import posix_fadvise, POSIX_FADV_DONTNEED, POSIX_FADV_NORMAL
+    from os import posix_fadvise, POSIX_FADV_DONTNEED, POSIX_FADV_NORMAL, POSIX_FADV_WILLNEED, POSIX_FADV_RANDOM, POSIX_FADV_NOREUSE, POSIX_FADV_SEQUENTIAL
 except:  # pragma: no cover
     try:
         from fadvise import (posix_fadvise,
                              POSIX_FADV_DONTNEED,
-                             POSIX_FADV_NORMAL)
+                             POSIX_FADV_NORMAL,
+                             POSIX_FADV_WILLNEED,
+                             POSIX_FADV_RANDOM,
+                             POSIX_FADV_NOREUSE,
+                             POSIX_FADV_SEQUENTIAL)
     except:
         import sys
         print("")
@@ -63,9 +67,17 @@ class _FadviseFunctor:
 
     def __call__(self, offset, size, willneed):
         if willneed:
-            posix_fadvise(self.fd, offset, size, POSIX_FADV_NORMAL)
+            posix_fadvise(self.fd, offset, size, POSIX_FADV_WILLNEED)
         else:
             posix_fadvise(self.fd, offset, size, POSIX_FADV_DONTNEED)
+    def normal(self, offset,size):
+        posix_fadvise(self.fd, offset, size, POSIX_FADV_NORMAL)
+    def random(self, offset, size):
+        posix_fadvise(self.fd, offset, size, POSIX_FADV_RANDOM)
+    def sequential(self, offset, size):
+        posix_fadvise(self.fd, offset, size, POSIX_FADV_SEQUENTIAL)
+    def noreuse(self, offset, size):
+        posix_fadvise(self.fd, offset, size, POSIX_FADV_NOREUSE)
 
 
 # RAII class for keeping a file lock during sparse grow operations.
@@ -285,7 +297,7 @@ class Repository:
             return cp2key[bestcp]
         return None
 
-    # Get fadvice info on the underlying repository file.
+    # Get fadvise info on the underlying repository file.
     def getTopThrottleInfo(self):
         totalsize = self.top.size
         normal = self.volume()

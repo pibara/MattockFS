@@ -94,6 +94,9 @@ class _CarvPathFile:
         st = self.xa["user.fadvise_status"].split(";")
         return {"normal": int(st[0]), "dontneed": int(st[1])}
 
+    def force_fadvise(self,s):
+        self.xa["user.force_fadvise"] = s
+
     # Retreive the size of the entity.
     def file_size(self):
         return self.as_entity().totalsize
