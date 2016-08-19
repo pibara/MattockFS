@@ -375,9 +375,17 @@ class CarvpathRefcountStack:
         sortable = []
         for carvpath in startset:
             sortable.append(_CustomSortable(carvpath, ltfunction, arglist))
-        # Sort according to the pollicies.
-        sortable.sort(reverse=reverse)
-        return sortable[0]
+        if len(sortable) < 2:
+          return sortable[0]
+        rval = sortable.pop(0)
+        for candidate in sortable:
+          if reverse:
+            if candidate > rval:
+              rval=candidate
+          else:
+            if candidate < rval:
+              rval=candidate
+        return rval;
 
     # Extend the stack with fragments from entity.
     # Recursive function starting at level zero.

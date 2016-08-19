@@ -408,7 +408,7 @@ class Actor:
     # Pop a job from the anycast set using a given job select policy.
     def anycast_pop(self, job_select_policy, module_select_policy="S"):
         if self.name != "loadbalance":
-            # For normal workers, get a best job ftom the repository according
+            # For normal workers, get a best job from the repository according
             # to the select policy.
             best = self.rep.anycast_best(anycast=self.anycast,
                                          sort_policy=job_select_policy)

@@ -1,24 +1,21 @@
 Todo for after paper is submitted.
 After the paper is submitted, there could be some time left to work on some of the below subjects.
 
-1) Improve on job picking performance (10 SP)
-   As the evaluation showed, some of the picking policies have rather poor performance. Looking into this issue
-   could yield better algoritms and better performance and scalability.
-2) Configurable logging facility (5 SP)
+1) Configurable logging facility (5 SP)
    The provenance logging currently goes to a local file. It is likely that we may in the future
    want provenance info to go to the same graph db as module meta data. To allow for something like 
    that, making a configurable loging target is a required step.
-3) Secondary opportunistic hashing (15 SP)
+2) Secondary opportunistic hashing (15 SP)
    This type of opportunistic hasing is described as an idea in the paper but has not been implemented.
    Implementing this should potentially allow for "incore" driven hashing in the wake of a carving module.
-4) Restore state from journal (10 SP)
+3) Restore state from journal (10 SP)
    If MattockFS is stopped while some AnyCast sets are non empty, these sets are currently lost. We should
    in theory be able to restore the pre-shutdown state from the journal.
-5) Build MattockFS deb package for Ubuntu LTS 16.4. (5 SP)
+4) Build MattockFS deb package for Ubuntu LTS 16.4. (5 SP)
    Currently the installation of MattockFS uses a combination of a python setup script and a bash script
    that is meant to run on Ubuntu and install dependencies. Turning this setup into a regular deb file
    should make installation more standard.
-6) Port the base API to C++ (15 SP)
+5) Port the base API to C++ (15 SP)
    If we want to implement a C++ version of a module framework, then the Python MattockFS wrapper API around the
    FS-as-API offered by MattockFS, should be ported to C++. 
 
