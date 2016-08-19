@@ -15,7 +15,8 @@ After the paper is submitted, there could be some time left to work on some of t
    Currently the installation of MattockFS uses a combination of a python setup script and a bash script
    that is meant to run on Ubuntu and install dependencies. Turning this setup into a regular deb file
    should make installation more standard.
-5) Port the base API to C++ (15 SP)
+5) Update website. Website was made largely pre-implemetation and needs some major updates.
+6) Port the base API to C++ (15 SP)
    If we want to implement a C++ version of a module framework, then the Python MattockFS wrapper API around the
    FS-as-API offered by MattockFS, should be ported to C++. 
 
