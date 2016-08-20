@@ -393,7 +393,7 @@ class Actor:
                                       newdata=self.newdata,
                                       col=self.col,
                                       rep=self.rep)
-
+        return
     # Get a job to do a kickstart with.
     def get_kickjob(self):
         # Add job to own anycast set.
@@ -465,6 +465,7 @@ class Actors:
         #  f.close()
         #  print "Done harvesting"
         self.journal = open(journal, "a", 0)  # Unbuffered journal log.
+        self.ticks = 0
         # if len(journalinfo) > 0:
         #  print "Processing harvested journal state"
         #  for needrestore in journalinfo:
@@ -472,6 +473,13 @@ class Actors:
         #    print "Restoring : ", provenance_log
         #    self.journal_restore(provenance_log)
         #  print "State restored"
+    def restorepoint(self):
+        print "Restorepoint" #FIXME
+    def tick(self):
+        self.ticks = self.ticks + 1
+        if self.ticks == 10000:
+            self.ticks=0
+            self.restorepoint()
 
     def __getitem__(self, key):
         # Any actor is made to exist by creating a new Actor for that name
@@ -490,6 +498,7 @@ class Actors:
                                      stack=self.stack,
                                      col=self.rep.col)
         # Return the new or already existing actor object.
+        self.tick()
         return self.actors[key]
 
 # def journal_restore(self, journal_records):

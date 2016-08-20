@@ -73,6 +73,7 @@ class ProvenanceLog:
             # Write the record synchonously to the journal.
             self.journal.write(json.dumps(journal_rec))
             self.journal.write("\n")
+            
 
     def __del__(self):
         # When the ProvenanceLog object is deleted, create one last record.
