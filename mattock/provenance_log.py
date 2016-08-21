@@ -106,3 +106,12 @@ class ProvenanceLog:
             # And write it to the jounal log.
             self.journal.write(json.dumps(journal_rec))
             self.journal.write("\n")
+    def restorepoint(self):
+        # Retreive the unique key to use in the journal.
+        key = self.log[0]["jkey"]
+        # Create a journal record
+        journal_rec = {"type": "RPENT", "key": key,
+                       "provenance": self.log}
+        # And write it to the jounal log.
+        self.journal.write(json.dumps(journal_rec))
+        self.journal.write("\n")

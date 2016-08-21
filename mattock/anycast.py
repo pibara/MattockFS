@@ -308,7 +308,9 @@ class Job:
                                          mime_type=self.mime_type,
                                          file_extension=extension,
                                          provenance=provenance)
-
+    def restorepoint(self):
+        self.provenance.restorepoint()
+        
 
 # The state shared by all workers of a specific type. Also used when no
 # workers are pressent.
@@ -333,6 +335,9 @@ class Actor:
         self.actors = actors
         self.rep = rep
 
+    def restorepoint(self):
+        for jobname in self.anycast:
+            self.anycast[jobname].restorepoint()
     # Register an instance for this Actor
     def register_worker(self, user, command):   # read-only extended attribute.
         rval = self.capgen(parentcap=self.secret)  # Generate worker sparsecap
@@ -474,16 +479,21 @@ class Actors:
         #    self.journal_restore(provenance_log)
         #  print "State restored"
     def restorepoint(self):
-        print "Restorepoint" #FIXME
+        self.journal.write("{\"type\" : \"RESTOREPOINT\", \"jobcount\" : " + str(len(self.jobs)) + " }\n")
+        for jobkey in self.jobs:
+            self.jobs[jobkey].restorepoint()
+        for actorname in self.actors:
+            self.actors[actorname].restorepoint()
     def tick(self):
         self.ticks = self.ticks + 1
-        if self.ticks == 10000:
+        if self.ticks == 4096:
             self.ticks=0
             self.restorepoint()
 
     def __getitem__(self, key):
         # Any actor is made to exist by creating a new Actor for that name
         # if needed.
+        self.tick()
         if key not in self.actors:
             self.actors[key] = Actor(actorname=key,
                                      capgen=self.capgen,
@@ -498,7 +508,6 @@ class Actors:
                                      stack=self.stack,
                                      col=self.rep.col)
         # Return the new or already existing actor object.
-        self.tick()
         return self.actors[key]
 
 # def journal_restore(self, journal_records):
