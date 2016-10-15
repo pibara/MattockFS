@@ -1,0 +1,10 @@
+Package: mattockfs-pydeps
+Section: python
+Priority: extra
+Essential: no
+Version: 0.9.9-1
+Architecture: all
+Installed-Size: 100
+Depends: python-pip,python-pyxattr,python-setuptools,libpython-dev,python-fuse,python-libewf
+Maintainer: Rob J Meijer <pibara@gmail.com>
+Description: Helper package for MattockFS. This package does pip install for MattockFS python dependencies not found in the ubuntu repo.

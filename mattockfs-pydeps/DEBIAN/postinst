@@ -1,0 +1,6 @@
+#!/bin/bash
+pip install pyblake2
+pip install fuse-python
+pip install redis
+pip install fadvise
+
