@@ -1,6 +1,5 @@
 #!/bin/bash
 pip uninstall pyblake2
-pip uninstall fuse-python
 pip uninstall redis
 pip uninstall fadvise
 
