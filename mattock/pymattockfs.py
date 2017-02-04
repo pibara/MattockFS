@@ -618,7 +618,6 @@ class MattockFS(fuse.Fuse):
             col=self.rep.col)
         self.topctl = TopCtl(rep=self.rep, context=self.context)
         self.needinit = True
-
     # Helper used by multiple fuse hooks to create one of the node type
     # objects above.
     def parsepath(self, path):

@@ -38,7 +38,8 @@ import random
 import copy
 import provenance_log
 import json
-
+import os
+import shutil 
 
 try:
     from pyblake2 import blake2b
@@ -433,6 +434,21 @@ class Actor:
                 return best
         return None
 
+class JournalFile:
+    def __init__(self,jfname):
+        self.active_file_name = jfname
+        self.previous_file_name = jfname + "-previous"
+        self.active_file = open(self.active_file_name, "a", 0)  # Unbuffered journal log.
+    def write(self,data):
+        self.active_file.write(data)
+    def newfile(self):
+        if os.path.exists(self.previous_file_name):
+            os.unlink(self.previous_file_name)
+        self.active_file.close()
+        shutil.move(self.active_file_name,self.previous_file_name)
+        self.active_file = open(self.active_file_name, "a", 0) # Unbuffered journal log. 
+    def close(self):
+        self.active_file.close()
 
 # State shared between different actors and a central coordination point.
 class Actors:
@@ -469,7 +485,7 @@ class Actors:
         #      del journalinfo[dkey]
         #  f.close()
         #  print "Done harvesting"
-        self.journal = open(journal, "a", 0)  # Unbuffered journal log.
+        self.journal = JournalFile(journal)
         self.ticks = 0
         # if len(journalinfo) > 0:
         #  print "Processing harvested journal state"
@@ -479,6 +495,7 @@ class Actors:
         #    self.journal_restore(provenance_log)
         #  print "State restored"
     def restorepoint(self):
+        self.journal.newfile()
         self.journal.write("{\"type\" : \"RESTOREPOINT\", \"jobcount\" : " + str(len(self.jobs)) + " }\n")
         for jobkey in self.jobs:
             self.jobs[jobkey].restorepoint()
@@ -489,11 +506,9 @@ class Actors:
         if self.ticks == 4096:
             self.ticks=0
             self.restorepoint()
-
     def __getitem__(self, key):
         # Any actor is made to exist by creating a new Actor for that name
         # if needed.
-        self.tick()
         if key not in self.actors:
             self.actors[key] = Actor(actorname=key,
                                      capgen=self.capgen,
@@ -507,6 +522,7 @@ class Actors:
                                      context=self.context,
                                      stack=self.stack,
                                      col=self.rep.col)
+        self.tick()
         # Return the new or already existing actor object.
         return self.actors[key]
 

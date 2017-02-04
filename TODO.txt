@@ -31,7 +31,7 @@ The following TODO items have been completed since I've handed in my paper for g
   from a sorting type algorithm to a more picking oriented algorithm
   would lead to a more efficient picking process for some of these policies,
   especially for larger sets.
-* Create a presentation video about MattockFS
+* Create a presentation video about MattockFS : https://www.youtube.com/watch?v=hJCqBLfEN7Y
 * Make MattockFS multi-process, starting a default of four archives per node. 
   This should be a first step towards allowing multi node meshups to be created with MattockFS.
 * Added a simple example program, implementing an mmls wrapper without throttling support. 
@@ -52,11 +52,11 @@ I will however gladly accept pull requests addressing these issues:
   This slowness could potentially partially nullify part of the performance
   benefits from the page-cache and opportunistic hashing. Rewriting it
   in C++ is likely to lead to a much faster implementation.
-* Move to BLAKE2bp: The current implementation uses a Python mod-
-  ule without support for the parallel multi-core BLAKE2bp implemen-
+* Move to BLAKE2bp: The current implementation uses a Python module 
+  without support for the parallel multi-core BLAKE2bp implemen-
   tation. With just one file-system on a node for a given archive, this
-  would mean at most one core could be working on opportunistic hash-
-  ing for the whole node, possibly creating a hashing bottleneck for the
+  would mean at most one core could be working on opportunistic hashing 
+  for the whole node, possibly creating a hashing bottleneck for the
   system. Implementing BLAKE2bp, either by patching the BLAKE2
   python module code, or by moving to C++ and appropriate library
   could remove that potential bottleneck.
