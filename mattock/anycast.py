@@ -522,7 +522,7 @@ class Actors:
                                      context=self.context,
                                      stack=self.stack,
                                      col=self.rep.col)
-        self.tick()
+        # self.tick()
         # Return the new or already existing actor object.
         return self.actors[key]
 

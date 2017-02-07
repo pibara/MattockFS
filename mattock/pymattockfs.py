@@ -311,11 +311,11 @@ class ActorInf:
 
 # Valid worker control-file under $MP/worker/
 class WorkerCtl:
-    def __init__(self, worker, sortre, selectre):
+    def __init__(self, worker, sortre, selectre, tick):
         self.worker = worker
         self.sortre = sortre
         self.selectre = selectre
-
+        self.tick = tick
     def getattr(self):
         return defaultstat(STAT_MODE_FILE_RO)
 
@@ -348,6 +348,7 @@ class WorkerCtl:
                 job = self.worker.accept_job()
                 if job is None:
                     return -errno.ENODATA
+                self.tick()
                 return "job/" + job + ".ctl"
         return -errno.ENODATA
 
@@ -380,8 +381,9 @@ class WorkerCtl:
 
 # Valid job control-file under $MP/job/
 class JobCtl:
-    def __init__(self, job):
+    def __init__(self, job, tick):
         self.job = job
+        self.tick = tick
 
     def getattr(self):
         return defaultstat(STAT_MODE_FILE_RO)
@@ -448,6 +450,7 @@ class JobCtl:
                 self.job.submit_child(carvpath=parts[0], nexthop=parts[1],
                                       routerstate=parts[2], mimetype=parts[3],
                                       extension=parts[4])
+                self.tick()
             return 0
         if name == "user.allocate_mutable":
             # Create a mutable of the given size.
@@ -688,11 +691,12 @@ class MattockFS(fuse.Fuse):
                     if self.ms.validworkercap(handle=handle):
                         return WorkerCtl(worker=self.ms.workers[handle],
                                          sortre=self.sortre,
-                                         selectre=self.selectre)
+                                         selectre=self.selectre,
+                                         tick=self.ms.tick)
                     return NoEnt()
                 if tokens[0] == "job":
                     if self.ms.validjobcap(handle=handle):
-                        return JobCtl(job=self.ms.jobs[handle])
+                        return JobCtl(job=self.ms.jobs[handle],tick=self.ms.tick)
                     return NoEnt()
                 return NoEnt()
             if extension == "dat" and tokens[0] == "mutable":
