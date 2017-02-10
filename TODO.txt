@@ -1,10 +1,5 @@
 The following are items I still hope to complete myself over the comming weeks:
-1)  Restore state from journal: While the current implementation main-
-    tains a journal log file that in theory could be used to allow the mes-
-    saging subsystem to pick up where it left off after a restart, restore
-    from journal isn’t currently implemented. Implementing this would ef-
-    fectively give MattockFS the same atomic persistence that the OCFA
-    Anycast had.
+1)  Testing (+ debugging) restore state from journal
 2)  Implement and evaluate secondary opportunistic hashing : Secondary
     incore based opportunistic hashing could potentially greatly improve
     the interaction between carving and opportunistic hashing.
@@ -20,6 +15,7 @@ The following are items I still hope to complete myself over the comming weeks:
 
 The following TODO items have been completed since I've handed in my paper for grading:
 
+* Restore state from journal at startup.
 * Framework fadvise hooks: Different file-types can have file-type specific
   processing and expected access patterns. It is likely that providing
   hooks for allowing the framework to predict such patterns could allow
