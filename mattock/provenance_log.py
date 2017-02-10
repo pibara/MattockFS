@@ -131,8 +131,7 @@ class ProvenanceLog:
         # Create a journal record
         journal_rec = {"type": "RPENT", 
                        "key": key,
-                       "provenance": self.log,
-                       "active" : False}
+                       "provenance": self.log}
         # And write it to the jounal log.
         self.journal.write(json.dumps(journal_rec,sort_keys=True))
         self.journal.write("\n")

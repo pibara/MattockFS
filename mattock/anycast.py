@@ -481,36 +481,41 @@ class Actors:
         self.provenance_log = open(provenance, "a", 0)
         # Restoring old state from journal;
         journalinfo = {}
-#        if os.path.exists(journal):
-#        with open(journal, 'r') as f:
-#            print "Harvesting old state from journal"
-#            for line in f:
-#                line = line.rstrip().encode('ascii', 'ignore')
-#                dat = json.loads(line)
-#                dtype = dat["type"]
-#                dkey = dat["key"]
-#                if dtype == "NEW":
-#                    journalinfo[dkey] = []
-#                    journalinfo[dkey].append(dat["provenance"])
-#                else:
-#                    if  dtype == "UPD":
-#                        journalinfo[dkey].append(dat["provenance"])
-#                    else:
-#                        if dtype == "FNL":
-#                            del journalinfo[dkey]
-#                        else:
-#                            if dtype == "RPENT":
-#                                journalinfo[dkey] = dat["provenance"]
-#        print "Done harvesting" 
+        if os.path.exists(journal):
+            with open(journal, 'r') as f:
+                print "Harvesting old state from journal"
+                for line in f:
+                    line = line.rstrip().encode('ascii', 'ignore')
+                    dat = json.loads(line)
+                    dtype = dat["type"]
+                    if dtype == "NEW":
+                        dkey = dat["key"]
+                        journalinfo[dkey] = []
+                        journalinfo[dkey].append(dat["provenance"])
+                    else:
+                        if  dtype == "UPD":
+                            dkey = dat["key"] 
+                            journalinfo[dkey].append(dat["provenance"])
+                        else:
+                            if dtype == "FNL":
+                                dkey = dat["key"]
+                                del journalinfo[dkey]
+                            else:
+                                if dtype == "RPENT":
+                                    dkey = dat["key"]
+                                    journalinfo[dkey] = dat["provenance"]
+            print "Done harvesting" 
         self.journal = JournalFile(journal)
         self.ticks = 0
-#        if len(journalinfo) > 0:
-#            print "Processing harvested journal state"
-#            for needrestore in journalinfo:
-#                provenance_log = journalinfo[needrestore]
-#                print "Restoring : ", provenance_log
-#                self.journal_restore(provenance_log)
-#                print "State restored"
+        if len(journalinfo) > 0:
+            print "Processing harvested journal state"
+            for needrestore in journalinfo:
+                provenance_log = journalinfo[needrestore]
+                print "Restoring : ", provenance_log
+                self.journal_restore(provenance_log,needrestore)
+                print "State restored"
+        else:
+             print "Nothing to restore"
     def restorepoint(self):
         self.journal.newfile()
         self.journal.write("{\"type\" : \"RESTOREPOINT\", \"jobcount\" : " + str(len(self.jobs)) + " }\n")
@@ -542,41 +547,50 @@ class Actors:
         # self.tick()
         # Return the new or already existing actor object.
         return self.actors[key]
-    #FIXME: work in progress
-#    def journal_restore(self, journal_records):
-#        actor = journal_records[-1]["actor"]
-#        print "Restoring job for actor ", actor
-#        if len(journal_records) == 1:
-#            pl0 = journal_records[0]
-#            print "  * Restoring without a provenance log: ",
-#            pl0["carvpath"], pl0["router_state"], pl0["mime"], pl0["extension"]
-#            self[actor].anycast_add(pl0["carvpath"],
-#                                    pl0["router_state"],
-#                                    pl0["mime"],
-#                                    pl0["extension"],
-#                                    None)
-#        else:
-#            pl0 = journal_records[0]
-#            print "* Creating first record for provenance log object for job"
-#            newpl = provenance_log.ProvenanceLog(pl0["jobid"],
-#                                                 pl0["actor"],
-#                                                 pl0["router_state"],
-#                                                 pl0["carvpath"],
-#                                                 pl0["mime"],
-#                                                 pl0["extension"],
-#                                                 journal=self.journal,
-#                                                 provenance_log=self.provenance_log,
-#                                                 restore=True)
-#            for subseq in journal_records[1:-1]:
-#                print "* Adding one more record to provenance log for job"
-#                newpl(subseq["jobid"],
-#                      subseq["actor"],
-#                      subseq["router_state"],
-#                      restore=True)
-#            pln = journal_records[-1]
-#            print "* Restoring job with provenance log:", pl0["carvpath"], pln["router_state"], pl0["mime"], pl0["extension"], newpl
-#            self[actor].anycast_add(pl0["carvpath"],
-        #pln["router_state"], pl0["mime"], pl0["extension"], newpl)a
+    #FIXME: untested code, might be OK, need tests first.
+    def journal_restore(self, journal_records,oldkey):
+         last_record = journal_records[-1]
+         #Try to restore job to its last queue
+         actor = last_record["actor"]
+         #If the job was active at restart, we can't just put it back in the queue.
+         was_active = last_record["active"]
+         #The last router state
+         router_state = last_record["router_state"]
+         #If the job was active, relay it to a module that can handle orphaned jobs.
+         if was_active == True :
+             #Add the actor name to the router state to let the special module know what module orphaned the job.
+             router_state = router_state + ":" + actor
+             actor = "orphaned"
+         print "Restoring job for actor ", actor
+         print "* Creating first record for provenance log object for job"
+         pl0=journal_records[0]
+         #Rebuild the provenance log object.
+         newpl = provenance_log.ProvenanceLog(jobid=pl0["jobid"],
+                                              actor=pl0["actor"],
+                                              router_state=pl0["router_state"],
+                                              carvpath=pl0["carvpath"],
+                                              mimetype=pl0["mime"],
+                                              extension=pl0["extension"],
+                                              journal=self.journal,
+                                              provenance_log=self.provenance_log,
+                                              user=pl0["user"],
+                                              command=pl0["command"],
+                                              restore=True)
+         for subseq in journal_records[1:-1]:
+             print "* Adding one more record to provenance log for job"
+             newpl(jobid=subseq["jobid"],
+                   actor=subseq["actor"],
+                   router_state=subseq["router_state"],
+                   user = subseq["user"],
+                   command = subseq["command"],
+                   restore=True)
+         #Recreate the old job on the anycast.
+         self[actor].anycast_add(
+            carvpath=pl0["carvpath"],
+            router_state=router_state,
+            mime_type=pl0["mime_type"],
+            file_extension=pl0["extention"],
+            provenance=newpl)
 
     def selectactor(self, actor_select_policy):
         actorset = self.actors.keys()
