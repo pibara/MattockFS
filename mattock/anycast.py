@@ -75,7 +75,7 @@ class Worker:
         # If there is still a job marked as active, we have no other option
         # than to commit it.
         if self.currentjob is not None:
-            self.currentjob.commit()
+            self.currentjob.commit(worker=self)
             self.currentjob = None
         # Unregister the module and make sure we don't do so twice.
         if self.valid:
@@ -95,20 +95,22 @@ class Worker:
         # If for any reason we forgat to explicitly forward or commit the
         # previous job, we have no other option than comitting it now.
         if self.currentjob is not None:
-            self.currentjob.commit()
+            self.currentjob.commit(worker=self)
         # The "K" job select policy doesn't actually select a job from the
         # anycast set but creates one out of thin air as way to kickstart
         # new data.
         if self.job_select_policy == "K":
-            self.currentjob = self.actor.get_kickjob()
+            self.currentjob = self.actor.get_kickjob(worker=self)
         else:
             # For all other policies, pop a job from our Actor's anycast set.
             self.currentjob = self.actor.anycast_pop(
               module_select_policy=self.module_select_policy,
-              job_select_policy=self.job_select_policy)
+              job_select_policy=self.job_select_policy,
+              worker=self)
         # Return the handle of our new current job.
         if self.currentjob is not None:
             self.currentjob.worker = self
+            self.currentjob.provenance.accept(actor=self.actorname,command=self.command,user=self.user)
             return self.currentjob.jobhandle
         return None
 
@@ -182,7 +184,7 @@ class Job:
     def __init__(self, jobhandle, actorname, carvpath, router_state,
                  mime_type, file_extension, actors, context, stack,
                  journal, prov_log, jobs, capgen, newdata, col, rep,
-                 provenance=None):
+                 provenance=None,worker=None):
         self.jobhandle = jobhandle
         self.actorname = actorname
         # Process the carvpath and flatten or replace with longpath digest if
@@ -207,6 +209,11 @@ class Job:
         self.newdata = newdata
         self.col = col
         self.rep = rep
+        user = None
+        command = None
+        if worker != None:
+            user = worker.user
+            command = worker.command
         # Create a brand new provenance structure if non was passed in the
         # constructor.
         if provenance is None:
@@ -218,14 +225,18 @@ class Job:
               mimetype=self.mime_type,
               extension=self.file_extension,
               journal=self.journal,
-              provenance_log=prov_log)
+              provenance_log=prov_log,
+              user=user,
+              command=command)
         else:
             # Otherwise append some data to the existing structure.
             self.provenance = provenance
             self.provenance(
               jobid=self.jobhandle,
               actor=self.actorname,
-              router_state=self.router_state)
+              router_state=self.router_state,
+              user=user,
+              command=command)
 
     def __del__(self):
         # Update the reference count stack on delete.
@@ -237,7 +248,7 @@ class Job:
             # FIXME, we need better logging.
             print "WARNING: Orphaned mutable: " + carvpath
 
-    def commit(self):
+    def commit(self,worker=None):
         # Remove from the jobs lookup map on commit.
         if self.jobhandle in self.jobs:
             del self.jobs[self.jobhandle]
@@ -297,7 +308,7 @@ class Job:
                         carvpath,
                         mimetype,
                         parentcp=self.carvpath,
-                        parentjob=self.provenance.log[0]["job"],
+                        parentjob=self.provenance.log[0]["jobid"],
                         extension=extension,
                         journal=self.journal,
                         provenance_log=self.actors.provenance_log,
@@ -308,7 +319,8 @@ class Job:
                                          router_state=routerstate,
                                          mime_type=self.mime_type,
                                          file_extension=extension,
-                                         provenance=provenance)
+                                         provenance=provenance,
+                                         worker=self.worker)
     def restorepoint(self):
         self.provenance.restorepoint()
         
@@ -379,7 +391,7 @@ class Actor:
 
     # Create and add a job to the anycast set for this actor.
     def anycast_add(self, carvpath, router_state, mime_type, file_extension,
-                    provenance):
+                    provenance,worker):
         jobhandle = self.capgen(self.secret)  # Create a new Job sparse-cap.
         # Create a new job and add to the anycast set map.
         self.anycast[jobhandle] = Job(jobhandle=jobhandle,
@@ -398,21 +410,23 @@ class Actor:
                                       capgen=self.capgen,
                                       newdata=self.newdata,
                                       col=self.col,
-                                      rep=self.rep)
+                                      rep=self.rep,
+                                      worker=worker)
         return
     # Get a job to do a kickstart with.
-    def get_kickjob(self):
+    def get_kickjob(self,worker=None):
         # Add job to own anycast set.
         self.anycast_add(carvpath="S0",
                          router_state="",
                          mime_type="application/x-zerosize",
                          file_extension="empty",
-                         provenance=None)
+                         provenance=None,
+                         worker=worker)
         # And pop it immediately.
-        return self.anycast_pop("S")
+        return self.anycast_pop("S",worker=worker)
 
     # Pop a job from the anycast set using a given job select policy.
-    def anycast_pop(self, job_select_policy, module_select_policy="S"):
+    def anycast_pop(self, job_select_policy, module_select_policy="S",worker=None):
         if self.name != "loadbalance":
             # For normal workers, get a best job from the repository according
             # to the select policy.
@@ -424,13 +438,14 @@ class Actor:
                 # Place it in the accessible jobs map.
                 self.jobs[best] = job
                 # Return the Job
+                job.worker = worker
                 return job
         else:
             # For our special "loadbalance" worker, select a module first.
             bestmodule = self.actors.selectactor(module_select_policy)
             if bestmodule is not None:
                 # Than call ourselves for the most suitable module.
-                best = self.actors[bestmodule].anycast_pop(job_select_policy)
+                best = self.actors[bestmodule].anycast_pop(job_select_policy,worker=worker)
                 return best
         return None
 
@@ -464,36 +479,38 @@ class Actors:
         self.capgen = CapabilityGenerator()  # Create capability generator.
         # Unbuffered provenance log.
         self.provenance_log = open(provenance, "a", 0)
-        # Restoring old state from journal; commented out for now, BROKEN!
-        # journalinfo = {}
-        # try :
-        #  f = open(journal, 'r')
-        # except:
-        #  f is None
-        # if f is not None:
-        #  print "Harvesting old state from journal"
-        #  for line in f:
-        #    line = line.rstrip().encode('ascii', 'ignore')
-        #    dat = json.loads(line)
-        #    dtype = dat["type"]
-        #    dkey = dat["key"]
-        #    if dtype == "NEW":
-        #      journalinfo[dkey] = []
-        #    if dtype != "FNL":
-        #      journalinfo[dkey].append(dat["provenance"])
-        #    else:
-        #      del journalinfo[dkey]
-        #  f.close()
-        #  print "Done harvesting"
+        # Restoring old state from journal;
+        journalinfo = {}
+#        if os.path.exists(journal):
+#        with open(journal, 'r') as f:
+#            print "Harvesting old state from journal"
+#            for line in f:
+#                line = line.rstrip().encode('ascii', 'ignore')
+#                dat = json.loads(line)
+#                dtype = dat["type"]
+#                dkey = dat["key"]
+#                if dtype == "NEW":
+#                    journalinfo[dkey] = []
+#                    journalinfo[dkey].append(dat["provenance"])
+#                else:
+#                    if  dtype == "UPD":
+#                        journalinfo[dkey].append(dat["provenance"])
+#                    else:
+#                        if dtype == "FNL":
+#                            del journalinfo[dkey]
+#                        else:
+#                            if dtype == "RPENT":
+#                                journalinfo[dkey] = dat["provenance"]
+#        print "Done harvesting" 
         self.journal = JournalFile(journal)
         self.ticks = 0
-        # if len(journalinfo) > 0:
-        #  print "Processing harvested journal state"
-        #  for needrestore in journalinfo:
-        #    provenance_log = journalinfo[needrestore]
-        #    print "Restoring : ", provenance_log
-        #    self.journal_restore(provenance_log)
-        #  print "State restored"
+#        if len(journalinfo) > 0:
+#            print "Processing harvested journal state"
+#            for needrestore in journalinfo:
+#                provenance_log = journalinfo[needrestore]
+#                print "Restoring : ", provenance_log
+#                self.journal_restore(provenance_log)
+#                print "State restored"
     def restorepoint(self):
         self.journal.newfile()
         self.journal.write("{\"type\" : \"RESTOREPOINT\", \"jobcount\" : " + str(len(self.jobs)) + " }\n")
@@ -525,34 +542,41 @@ class Actors:
         # self.tick()
         # Return the new or already existing actor object.
         return self.actors[key]
-
-# def journal_restore(self, journal_records):
-#    actor = journal_records[-1]["actor"]
-#    print "Restoring job for actor ", actor
-#    if len(journal_records) == 1:
-#      pl0 = journal_records[0]
-#      print "  * Restoring without a provenance log: ",
-# pl0["carvpath"], pl0["router_state"], pl0["mime"], pl0["extension"]
-#      self[actor].anycast_add(pl0["carvpath"], pl0["router_state"],
-# pl0["mime"], pl0["extension"], None)
-#    else:
-#      pl0 = journal_records[0]
-#      print "* Creating first record for provenance log object for job"
-#      newpl = provenance_log.ProvenanceLog(pl0["job"], pl0["actor"],
-# pl0["router_state"], pl0["carvpath"], pl0["mime"], pl0["extension"],
-# journal=self.journal, provenance_log=self.provenance_log, restore=True)
-#      for subseq in journal_records[1:-1]:
-#        print "* Adding one more record to provenance log for job"
-#        newpl(subseq["jobid"], subseq["actor"], subseq["router_state"],
-# restore=True)
-#      pln = journal_records[-1]
-#      print "* Restoring job with provenance log:", pl0["carvpath"],
-# pln["router_state"],
-# pl0["mime"],
-# pl0["extension"],
-# newpl
-#      self[actor].anycast_add(pl0["carvpath"],
-# pln["router_state"], pl0["mime"], pl0["extension"], newpl)a
+    #FIXME: work in progress
+#    def journal_restore(self, journal_records):
+#        actor = journal_records[-1]["actor"]
+#        print "Restoring job for actor ", actor
+#        if len(journal_records) == 1:
+#            pl0 = journal_records[0]
+#            print "  * Restoring without a provenance log: ",
+#            pl0["carvpath"], pl0["router_state"], pl0["mime"], pl0["extension"]
+#            self[actor].anycast_add(pl0["carvpath"],
+#                                    pl0["router_state"],
+#                                    pl0["mime"],
+#                                    pl0["extension"],
+#                                    None)
+#        else:
+#            pl0 = journal_records[0]
+#            print "* Creating first record for provenance log object for job"
+#            newpl = provenance_log.ProvenanceLog(pl0["jobid"],
+#                                                 pl0["actor"],
+#                                                 pl0["router_state"],
+#                                                 pl0["carvpath"],
+#                                                 pl0["mime"],
+#                                                 pl0["extension"],
+#                                                 journal=self.journal,
+#                                                 provenance_log=self.provenance_log,
+#                                                 restore=True)
+#            for subseq in journal_records[1:-1]:
+#                print "* Adding one more record to provenance log for job"
+#                newpl(subseq["jobid"],
+#                      subseq["actor"],
+#                      subseq["router_state"],
+#                      restore=True)
+#            pln = journal_records[-1]
+#            print "* Restoring job with provenance log:", pl0["carvpath"], pln["router_state"], pl0["mime"], pl0["extension"], newpl
+#            self[actor].anycast_add(pl0["carvpath"],
+        #pln["router_state"], pl0["mime"], pl0["extension"], newpl)a
 
     def selectactor(self, actor_select_policy):
         actorset = self.actors.keys()

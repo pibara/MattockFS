@@ -48,10 +48,10 @@ class ProvenanceLog:
         self.provenance = provenance_log  # File handle for storing provenance
         #                                   log once done.
         key = carvpath + "-" + jobid
-        key = blake2b(key.encode(), digest_size=32).hexdigest() 
+        self.key = blake2b(key.encode(), digest_size=32).hexdigest() 
         # Fill the first record in the provenance log with basic info.
-        rec = {"job": jobid, "actor": actor, "router_state": router_state,
-               "carvpath": carvpath, "mime": mimetype, "extension": extension, "jkey": key }
+        rec = {"jobid": jobid, "actor": actor, "router_state": router_state,
+               "carvpath": carvpath, "mime": mimetype, "extension": extension, "active": True }
         rec["time"] = time.time()  # Log creation time
         # If there was a parent carvpath: make a note of it in the creation
         # record.
@@ -69,49 +69,72 @@ class ProvenanceLog:
         # Don't log to journal if constructed in restore mode.
         if restore is False:
             # Create a journal log record
-            journal_rec = {"type": "NEW", "key": key, "provenance": rec}
+            journal_rec = {"type": "NEW", "key": self.key, "provenance": rec}
             # Write the record synchonously to the journal.
-            self.journal.write(json.dumps(journal_rec))
+            self.journal.write(json.dumps(journal_rec,sort_keys=True))
             self.journal.write("\n")
-            
-
     def __del__(self):
         # When the ProvenanceLog object is deleted, create one last record.
         rec = {}
         rec["time"] = time.time()  # Make note of the time.
+        rec["active"] = False
         self.log.append(rec)
         # Retreive the unique key to use in the journal.
-        key = self.log[0]["jkey"]
+        key = self.key
         # Create a journal record.
-        journal_rec = {"type": "FNL", "key": key}
+        journal_rec = {"type": "FNL", "key": key, "provenance" : rec}
         # Write it to the journal.
-        self.journal.write(json.dumps(journal_rec))
+        self.journal.write(json.dumps(journal_rec,sort_keys=True))
         self.journal.write("\n")
         # Write the full provenance log to the provenance logging file.
-        self.provenance.write(json.dumps(self.log))
+        self.provenance.write(json.dumps(self.log,sort_keys=True))
         self.provenance.write("\n")
 
-    def __call__(self, jobid, actor, router_state="", restore=False):
+    def __call__(self, jobid, actor, router_state="", restore=False,command=None, user=None):
+        newobj = {"jobid": jobid,
+                  "actor": actor,
+                  "router_state": router_state,
+                  "time" : time.time(),
+                  "active" : False}
+        if user != None:
+            newobj["user"] = user
+        if command != None:
+            newobj["command"] = command
         # Add a line to the provenance log.
-        self.log.append({"jobid": jobid, "actor": actor,
-                         "router_state": router_state})
+        self.log.append(newobj)
         # Don't log to journal if invoked in  restore mode.
         if restore is False:
             # Retreive the unique key to use in the journal.
-            key = self.log[0]["jkey"]
+            key = self.key
             # Create a journal record
-            journal_rec = {"type": "UPD", "key": key,
-                           "provenance": {"jobid": jobid, "actor": actor,
-                                          "router_state": router_state}}
+            journal_rec = {"type": "UPD", 
+                           "key": key,
+                           "provenance": newobj}
             # And write it to the jounal log.
-            self.journal.write(json.dumps(journal_rec))
+            self.journal.write(json.dumps(journal_rec,sort_keys=True))
             self.journal.write("\n")
+    def accept(self,actor,command,user):
+        newobj = {"actor": actor,
+                  "time" : time.time(),
+                  "user" : user,
+                  "command" : command,
+                  "active" : True }
+        self.log.append(newobj)
+        journal_rec = {"type" : "UPD",
+                       "key"  : self.key,
+                       "provenance" : newobj }
+        self.journal.write(json.dumps(journal_rec,sort_keys=True))
+        self.journal.write("\n")
     def restorepoint(self):
         # Retreive the unique key to use in the journal.
-        key = self.log[0]["jkey"]
+        key = self.key
         # Create a journal record
-        journal_rec = {"type": "RPENT", "key": key,
-                       "provenance": self.log}
+        journal_rec = {"type": "RPENT", 
+                       "key": key,
+                       "provenance": self.log,
+                       "active" : False}
         # And write it to the jounal log.
-        self.journal.write(json.dumps(journal_rec))
+        self.journal.write(json.dumps(journal_rec,sort_keys=True))
         self.journal.write("\n")
+
+
