@@ -406,6 +406,10 @@ class JobCtl:
         if name == "user.routing_info":
             # Compose routing info string from actor name, router state
             # and mime_type.
+            print self.job
+            print self.job.actorname
+            print self.job.router_state
+            print self.job.mime_type
             return (self.job.actorname + ";" + self.job.router_state +
                     ";" + self.job.mime_type)
         if name == "user.submit_child":  # pragma: no cover

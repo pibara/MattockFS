@@ -1,21 +1,84 @@
-The following are items I still hope to complete myself over the comming weeks:
-1)  Testing (+ debugging) restore state from journal
-2)  Implement and evaluate secondary opportunistic hashing : Secondary
-    incore based opportunistic hashing could potentially greatly improve
-    the interaction between carving and opportunistic hashing.
-3)  Build MattockFS deb package for Ubuntu LTS 16.4. (5 SP)
+The following are items I still hope to complete myself over the comming weeks before the DFRWS-EU 2017:
+1)  RJM : Build MattockFS deb package for Ubuntu LTS 16.4. (5 SP)
     Currently the installation of MattockFS uses a combination of a python setup script and a bash script
     that is meant to run on Ubuntu and install dependencies. Turning this setup into a regular deb file
     should make installation more standard.
-4)  Update website. Website was made largely pre-implemetation and needs some major updates.
-5)  Write ports of the base API to C++ Next to Python, C++ should be
+2)  RJM : Complete my material for DFRWS-EU 2017 workshop on MattockFS.
+3)  RJM : Update website. Website was made largely pre-implemetation and needs some major updates.
+
+After the DFRWS-EU, I'll focus my efforts on these esential features. Extra hands are
+very much welcome. 
+
+    IF YOU WISH TO CONTRIBUTE BY PICKING UP ANY OF THE ITEMS BELOW,
+    PLEASE ADD YOUR INITIALS TO THE ITEM AND SEND ME A PULL REQUEST.
+
+4)  Testing (+ debugging) restore state from journal. This bastard has been with
+    me for a few months now and "I REALLY COULD USE A SECOND PAIR OF EYES ON THIS ONE".
+    After a restart, the anycast state should get restored from the journal. Currently
+    he restored state is somehow messed up, so I've disabled this crucial feature for
+    now. I was really hoping to fix this one before the DFRWS.
+5)  Implement temporary-quarantine facility: In OCFA, the Anycast im-
+    plemented a quarantine facility for data that would crash a module.
+    This facility, that OCFA implemented in the form of the never priority
+    allowed the investigation to keep running while maintenance program-
+    mers would fix the module. Research is needed into the possibility of
+    implementing a similar data quarantine functionality in MattockFS.
+    It is a remore posibility that this feature might be a prerequitite to
+    truly fixing the issues with #4.
+6)  Implement and evaluate secondary opportunistic hashing : Secondary
+    incore based opportunistic hashing could potentially greatly improve
+    the interaction between carving and opportunistic hashing.
+7)  Write ports of the base API to C++ Next to Python, C++ should be
     considered an important language for writing modules in. The current
     Python wrapper API for access to the file-system based archive and
     messaging API should also be ported to C++.
 
+After everything up to #7 is complete, chances are the Python reference implementation
+will have gone as fas as we can get with Python and the next logical step would be
+a port to C++, followed by a number of nfeatures best implemented after such a port:
+
+8)   Port MattockFS to C++: While Python is a good programming lan-
+     guage for prototyping, our evaluation has shown that the implementa-
+     tion is relatively slow with respect to import and possibly messaging.
+     This slowness could potentially partially nullify part of the performance
+     benefits from the page-cache and opportunistic hashing. Rewriting it
+     in C++ is likely to lead to a much faster implementation.
+9)   Move to BLAKE2bp: The current implementation uses a Python module 
+     without support for the parallel multi-core BLAKE2bp implemen-
+     tation. With just one file-system on a node for a given archive, this
+     would mean at most one core could be working on opportunistic hashing 
+     for the whole node, possibly creating a hashing bottleneck for the
+     system. Implementing BLAKE2bp, either by patching the BLAKE2
+     python module code, or by moving to C++ and appropriate library
+     could remove that potential bottleneck.
+10)  Fuse read-block size: As we identified in our evaluation of file/digest
+     order, reducing the read block-size for FUSE could potentially greatly
+     reduce the amount of spurious reads, but at the expense of file-system
+     overhead. This should be evaluated and if worth the price, implemented
+     into MattockFS.
+
+Finaly there are some architecture priviledge seperation concerns that need adressing:
+
+11)  Redis and privilege separation: The current implementation of Mat-
+     tockFS uses REDIS as in-memory distributed storage for CarvPath
+     long-path entries. The use of a Redis server for distributed CarvPath
+     long-path storage is currently an Achilles’ heel in the access control
+     model of MattockFS. It may be necessary to rethink this part of Mat-
+     tockFS to remove this potential vulnerability.
+12   Mandatory access control: Without limiting access to /proc in an ef-
+     fective way, the sparse capability based API might be compromised
+     through capabilities that could be snooped from other processes through
+     pseudo files in the /proc hierarchy that give access to process internals
+     including open files. Using AppArmor or SELinux, access to these
+     pseudo files could be effectively prohibited. Further, in a directed anti-
+     forensic attack against MattockFS, a running module might spawn a
+     child process that could register under the name of an other module.
+     Again a threat that could be removed by using AppArmor or SELinux
+     for Mandatory Access Controll.
+
 The following TODO items have been completed since I've handed in my paper for grading:
 
-* Restore state from journal at startup.
+* Maintain state in journal for restore of anycast state after restart.
 * Framework fadvise hooks: Different file-types can have file-type specific
   processing and expected access patterns. It is likely that providing
   hooks for allowing the framework to predict such patterns could allow
@@ -28,52 +91,8 @@ The following TODO items have been completed since I've handed in my paper for g
   would lead to a more efficient picking process for some of these policies,
   especially for larger sets.
 * Create a presentation video about MattockFS : https://www.youtube.com/watch?v=hJCqBLfEN7Y
-* Make MattockFS multi-process, starting a default of four archives per node. 
+* Make MattockFS multi-process, starting a default of four archives per node.
   This should be a first step towards allowing multi node meshups to be created with MattockFS.
-* Added a simple example program, implementing an mmls wrapper without throttling support. 
+* Added a simple example program, implementing an mmls wrapper without throttling support.
   I hope this can help others an easier steppingstone to figuring out how to use MattockFS.
 
-The following items are subject I won't be working on. 
-I will however gladly accept pull requests addressing these issues:
-
-* Implement temporary-quarantine facility: In OCFA, the Anycast im-
-  plemented a quarantine facility for data that would crash a module.
-  This facility, that OCFA implemented in the form of the never priority
-  allowed the investigation to keep running while maintenance program-
-  mers would fix the module. Research is needed into the possibility of
-  implementing a similar data quarantine functionality in MattockFS.
-* Port MattockFS to C++: While Python is a good programming lan-
-  guage for prototyping, our evaluation has shown that the implementa-
-  tion is relatively slow with respect to import and possibly messaging.
-  This slowness could potentially partially nullify part of the performance
-  benefits from the page-cache and opportunistic hashing. Rewriting it
-  in C++ is likely to lead to a much faster implementation.
-* Move to BLAKE2bp: The current implementation uses a Python module 
-  without support for the parallel multi-core BLAKE2bp implemen-
-  tation. With just one file-system on a node for a given archive, this
-  would mean at most one core could be working on opportunistic hashing 
-  for the whole node, possibly creating a hashing bottleneck for the
-  system. Implementing BLAKE2bp, either by patching the BLAKE2
-  python module code, or by moving to C++ and appropriate library
-  could remove that potential bottleneck.
-* Fuse read-block size: As we identified in our evaluation of file/digest
-  order, reducing the read block-size for FUSE could potentially greatly
-  reduce the amount of spurious reads, but at the expense of file-system
-  overhead. This should be evaluated and if worth the price, implemented
-  into MattockFS.
-* Redis and privilege separation: The current implementation of Mat-
-  tockFS uses REDIS as in-memory distributed storage for CarvPath
-  long-path entries. The use of a Redis server for distributed CarvPath
-  long-path storage is currently an Achilles’ heel in the access control
-  model of MattockFS. It may be necessary to rethink this part of Mat-
-  tockFS to remove this potential vulnerability.
-* Mandatory access control: Without limiting access to /proc in an ef-
-  fective way, the sparse capability based API might be compromised
-  through capabilities that could be snooped from other processes through
-  pseudo files in the /proc hierarchy that give access to process internals
-  including open files. Using AppArmor or SELinux, access to these
-  pseudo files could be effectively prohibited. Further, in a directed anti-
-  forensic attack against MattockFS, a running module might spawn a
-  child process that could register under the name of an other module.
-  Again a threat that could be removed by using AppArmor or SELinux
-  for MAC.

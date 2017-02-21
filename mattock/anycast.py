@@ -209,8 +209,8 @@ class Job:
         self.newdata = newdata
         self.col = col
         self.rep = rep
-        user = None
-        command = None
+        user = "mattockfs"
+        command = ["mattockfs"]
         if worker != None:
             user = worker.user
             command = worker.command
@@ -391,7 +391,7 @@ class Actor:
 
     # Create and add a job to the anycast set for this actor.
     def anycast_add(self, carvpath, router_state, mime_type, file_extension,
-                    provenance,worker):
+                    provenance,worker=None):
         jobhandle = self.capgen(self.secret)  # Create a new Job sparse-cap.
         # Create a new job and add to the anycast set map.
         self.anycast[jobhandle] = Job(jobhandle=jobhandle,
@@ -549,48 +549,52 @@ class Actors:
         return self.actors[key]
     #FIXME: untested code, might be OK, need tests first.
     def journal_restore(self, journal_records,oldkey):
-         last_record = journal_records[-1]
-         #Try to restore job to its last queue
-         actor = last_record["actor"]
-         #If the job was active at restart, we can't just put it back in the queue.
-         was_active = last_record["active"]
-         #The last router state
-         router_state = last_record["router_state"]
-         #If the job was active, relay it to a module that can handle orphaned jobs.
-         if was_active == True :
-             #Add the actor name to the router state to let the special module know what module orphaned the job.
-             router_state = router_state + ":" + actor
-             actor = "orphaned"
-         print "Restoring job for actor ", actor
-         print "* Creating first record for provenance log object for job"
-         pl0=journal_records[0]
-         #Rebuild the provenance log object.
-         newpl = provenance_log.ProvenanceLog(jobid=pl0["jobid"],
-                                              actor=pl0["actor"],
-                                              router_state=pl0["router_state"],
-                                              carvpath=pl0["carvpath"],
-                                              mimetype=pl0["mime"],
-                                              extension=pl0["extension"],
-                                              journal=self.journal,
-                                              provenance_log=self.provenance_log,
-                                              user=pl0["user"],
-                                              command=pl0["command"],
-                                              restore=True)
-         for subseq in journal_records[1:-1]:
-             print "* Adding one more record to provenance log for job"
-             newpl(jobid=subseq["jobid"],
-                   actor=subseq["actor"],
-                   router_state=subseq["router_state"],
-                   user = subseq["user"],
-                   command = subseq["command"],
-                   restore=True)
-         #Recreate the old job on the anycast.
-         self[actor].anycast_add(
-            carvpath=pl0["carvpath"],
-            router_state=router_state,
-            mime_type=pl0["mime_type"],
-            file_extension=pl0["extention"],
-            provenance=newpl)
+         restorebug = True
+         if restorebug:
+             print "SKIP RESTORE! RESTORE CODE DISABLED (BROKEN)"
+         else:
+             last_record = journal_records[-1]
+             #Try to restore job to its last queue
+             actor = last_record["actor"]
+             #If the job was active at restart, we can't just put it back in the queue.
+             was_active = last_record["active"]
+             #The last router state
+             router_state = last_record["router_state"]
+             #If the job was active, relay it to a module that can handle orphaned jobs.
+             if was_active == True :
+                 #Add the actor name to the router state to let the special module know what module orphaned the job.
+                 router_state = router_state + ":" + actor
+                 actor = "orphaned"
+             print "Restoring job for actor ", actor
+             print "* Creating first record for provenance log object for job"
+             pl0=journal_records[0]
+             #Rebuild the provenance log object.
+             newpl = provenance_log.ProvenanceLog(jobid=pl0["jobid"],
+                                                  actor=pl0["actor"],
+                                                  router_state=pl0["router_state"],
+                                                  carvpath=pl0["carvpath"],
+                                                  mimetype=pl0["mime"],
+                                                  extension=pl0["extension"],
+                                                  journal=self.journal,
+                                                  provenance_log=self.provenance_log,
+                                                  user=pl0["user"],
+                                                  command=pl0["command"],
+                                                  restore=True)
+             for subseq in journal_records[1:-1]:
+                 print "* Adding one more record to provenance log for job"
+                 newpl(jobid=subseq["jobid"],
+                       actor=subseq["actor"],
+                       router_state=subseq["router_state"],
+                       user = subseq["user"],
+                       command = subseq["command"],
+                       restore=True)
+             #Recreate the old job on the anycast.
+             self[actor].anycast_add(
+                carvpath=pl0["carvpath"],
+                router_state=router_state,
+                mime_type=pl0["mime"],
+                file_extension=pl0["extension"],
+                provenance=newpl)
 
     def selectactor(self, actor_select_policy):
         actorset = self.actors.keys()
