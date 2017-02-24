@@ -1,0 +1,25 @@
+Package: mattockfs
+Section: utils
+Priority: extra
+Essential: no
+Version: 0.9.9-1
+Architecture: all
+Installed-Size: 1160
+Depends: python-blake2,python-fadvise,python-xattr,python-redis,python-fuse,python-libewf,fuse,redis-server
+Recommends: 
+Maintainer: Rob J Meijer <pibara@gmail.com>
+Description: MattockFS Computer-Forensic-Archive and Message-Bus file-system.
+ MattockFS in its current form is is a Python reference implementation of a user space file system
+ that provides a write once archive and local message bus aimed specifically at the the computer forensic
+ process. MattockFS aims to be a core component in (distributed) processing of computer forensic evidence
+ in the setting of a computer forensic framework aimed at medium to large scale CF investigations.
+ MattockFS's design is based on the least authority file-system MattockFS, the CarvFS computer forensic
+ file system for zero-storage/in-line carving, and on the Anycast message bus solution from the Open Computer
+ Forensics Architecture (OCFA). Like CarvFS, MattockFS uses nested carvpath anotations for (read only) access to
+ archive data. Like the OCFA anycast, MattockFS allows for anynchonous messages passed between forensic framework
+ modules, and like MinorFS, MattockFS uses the concept of sparse capabilities, that when combined with Mandatory
+ Access Controls (SELinux or AppArmor) allow for least authority priviledge separation between modules that should
+ protect both from basic robustnes concerns from module crashes and from targeted anti forensic attacks against
+ vulnerable computer forensic framework modules. Priviledge seperation is further enhanced with a trusted provenance
+ log. The MattockFS design introduces (BLAKE2 based) opportunistic hashing and other anti-spurious-read features. 
+
