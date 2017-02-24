@@ -18,5 +18,8 @@ cd debstuf
 fakeroot dpkg-deb --build mattockfs mattockfs_`grep Version mattockfs/DEBIAN/control |sed -e 's/.* //'`.deb
 rm -rf mattockfs/
 #Download the primary dependencies of MattockFS (Work in progress, need to still look if complete for clean 16.04 install)
-apt-get download -o=dir::cache=. python-xattr python-redis python-fuse python-libewf fuse redis-server
+apt-get download -o=dir::cache=. python-xattr python-redis python-fuse python-libewf fuse redis-server libewf2 libpython2.7 libbfio1 python-cffi python-cffi-backend python-pycparser python-ply libffi6 python-pkg-resources redis-tools libjemalloc1 libfuse2
 rm *.bin
+tar czf ubuntu_packages_mattockfs_dfrwseu2017.tgz *.deb
+rm *.deb
+
