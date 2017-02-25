@@ -483,7 +483,6 @@ class Actors:
         journalinfo = {}
         if os.path.exists(journal):
             with open(journal, 'r') as f:
-                print "Harvesting old state from journal"
                 for line in f:
                     line = line.rstrip().encode('ascii', 'ignore')
                     dat = json.loads(line)
@@ -504,18 +503,12 @@ class Actors:
                                 if dtype == "RPENT":
                                     dkey = dat["key"]
                                     journalinfo[dkey] = dat["provenance"]
-            print "Done harvesting" 
         self.journal = JournalFile(journal)
         self.ticks = 0
         if len(journalinfo) > 0:
-            print "Processing harvested journal state"
             for needrestore in journalinfo:
                 provenance_log = journalinfo[needrestore]
-                print "Restoring : ", provenance_log
                 self.journal_restore(provenance_log,needrestore)
-                print "State restored"
-        else:
-             print "Nothing to restore"
     def restorepoint(self):
         self.journal.newfile()
         self.journal.write("{\"type\" : \"RESTOREPOINT\", \"jobcount\" : " + str(len(self.jobs)) + " }\n")
@@ -565,8 +558,6 @@ class Actors:
                  #Add the actor name to the router state to let the special module know what module orphaned the job.
                  router_state = router_state + ":" + actor
                  actor = "orphaned"
-             print "Restoring job for actor ", actor
-             print "* Creating first record for provenance log object for job"
              pl0=journal_records[0]
              #Rebuild the provenance log object.
              newpl = provenance_log.ProvenanceLog(jobid=pl0["jobid"],
@@ -581,7 +572,6 @@ class Actors:
                                                   command=pl0["command"],
                                                   restore=True)
              for subseq in journal_records[1:-1]:
-                 print "* Adding one more record to provenance log for job"
                  newpl(jobid=subseq["jobid"],
                        actor=subseq["actor"],
                        router_state=subseq["router_state"],
