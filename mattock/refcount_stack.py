@@ -169,7 +169,9 @@ class CarvpathRefcountStack:
                 self.fadvise(offset=fragment.offset, size=fragment.size,
                              willneed=True)
             # Write to our refcount log file.
-            self.log.write(str(time.time()) + ":+:" + str(merged)+"\n")
+            cp = str(merged)
+            if cp != "S0":
+                self.log.write(str(time.time()) + ":+:" + cp +"\n")
         return
 
     # Remove an existing entity from the box. Returns two entities:
@@ -198,7 +200,9 @@ class CarvpathRefcountStack:
                 for fragment in unmerged:
                     self.fadvise(offset=fragment.offset, size=fragment.size,
                                  willneed=False)
-                self.log.write(str(time.time()) + ":-:" + str(unmerged)+"\n")
+                cp = str(unmerged)
+                if cp != "S0":
+                    self.log.write(str(time.time()) + ":-:" + cp +"\n")
         return
 
     def _create_sortmap_R(self, startset):
