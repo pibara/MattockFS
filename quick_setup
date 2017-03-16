@@ -1,0 +1,27 @@
+#!/bin/bash -x
+#Use regular setup to install the code and most python dependencies.
+python ./setup.py build
+sudo python ./setup.py install 
+#The above seems to fail sometimes after updating a source file, running it twice seems to fix it, duno why yet
+python ./setup.py build
+sudo python ./setup.py install
+#Create the mattockfs user and make it a member of the fuse group if needed
+if grep --quiet "^mattockfs:" /etc/passwd; then
+  echo "User mattockfs exists already" 
+else
+  if grep --quiet "^fuse:" /etc/group; then
+    sudo useradd mattockfs -g fuse -d /var/mattock -m
+  else
+    sudo useradd mattockfs -d /var/mattock -m
+  fi
+fi
+#Patch fuse.conf to include user_allow_other
+if grep --quiet "^user_allow_other" /etc/fuse.conf; then
+  echo "user_allow_other already set for fuse"
+else
+  sudo sh -c '/bin/echo user_allow_other >> /etc/fuse.conf'
+fi
+#Copy the start, stop and test scripts to /usr/local/bin
+sudo cp bin/* /usr/local/bin/
+sudo cp mattockfs.json /etc/
+      
