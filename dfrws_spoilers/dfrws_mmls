@@ -1,0 +1,15 @@
+#!/usr/bin/python
+from mattock.api import MountPoint
+from mattock.carvpath import Fragment
+from dfrwsdemo import mmls
+
+mp = MountPoint("/var/mattock/mnt/0")
+context = mp.register_worker("mmls")
+for job in context.get_job():
+    cp=job.carvpath
+    print "Processing",cp.as_file_path()
+    for poffset,psize in mmls(cp.as_file_path()):
+        ccp=cp[str(Fragment(poffset,psize))].as_file_path()
+        print "  * ", ccp
+        job.childsubmit(ccp,"fswalk","","x-mattock/fs","dd")
+    job.done()

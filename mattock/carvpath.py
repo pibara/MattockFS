@@ -379,7 +379,7 @@ class _Entity:
     def __add__(self, other):
         # Express a+b in terms of operator+=
         rval = _Entity(lpmap=self.longpathmap, maxfstoken=self.maxfstoken)
-        rval.unaryplus(other=this)
+        rval.unaryplus(other=self)
         rval.unaryplus(other=other)
         return rval
 

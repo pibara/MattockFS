@@ -1,0 +1,16 @@
+#!/usr/bin/python
+from mattock.api import MountPoint
+from mattock.carvpath import Fragment
+from dfrwsdemo import fswalk,is_jpg
+
+mp = MountPoint("/var/mattock/mnt/0")
+context = mp.register_worker("fswalk")
+for job in context.get_job():
+    cp=job.carvpath
+    print "Processing",cp.as_file_path()
+    for poffset,psize,inode in fswalk(cp.as_file_path()):
+        ccp=cp[str(Fragment(poffset,psize))].as_file_path()
+        if is_jpg(ccp):
+            print "  ["+inode+"]  : " + ccp
+            job.childsubmit(ccp,"exif","","image/jpeg","jpg")
+    job.done()

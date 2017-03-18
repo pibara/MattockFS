@@ -1,0 +1,21 @@
+#!/usr/bin/python
+# NOTE: This script is meant mainly for testing purposes.
+#       It does not respect mattock throttling considerations
+from mattock.api import MountPoint
+import sys
+
+if len(sys.argv) < 3:
+    print "Please specify carvpath to use and actor to send message to."
+else:
+    resubmit_carvpath = sys.argv[1]
+    targetmodule = sys.argv[2]
+    mp = MountPoint("/var/mattock/mnt/0")
+    context = mp.register_worker("resubmit","K")
+    kickjob = context.poll_job()
+    kickjob.childsubmit(carvpath=resubmit_carvpath,
+                        nextactor=targetmodule,
+                        routerstate="",
+                        mimetype="application/unknown",
+                        extension="dd")
+    print "Data forwarded to",targetmodule,"as", resubmit_carvpath
+    kickjob.done()

@@ -1,0 +1,19 @@
+#!/usr/bin/python
+from mattock.api import MountPoint
+from mattock.carvpath import Fragment
+from dfrwsdemo import exif
+
+mp = MountPoint("/var/mattock/mnt/0")
+context = mp.register_worker("exif")
+for job in context.get_job():
+    cp=job.carvpath
+    print "Processing",cp.as_file_path()
+    exifjson = exif(cp.as_file_path())
+    datasize = len(exifjson)
+    mutable = job.childdata(datasize)
+    with open(mutable, "r+") as f:
+        f.seek(0)
+        f.write(exifjson)
+    exif_carvpath = job.frozen_childdata()
+    job.childsubmit(exif_carvpath,"dsm","","x-mattock/exif-meta","json")
+    job.done()
