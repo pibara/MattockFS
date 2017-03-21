@@ -24,6 +24,11 @@ More detailed ingo can be found here:
 
 http://pibara.github.io/MattockFS/
 
+DFRWS MattockFS workshop
+========================
+
+On the March 21..23 2017 DFRWS-EU conference there will be a workshop om MattockFS. More information, the slides of the presentations and hands-on session, and some relevant downloads are available <A HREF="http://dfrws.capibara.com/">HERE</A>. 
+
 Install
 =======
 
