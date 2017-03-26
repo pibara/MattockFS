@@ -7,6 +7,7 @@ import sys
 import json
 
 ewffiles = sys.argv[1:]
+sparsechunk="\0" * 4096 #An all zero's block to compare with.
 if len(ewffiles) == 0:
     print "Please specify EWF file to use."
 else:
@@ -36,14 +37,17 @@ else:
     with open(mutable, "r+") as f:
         f.seek(0)
         while remaining > 0:
-            if remaining > 1048576:
-                chunk = 1048576
+            if remaining > 4096: #4096 isn't all that fast, but will allow good sparse usage
+                chunk = 4096
                 remaining -= chunk
             else:
                 chunk = remaining
                 remaining = 0
             data = handle.read(chunk)
-            f.write(data)
+            if data == sparsechunk:
+                f.seek(4096,1) #Keep all zero 4k blocks as sparse so they don't take up space.
+            else:
+                f.write(data)
     handle.close()
     img_carvpath = kickjob.frozen_childdata()
     kickjob.childsubmit(carvpath=img_carvpath,
