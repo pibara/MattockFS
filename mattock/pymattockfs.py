@@ -137,7 +137,7 @@ class TopDir:
 # One of the non listable directories.
 class NoList:  # pragma: no cover
     def getattr(self):
-        return defaultstat(STAT_MODE_DIR_NOLIST)
+        return defaultstat(STAT_MODE_DIR)
 
     def opendir(self):
         return -errno.EPERM
@@ -157,6 +157,37 @@ class NoList:  # pragma: no cover
     def open(self, flags, path):
         return -errno.EPERM
 
+class ActorDir: 
+    def __init__(self,actors):
+        self.actors=actors
+
+    def getattr(self):
+        return defaultstat(STAT_MODE_DIR)
+
+    def readdir(self):  # pragma: no cover
+        for actor in self.actors.actors:
+            yield fuse.Direntry(actor + ".ctl")
+            yield fuse.Direntry(actor + ".inf")
+
+    def opendir(self):
+        return 0
+
+    def readlink(self):
+        return -errno.EINVAL
+
+    def listxattr(self):
+        return []
+
+    def getxattr(self, name, size):
+        return -errno.ENODATA
+
+    def setxattr(self, name, val):
+        return -errno.ENODATA
+
+    def open(self, flags, path):
+        return -errno.EPERM
+
+ 
 
 # Top level mattockfs.ctl control file.
 class TopCtl:
@@ -624,6 +655,7 @@ class MattockFS(fuse.Fuse):
             stack=self.rep.stack,
             col=self.rep.col)
         self.topctl = TopCtl(rep=self.rep, context=self.context)
+        self.actordir = ActorDir(actors=self.ms)
         self.needinit = True
     # Helper used by multiple fuse hooks to create one of the node type
     # objects above.
@@ -647,7 +679,9 @@ class MattockFS(fuse.Fuse):
             if len(tokens) == 1:
                 if tokens[0] == "mattockfs.ctl":
                     return self.topctl
-                # All level 1 directories are unlistable.
+                if tokens[0] == "actor":
+                    return self.actordir
+                # All other level 1 directories are unlistable.
                 return self.nolistdir
             if tokens[0] == "carvpath":
                 lastpart = tokens[1].split(".")
