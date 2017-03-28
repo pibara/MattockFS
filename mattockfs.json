@@ -1,1 +1,6 @@
-{ "instance_count" : 4}
+{ 
+  "instance_count" : 4 ,
+  "thin_air_jobs" : ["ewf2mattock"] ,
+  "steal_jobs" : ["loadbalance"] ,
+  "secondary_oh" : ["scalpelcp"]
+}
