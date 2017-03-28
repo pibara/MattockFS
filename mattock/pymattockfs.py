@@ -431,7 +431,8 @@ class JobCtl:
                 "user.allocate_mutable",
                 "user.frozen_mutable",
                 "user.current_mutable",
-                "user.job_carvpath"]
+                "user.job_carvpath",
+                "user.add_longpath"]
 
     def getxattr(self, name, size):
         if name == "user.routing_info":
@@ -467,6 +468,8 @@ class JobCtl:
             # worker that initiated the tool chain.
             return ("carvpath/" +
                     self.job.carvpath + "." + self.job.file_extension)
+        if name == "user.add_longpath" :
+            return ""
         return -errno.ENODATA
 
     def setxattr(self, name, val):
@@ -494,6 +497,12 @@ class JobCtl:
         if name in ("user.frozen_mutable",
                     "user.job_carvpath"):  # pragma: no cover
             return -errno.EPERM
+        if name == "user.add_longpath" :
+            #EXPERIMENTAL!, Attempt to provide longpath synchonisation between modules without
+            #               allowing workers to directly connect to redis.
+            val = val.split("carvpath/")[-1].split(".")[0]
+            altval = str(self.job.context.parse(val)) 
+            return 0
         return -errno.ENODATA
 
     def open(self, flags, path):  # pragma: no cover
