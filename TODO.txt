@@ -1,15 +1,20 @@
 IF YOU WISH TO CONTRIBUTE BY PICKING UP ANY OF THE ITEMS BELOW,
 PLEASE ADD YOUR INITIALS TO THE ITEM AND SEND ME A PULL REQUEST.
 
-1)  RJM : Update website. Website was made largely pre-implemetation and needs some major updates.
+1)  RJM: Decouple longpath implementation in such a way that workers don't need to ever
+    directly access redis.
 2)  Find + fix bug with mime-type mess up between submitting child job and 
     receiving job in next module.
-3)  Testing (+ debugging) restore state from journal. This bastard has been with
+3)  Implement and evaluate secondary opportunistic hashing : Secondary
+    incore based opportunistic hashing could potentially greatly improve
+    the interaction between carving and opportunistic hashing.
+4)  Update website. Website was made largely pre-implemetation and needs some major updates.
+5)  Testing (+ debugging) restore state from journal. This bastard has been with
     me for a few months now and "I REALLY COULD USE A SECOND PAIR OF EYES ON THIS ONE".
     After a restart, the anycast state should get restored from the journal. Currently
     he restored state is somehow messed up, so I've disabled this crucial feature for
     now. I was really hoping to fix this one before the DFRWS.
-4)  Implement temporary-quarantine facility: In OCFA, the Anycast im-
+6)  Implement temporary-quarantine facility: In OCFA, the Anycast im-
     plemented a quarantine facility for data that would crash a module.
     This facility, that OCFA implemented in the form of the never priority
     allowed the investigation to keep running while maintenance program-
@@ -17,10 +22,7 @@ PLEASE ADD YOUR INITIALS TO THE ITEM AND SEND ME A PULL REQUEST.
     implementing a similar data quarantine functionality in MattockFS.
     It is a remore posibility that this feature might be a prerequitite to
     truly fixing the issues with #4.
-5)  Implement and evaluate secondary opportunistic hashing : Secondary
-    incore based opportunistic hashing could potentially greatly improve
-    the interaction between carving and opportunistic hashing.
-6)  Write ports of the base API to C++ Next to Python, C++ should be
+7)  Write ports of the base API to C++ Next to Python, C++ should be
     considered an important language for writing modules in. The current
     Python wrapper API for access to the file-system based archive and
     messaging API should also be ported to C++.
@@ -29,13 +31,13 @@ After everything up to #7 is complete, chances are the Python reference implemen
 will have gone as fas as we can get with Python and the next logical step would be
 a port to C++, followed by a number of nfeatures best implemented after such a port:
 
-7)   Port MattockFS to C++: While Python is a good programming lan-
+8)   Port MattockFS to C++: While Python is a good programming lan-
      guage for prototyping, our evaluation has shown that the implementa-
      tion is relatively slow with respect to import and possibly messaging.
      This slowness could potentially partially nullify part of the performance
      benefits from the page-cache and opportunistic hashing. Rewriting it
      in C++ is likely to lead to a much faster implementation.
-8)   Move to BLAKE2bp: The current implementation uses a Python module 
+9)   Move to BLAKE2bp: The current implementation uses a Python module 
      without support for the parallel multi-core BLAKE2bp implemen-
      tation. With just one file-system on a node for a given archive, this
      would mean at most one core could be working on opportunistic hashing 
@@ -43,7 +45,7 @@ a port to C++, followed by a number of nfeatures best implemented after such a p
      system. Implementing BLAKE2bp, either by patching the BLAKE2
      python module code, or by moving to C++ and appropriate library
      could remove that potential bottleneck.
-9)  Fuse read-block size: As we identified in our evaluation of file/digest
+10)  Fuse read-block size: As we identified in our evaluation of file/digest
      order, reducing the read block-size for FUSE could potentially greatly
      reduce the amount of spurious reads, but at the expense of file-system
      overhead. This should be evaluated and if worth the price, implemented
@@ -51,13 +53,7 @@ a port to C++, followed by a number of nfeatures best implemented after such a p
 
 Finaly there are some architecture priviledge seperation concerns that need adressing:
 
-10)  Redis and privilege separation: The current implementation of Mat-
-     tockFS uses REDIS as in-memory distributed storage for CarvPath
-     long-path entries. The use of a Redis server for distributed CarvPath
-     long-path storage is currently an Achilles’ heel in the access control
-     model of MattockFS. It may be necessary to rethink this part of Mat-
-     tockFS to remove this potential vulnerability.
-11   Mandatory access control: Without limiting access to /proc in an ef-
+11)  Mandatory access control: Without limiting access to /proc in an ef-
      fective way, the sparse capability based API might be compromised
      through capabilities that could be snooped from other processes through
      pseudo files in the /proc hierarchy that give access to process internals
