@@ -41,7 +41,7 @@ import opportunistic_hash
 import sys
 import copy
 import os
-import longpathmap
+import resislongpathmap as longpathmap
 import pwd
 
 fuse.fuse_python_api = (0, 2)

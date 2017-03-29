@@ -790,7 +790,7 @@ class _Test:  # pragma: no cover
 
 
 if __name__ == "__main__":  # pragma: no cover
-    import longpathmap
+    import resislongpathmap as longpathmap
     lpmap = longpathmap.LongPathMap()
     context = Context(lpmap)
     t = _Test(lpmap, 160)
