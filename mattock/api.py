@@ -263,7 +263,7 @@ class LongPathMap:
     def __init__(self,mp):
         ctlpath = mp + "/mattockfs.ctl"
         self.cproot = mp + "/carvpath/"
-        if not (os.path.isfile(ctlpath):
+        if not (os.path.isfile(ctlpath)):
             raise RuntimeError("File-system not mounted at "+mp)
         self.main_ctl = xattr.xattr(ctlpath)
     def __getitem__(self, i):
@@ -271,8 +271,8 @@ class LongPathMap:
         cp_ctl = xattr.xattr(cpath)
         return cp_ctl["user.long_path"]
     def __setitem__(self, i, val):
-        self.main_ctl["add_longpath"] = val
-        self.redis.set(i, val)
+        print "add_longpath",val
+        self.main_ctl["user.add_longpath"] = val
     def __contains__(self, key):
         cpath = self.cproot + i + ".dat"
         return os.path.isfile(cpath)
