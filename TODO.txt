@@ -1,8 +1,9 @@
 IF YOU WISH TO CONTRIBUTE BY PICKING UP ANY OF THE ITEMS BELOW,
 PLEASE ADD YOUR INITIALS TO THE ITEM AND SEND ME A PULL REQUEST.
 
-1)  RJM: Decouple longpath implementation in such a way that workers don't need to ever
-    directly access redis.
+1)  Put priviledged operation in config and respect enforce as access controll.
+    * kickstarting (S0 parent jobs out of thin air)
+    * loadbalance (module selection policy setting)
 2)  Find + fix bug with mime-type mess up between submitting child job and 
     receiving job in next module.
 3)  Implement and evaluate secondary opportunistic hashing : Secondary
@@ -66,6 +67,8 @@ Finaly there are some architecture priviledge seperation concerns that need adre
 
 The following TODO items have been completed since I've handed in my paper for grading:
 
+* Decouple longpath implementation in such a way that workers don't need to ever
+  directly access redis.
 * Maintain state in journal for restore of anycast state after restart.
 * Framework fadvise hooks: Different file-types can have file-type specific
   processing and expected access patterns. It is likely that providing
