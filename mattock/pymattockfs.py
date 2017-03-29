@@ -206,7 +206,8 @@ class TopCtl:
 
     def listxattr(self):  # pragma: no cover
         return ["user.fadvise_status",
-                "user.full_archive"]
+                "user.full_archive",
+                "user.add_longpath"]
 
     def getxattr(self, name, size):
         if name == "user.fadvise_status":
@@ -216,14 +217,19 @@ class TopCtl:
         if name == "user.full_archive":
             # Get the current full archive carvpath from the repository.
             return "carvpath/" + str(self.rep.top.topentity) + ".raw"
+        if name == "user.add_longpath":
+            return ""
         return -errno.ENODATA
 
     def setxattr(self, name, val):  # pragma: no cover
         if name in ("user.fadvise_status",
                     "user.full_archive"):
             return -errno.EPERM
+        if name == "user.add_longpath":
+            val = val.split("carvpath/")[-1].split(".")[0]
+            altval = str(self.context.parse(val))
+            return 0
         return -errno.ENODATA
-
     def open(self, flags, path):  # pragma: no cover
         return -errno.EPERM
 
@@ -431,8 +437,7 @@ class JobCtl:
                 "user.allocate_mutable",
                 "user.frozen_mutable",
                 "user.current_mutable",
-                "user.job_carvpath",
-                "user.add_longpath"]
+                "user.job_carvpath"]
 
     def getxattr(self, name, size):
         if name == "user.routing_info":
@@ -468,8 +473,6 @@ class JobCtl:
             # worker that initiated the tool chain.
             return ("carvpath/" +
                     self.job.carvpath + "." + self.job.file_extension)
-        if name == "user.add_longpath" :
-            return ""
         return -errno.ENODATA
 
     def setxattr(self, name, val):
@@ -497,12 +500,6 @@ class JobCtl:
         if name in ("user.frozen_mutable",
                     "user.job_carvpath"):  # pragma: no cover
             return -errno.EPERM
-        if name == "user.add_longpath" :
-            #EXPERIMENTAL!, Attempt to provide longpath synchonisation between modules without
-            #               allowing workers to directly connect to redis.
-            val = val.split("carvpath/")[-1].split(".")[0]
-            altval = str(self.job.context.parse(val)) 
-            return 0
         return -errno.ENODATA
 
     def open(self, flags, path):  # pragma: no cover
@@ -564,9 +561,16 @@ class CarvPathFile:
         return -errno.EINVAL
 
     def listxattr(self):  # pragma: no cover
-        return ["user.opportunistic_hash",
-                "user.fadvise_status",
-                "user.force_fadvise"]
+        #Only list user,long_path if a 'D'igest carvpath.
+        if self.carvpath.split("carvpath/")[-1].split(".")[0][0] == "D":
+            return ["user.opportunistic_hash",
+                    "user.fadvise_status",
+                    "user.force_fadvise",
+                    "user.long_path"]
+        else:
+            return ["user.opportunistic_hash",
+                    "user.fadvise_status",
+                    "user.force_fadvise"]
 
     def getxattr(self, name, size):
         if name == "user.opportunistic_hash":
@@ -587,6 +591,9 @@ class CarvPathFile:
                                   carvpath=self.carvpath)))
         if name == "user.force_fadvise":
              return -errno.EPERM
+        if name == "user.long_path":
+            carvpath=self.carvpath.split("carvpath/")[-1].split(".")[0]
+            return self.context.longpathmap[carvpath]
         return -errno.ENODATA
 
     def setxattr(self, name, val):  # pragma: no cover
@@ -595,7 +602,8 @@ class CarvPathFile:
                 return 0
             return -errno.EINVAL 
         if name in ("user.opportunistic_hash",
-                    "user.fadvise_status"):
+                    "user.fadvise_status",
+                    "user.long_path"):
             return -errno.EPERM
         return -errno.ENODATA
 
