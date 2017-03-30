@@ -2,6 +2,7 @@ IF YOU WISH TO CONTRIBUTE BY PICKING UP ANY OF THE ITEMS BELOW,
 PLEASE ADD YOUR INITIALS TO THE ITEM AND SEND ME A PULL REQUEST.
 
 TOPIC "BINDING"
+===============
 
 1)  Extend Python API with a multi-mountpoint eventloop Class that has hooks
     for the main higher level API functions (but does not implement them.
@@ -15,36 +16,44 @@ TOPIC "BINDING"
 
 TOPIC "PRIVSEP"
 
-4)  Put priviledged operation in config and respect enforce as access controll.
+1)  Put priviledged operation in config and respect enforce as access controll.
     * kickstarting (S0 parent jobs out of thin air)
     * loadbalance (module selection policy setting)
-5)  Provide an base AppArmor module profile with example profile for an example module.
-6)  Provide an IPTABLES example with different module gid's and uid's.
-
+2)  Provide an base AppArmor module profile with example profile for an example module.
+3)  Provide an IPTABLES example with different module gid's and uid's.
+4)  $MNT/workdir/$CAP : Provide workers with a private working directory so workers running
+    as the same uid can't corrupt eachothers persistent mutable storage.
+5)  $MNT/etc/ : Create a config file snapshotting facility. For forensic chain integrity,
+    module config file versions used should be recorded in the archive and refered to from job
+    meta data or provenance logs. This facility should provide an extended attribute for snapshotting
+    config files from /etc/mattock.d/ and retreiving the carvpath of the snapshot.
+6)  Fix "reset": Currently workers can revoke all authority of their peers by invoking reset on 
+    <actor>.ctl. We should change this feature as to make reset work only if the process that 
+    registered as worker is no longer an active process.
 
 TOPIC "BUGS"
 
-7)  Find + fix bug with mime-type mess up between submitting child job and 
+1)  Find + fix bug with mime-type mess up between submitting child job and 
     receiving job in next module.
 
 TOPIC "PAGECACHE"
 
-8)  Implement and evaluate secondary opportunistic hashing : Secondary
+1)  Implement and evaluate secondary opportunistic hashing : Secondary
     incore based opportunistic hashing could potentially greatly improve
     the interaction between carving and opportunistic hashing.
 
 TOPIC "DOCUMENTATION"
 
-9)  Update website. Website was made largely pre-implemetation and needs some major updates.
+1)  Update website. Website was made largely pre-implemetation and needs some major updates.
 
 TOPIC "ROBUSTNESS"
 
-10)  Testing (+ debugging) restore state from journal. This bastard has been with
+1)  Testing (+ debugging) restore state from journal. This bastard has been with
     me for a few months now and "I REALLY COULD USE A SECOND PAIR OF EYES ON THIS ONE".
     After a restart, the anycast state should get restored from the journal. Currently
     he restored state is somehow messed up, so I've disabled this crucial feature for
     now. I was really hoping to fix this one before the DFRWS.
-11)  Implement temporary-quarantine facility: In OCFA, the Anycast im-
+2)  Implement temporary-quarantine facility: In OCFA, the Anycast im-
     plemented a quarantine facility for data that would crash a module.
     This facility, that OCFA implemented in the form of the never priority
     allowed the investigation to keep running while maintenance program-
@@ -55,13 +64,13 @@ TOPIC "ROBUSTNESS"
 
 TOPIC "PERFORMANCE"
 
-12)  Port MattockFS to C++: While Python is a good programming lan-
+1)   Port MattockFS to C++: While Python is a good programming lan-
      guage for prototyping, our evaluation has shown that the implementa-
      tion is relatively slow with respect to import and possibly messaging.
      This slowness could potentially partially nullify part of the performance
      benefits from the page-cache and opportunistic hashing. Rewriting it
      in C++ is likely to lead to a much faster implementation.
-13)  Move to BLAKE2bp: The current implementation uses a Python module 
+2)   Move to BLAKE2bp: The current implementation uses a Python module 
      without support for the parallel multi-core BLAKE2bp implemen-
      tation. With just one file-system on a node for a given archive, this
      would mean at most one core could be working on opportunistic hashing 
@@ -69,7 +78,7 @@ TOPIC "PERFORMANCE"
      system. Implementing BLAKE2bp, either by patching the BLAKE2
      python module code, or by moving to C++ and appropriate library
      could remove that potential bottleneck.
-14)  Fuse read-block size: As we identified in our evaluation of file/digest
+3)  Fuse read-block size: As we identified in our evaluation of file/digest
      order, reducing the read block-size for FUSE could potentially greatly
      reduce the amount of spurious reads, but at the expense of file-system
      overhead. This should be evaluated and if worth the price, implemented
