@@ -362,7 +362,7 @@ class TrivialRouter:
     def process_parent_meta(self,toplevel_meta):
         pass
     def get_parentmeta_routing_info(self):
-        return ""
+        return None,""
     def clear_state(self):
         pass
     def get_parentdata_routing_info(self):
@@ -392,11 +392,11 @@ class TrivialTreeWalker:
         self.module = module
     def mimetype(self,cp):
         return "bogus/bogus" #FIXME
-    def _node_walk(node,child_submit,allocate_storage,job):
+    def _node_walk(self,node,child_submit,allocate_storage,job):
         for childnode in node.children():
             self._node_walk(childnode,child_submit,allocate_storage,job)
-            cp = node.get_carvpath(allocate_storage)
-            meta = node.get_meta()
+            cp = childnode.get_carvpath(allocate_storage)
+            meta = childnode.get_meta()
             if not "mime-type" in meta:
                 meta["mime-type"] = self.mimetype(cp)
             child_submit(job,cp,meta)
@@ -488,11 +488,11 @@ class EventLoop:
         self.throttler.on_alloc(size)
         return self.job.childdata(size)
     def __call__(self):
-        while (job,worker) in _get_job():
+        for job,worker in self._get_job():
             self.job=job
             self.throttler.set_worker(worker)
             self.router.set_state(job.router_state)
-            toplevel_meta = self.treewalker.walk(job.carvpath,self.router.get_walk_argument(),self._child_submit,self._allocate_storage)
+            toplevel_meta = self.treewalker.walk(job.carvpath,self.router.get_walk_argument(),self._child_submit,self._allocate_storage,job)
             self.router.process_parent_meta(toplevel_meta)
             meta_module,meta_router_state = self.router.get_parentmeta_routing_info()
             if meta_module != None:
