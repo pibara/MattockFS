@@ -35,6 +35,7 @@ import xattr
 import os
 import os.path
 import re
+import json
 from time import sleep
 import carvpath
 
@@ -328,3 +329,189 @@ class MountPoint:
     # Request the current carvpath for the archive as a whole.
     def full_path(self, entity, ext="dat"):
         return self.mountpoint + "/carvpath/" + str(entity) + "." + ext
+
+
+#Some dumb and inadequate versions of module framework components. There are there basically to allow
+#seperate development of the real component. 
+
+
+#Trivial router that routs data to single tool toolchain based soly on mime-type.
+class TrivialRouter:
+    def __init__(self):
+        #Simple json that maps from mime-type to module;ext
+        with open("/etc/mattock_trivial_router_conf.json","r") as f:
+            jsondata = f.read()
+            self.rules = json.loads(jsondata) 
+    def _mime_to_module(self,mime):
+        if mime in self.rules:
+            rule = self.rules[mime]
+            return rule[0:rule.find(";")]
+        return None
+    def _mime_to_ext(self,mime):
+        if mime in self.rules:
+            rule = self.rules[mime]
+            return rule[rule.find(";")+1:]
+        return "dat"
+    def process_child_meta(self,meta):
+        mime = meta["mime-type"]
+        return self._mime_to_module(mime),"",mime,self._mime_to_ext(mime),None,""
+    def set_state(self,router_state):
+        pass
+    def get_walk_argument(self):
+        return None
+    def process_parent_meta(self,toplevel_meta):
+        pass
+    def get_parentmeta_routing_info(self):
+        return ""
+    def clear_state(self):
+        pass
+    def get_parentdata_routing_info(self):
+        return None,""
+
+
+class JsonSerializer:
+    def __call__(self,meta):
+       return json.dumps(meta) 
+
+class DummyThrottler:
+    def set_global_functors(self,fadvise_status,anycast_status):
+        self.fadvise_status = fadvise_status
+        self.anycast_status = anycast_status
+    def on_anycast(self,meta_nexthop):
+        pass
+    def on_alloc(self,size):
+        pass
+    def set_worker(self,worker):
+        pass
+
+
+class TrivialTreeWalker:
+    def __init__(self,module=None):
+        self.module = module
+    def set_module(self,module):
+        self.module = module
+    def mimetype(self,cp):
+        return "bogus/bogus" #FIXME
+    def _node_walk(node,child_submit,allocate_storage,job):
+        for childnode in node.children():
+            self._node_walk(childnode,child_submit,allocate_storage,job)
+            cp = node.get_carvpath(allocate_storage)
+            meta = node.get_meta()
+            if not "mime-type" in meta:
+                meta["mime-type"] = self.mimetype(cp)
+            child_submit(job,cp,meta)
+    def walk(self,carvpath,argument,child_submit,allocate_storage,job):
+        node = self.module.root(carvpath,argument)
+        self._node_walk(node,child_submit,allocate_storage,job) 
+        return node.get_meta()
+
+ 
+
+#This class is meant for binding together the low level MattockFS language bindings with higher level
+#module framework components and the actual module that uses a higher level API. The EventLoop will
+#poll all of the active CarvPath mounts and will comunicate with appropriate user supplied framework
+#components in order to allow modules using such a module frameworj to process incomming jobs using a
+#higher level API.
+class EventLoop:
+    def __init__(self,modname, module, router=TrivialRouter(), serializer=JsonSerializer(), throttler=DummyThrottler(), treewalker=TrivialTreeWalker(), initial_policy=None):
+        treewalker.set_module(module)
+        jsonfile = "/etc/mattockfs.json"
+        self.count = 0
+        with open(jsonfile,"r") as f:
+            jsondata = f.read()
+            data = json.loads(jsondata)
+            self.count=data["instance_count"]
+        self.mountpoints = []
+        self.workers = []
+        for mpno in range(0,self.count):
+            mppath = "/var/mattock/mnt/" + str(mpno)
+            self.mountpoints.append(MountPoint(mppath))
+        for mp in self.mountpoints:
+            self.workers.append(mp.register_worker(modname,initial_policy))
+        self.router = router
+        self.serializer = serializer
+        self.throttler = throttler
+        self.treewalker = treewalker
+        self.throttler.set_global_functors(self._fadvise_status,self._anycast_status)
+    def _fadvise_status(self):
+        dontneed = 0
+        normal = 0
+        for mp in self.mountpoints:
+            obj = mp.fadvise_status()
+            dontneed = dontneed + obj["dontneed"]
+            normal = normal + obj["normal"]
+        return  {"normal": normal, "dontneed": dontneed}
+    def _anycast_status(self, actorname):
+        setsize = 0
+        setvolume = 0
+        for mp in self.mountpoints:
+            obj = mp.anycast_status(actorname)
+            setsize = setsize + obj["set_size"]
+            setvolume = setvolume + obj["set_volume"]
+        return  {"set_size": setsize, "set_volume": setvolume}
+    def _get_job(self):
+        sleepcount = 0 
+        while True:
+            for index in  range(0,self.count):
+                worker=self.workers[index]
+                job = worker.poll_job()
+                if job is None:
+                    sleepcount = sleepcount + 1
+                else:
+                    sleepcount = 0
+                    yield job,worker
+                if sleepcount == self.count:
+                    sleep(0.05)           
+    def _child_submit(self,job,carvpath,meta):
+        data_nexthop,data_routerstate,data_mimetype,data_ext,meta_nexthop,meta_routerstate=self.router.process_child_meta(meta)
+        if meta_nexthop != None:
+            self.throttler.on_anycast(meta_nexthop)
+            metablob = self.serializer(meta)
+            mutable = job.childdata(len(metablob))
+            with open(mutable, "r+") as f:
+                f.seek(0)
+                f.write(metablob)
+            meta_carvpath = job.frozen_childdata()
+            job.childsubmit(carvpath=meta_carvpath,
+                        nextactor=meta_nexthop,
+                        routerstate=meta_routerstate,
+                        mimetype=self.serializer.mimetype,
+                        extension=self.serializer.ext)
+        if data_nexthop != None:
+            self.throttler.on_anycast(data_nexthop)
+            job.childsubmit(carvpath=data_carvpath,
+                        nextactor=data_nexthop,
+                        routerstate=data_routerstate,
+                        mimetype=data_mimetype,
+                        extension=data_ext)
+    def _allocate_storage(self,size):
+        self.throttler.on_alloc(size)
+        return self.job.childdata(size)
+    def __call__(self):
+        while (job,worker) in _get_job():
+            self.job=job
+            self.throttler.set_worker(worker)
+            self.router.set_state(job.router_state)
+            toplevel_meta = self.treewalker.walk(job.carvpath,self.router.get_walk_argument(),self._child_submit,self._allocate_storage)
+            self.router.process_parent_meta(toplevel_meta)
+            meta_module,meta_router_state = self.router.get_parentmeta_routing_info()
+            if meta_module != None:
+                metablob = self.serializer(toplevel_meta)
+                mutable = job.childdata(len(metablob))
+                with open(mutable, "r+") as f:
+                    f.seek(0)
+                    f.write(metablob)
+                meta_carvpath = job.frozen_childdata()
+                job.childsubmit(carvpath=meta_carvpath,
+                            nextactor=meta_module,
+                            routerstate=meta_router_state,
+                            mimetype=self.serializer.mimetype,
+                            extension=self.serializer.ext)
+            data_module,data_router_state = self.router.get_parentdata_routing_info()
+            if data_module == None:
+                job.done()
+            else:
+                job.forward(data_module,data_router_state)
+            self.router.clear_state()         
+
+
