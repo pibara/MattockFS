@@ -1,81 +1,8 @@
-IF YOU WISH TO CONTRIBUTE BY PICKING UP ANY OF THE ITEMS BELOW,
-PLEASE ADD YOUR INITIALS TO THE ITEM AND SEND ME A PULL REQUEST.
+The TODO list has migrated to the GitHub project issues page:
 
-TOPIC "BINDING"
+* https://github.com/pibara/MattockFS/issues
 
-1)  Extend Python API with a multi-mountpoint eventloop Class that has hooks
-    for the main higher level API functions (but does not implement them.
-2)  Naive example implementation for higher level module framework. 
-    Just as an example of how the event loop class is suposed to be used.
-3)  Write ports of the base API to C++ Next to Python, C++ should be
-    considered an important language for writing modules in. The current
-    Python wrapper API for access to the file-system based archive and
-    messaging API should also be ported to C++.
-
-
-TOPIC "PRIVSEP"
-
-4)  Put priviledged operation in config and respect enforce as access controll.
-    * kickstarting (S0 parent jobs out of thin air)
-    * loadbalance (module selection policy setting)
-5)  Provide an base AppArmor module profile with example profile for an example module.
-6)  Provide an IPTABLES example with different module gid's and uid's.
-
-
-TOPIC "BUGS"
-
-7)  Find + fix bug with mime-type mess up between submitting child job and 
-    receiving job in next module.
-
-TOPIC "PAGECACHE"
-
-8)  Implement and evaluate secondary opportunistic hashing : Secondary
-    incore based opportunistic hashing could potentially greatly improve
-    the interaction between carving and opportunistic hashing.
-
-TOPIC "DOCUMENTATION"
-
-9)  Update website. Website was made largely pre-implemetation and needs some major updates.
-
-TOPIC "ROBUSTNESS"
-
-10)  Testing (+ debugging) restore state from journal. This bastard has been with
-    me for a few months now and "I REALLY COULD USE A SECOND PAIR OF EYES ON THIS ONE".
-    After a restart, the anycast state should get restored from the journal. Currently
-    he restored state is somehow messed up, so I've disabled this crucial feature for
-    now. I was really hoping to fix this one before the DFRWS.
-11)  Implement temporary-quarantine facility: In OCFA, the Anycast im-
-    plemented a quarantine facility for data that would crash a module.
-    This facility, that OCFA implemented in the form of the never priority
-    allowed the investigation to keep running while maintenance program-
-    mers would fix the module. Research is needed into the possibility of
-    implementing a similar data quarantine functionality in MattockFS.
-    It is a remore posibility that this feature might be a prerequitite to
-    truly fixing the issues with #4.
-
-TOPIC "PERFORMANCE"
-
-12)  Port MattockFS to C++: While Python is a good programming lan-
-     guage for prototyping, our evaluation has shown that the implementa-
-     tion is relatively slow with respect to import and possibly messaging.
-     This slowness could potentially partially nullify part of the performance
-     benefits from the page-cache and opportunistic hashing. Rewriting it
-     in C++ is likely to lead to a much faster implementation.
-13)  Move to BLAKE2bp: The current implementation uses a Python module 
-     without support for the parallel multi-core BLAKE2bp implemen-
-     tation. With just one file-system on a node for a given archive, this
-     would mean at most one core could be working on opportunistic hashing 
-     for the whole node, possibly creating a hashing bottleneck for the
-     system. Implementing BLAKE2bp, either by patching the BLAKE2
-     python module code, or by moving to C++ and appropriate library
-     could remove that potential bottleneck.
-14)  Fuse read-block size: As we identified in our evaluation of file/digest
-     order, reducing the read block-size for FUSE could potentially greatly
-     reduce the amount of spurious reads, but at the expense of file-system
-     overhead. This should be evaluated and if worth the price, implemented
-     into MattockFS.
-
-The following TODO items have been completed since I've handed in my paper for grading:
+The following TODO items have been completed between the time that I've handed in my paper for grading:
 
 * Decouple longpath implementation in such a way that workers don't need to ever
   directly access redis.
