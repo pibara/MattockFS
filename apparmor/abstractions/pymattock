@@ -17,5 +17,5 @@
 /proc/@{pid} r,
 /proc/pid/self r,
 /proc/@{pid}/** rw
+/proc/meminfo
 
-,

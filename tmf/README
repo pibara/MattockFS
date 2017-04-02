@@ -1,0 +1,6 @@
+This dir contains experimental modules for the bare-bone trivial module framework that
+is included in the standard language bindings as trivial default components to the 
+EventLoop API. 
+
+This is all very experimental and meant primarily to give potential authors of higher
+level framework implemetations something to work with.

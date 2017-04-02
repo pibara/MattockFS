@@ -157,7 +157,8 @@ class _Job:
             #                 carvpath.
             val = (carvpath + ";" + nextactor + ";" + routerstate + ";" +
                    mimetype + ";" + extension)
-            self.ctl["user.submit_child"] = val
+            print "submit_child (",val,")"
+            self.ctl["user.submit_child"] = val.encode()
             self.newdata = None
 
     # Mark the job as done without specifying a new target. This should close
@@ -479,7 +480,7 @@ class EventLoop:
                         extension=self.serializer.ext)
         if data_nexthop != None:
             self.throttler.on_anycast(data_nexthop)
-            job.childsubmit(carvpath=data_carvpath,
+            job.childsubmit(carvpath=carvpath,
                         nextactor=data_nexthop,
                         routerstate=data_routerstate,
                         mimetype=data_mimetype,
