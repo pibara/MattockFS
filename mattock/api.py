@@ -157,7 +157,6 @@ class _Job:
             #                 carvpath.
             val = (carvpath + ";" + nextactor + ";" + routerstate + ";" +
                    mimetype + ";" + extension)
-            print "submit_child (",val,")"
             self.ctl["user.submit_child"] = val.encode()
             self.newdata = None
 
@@ -273,7 +272,6 @@ class LongPathMap:
         cp_ctl = xattr.xattr(cpath)
         return cp_ctl["user.long_path"]
     def __setitem__(self, i, val):
-        print "add_longpath",val
         self.main_ctl["user.add_longpath"] = val
     def __contains__(self, key):
         cpath = self.cproot + i + ".dat"
