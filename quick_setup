@@ -31,4 +31,4 @@ else
 fi
 #Copy the start, stop and test scripts to /usr/local/bin
 sudo cp bin/* /usr/local/bin/
-sudo cp mattockfs.json mattock_trivial_router_conf.json /etc/
+sudo cp mattockfs.json /etc/

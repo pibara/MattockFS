@@ -1,5 +1,0 @@
-{
-  "application/disk-img" : "mmls;dd" ,
-  "application/file-system" : "fswalk;dd" ,
-  "image/jpeg" : "exif;jpeg"
-}
