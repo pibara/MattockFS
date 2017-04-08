@@ -57,19 +57,23 @@ except ImportError:  # pragma: no cover
 
 # In-file-system representation of a worker.
 class Worker:
-    def __init__(self, actorname, workerhandle, actor, user, command):
+    def __init__(self, actorname, workerhandle, actor, user, command, pid):
         self.actor = actor  # Refence to the actor this worker is instance of.
         self.actorname = actorname  # Name of the actor that we are worker for
         self.workerhandle = workerhandle  # Unique handle for this worker
         self.user = user
         self.command = command
+        self.pid = pid
         self.currentjob = None  # The job currently being processed by us.
         # When not set to "S", the module selection policy for load balancing.
         self.module_select_policy = "S"
         # The pollicy for selecting the first job from the anycast set.
         self.job_select_policy = "H"
         self.valid = True  # Make sure we don't try to do cleanup twice.
-
+    def still_running(self):
+        if os.path.exists( "/proc/" + str(self.pid)):
+            return True
+        return False
     # Cleanup all pending state for the worker.
     def teardown(self):
         # If there is still a job marked as active, we have no other option
@@ -352,11 +356,12 @@ class Actor:
         for jobname in self.anycast:
             self.anycast[jobname].restorepoint()
     # Register an instance for this Actor
-    def register_worker(self, user, command):   # read-only extended attribute.
+    def register_worker(self, user, command, pid):   # read-only extended attribute.
         rval = self.capgen(parentcap=self.secret)  # Generate worker sparsecap
         # Make a new worker and register in the workers map.
         self.workers[rval] = Worker(actorname=self.name, workerhandle=rval,
-                                    actor=self, user=user, command=command)
+                                    actor=self, user=user, command=command,
+                                    pid=pid)
         # Also make the new worker part of a all-actors level lookup map.
         self.allworkers[rval] = self.workers[rval]
         return rval  # Return the sparse-cap.
@@ -375,7 +380,8 @@ class Actor:
         handles = self.workers.keys()
         # Unregister each of them.
         for handle in handles:
-            self.unregister(handle)
+            if not self.workers[handle].still_running():
+                self.unregister(handle)
 
     # Count the workers for this actor.
     def worker_count(self):   # read-only extended attribute

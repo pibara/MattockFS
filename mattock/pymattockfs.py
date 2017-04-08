@@ -278,7 +278,7 @@ class ActorCtl:
                 with open(path, "r") as f:
                     cmd = f.read().split("\0")[:-1]
                 rval = ("worker/" +
-                        self.mod.register_worker(user=user, command=cmd) +
+                        self.mod.register_worker(user=user, command=cmd, pid=context["pid"]) +
                         ".ctl")
                 return rval
         return -errno.ENODATA
