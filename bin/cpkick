@@ -12,10 +12,13 @@ else:
     mp = MountPoint("/var/mattock/mnt/0")
     context = mp.register_worker("cpkick","K")
     kickjob = context.poll_job()
-    kickjob.childsubmit(carvpath=carvpath,
+    if kickjob == None:
+        print "Seems we are not priviledged to run as kickstarting module"
+    else:
+        kickjob.childsubmit(carvpath=carvpath,
                         nextactor=nextmodule,
                         routerstate="",
                         mimetype="application/binary",
                         extension="data")
-    print "Forwarded to",nextmodule,"as", carvpath
-    kickjob.done()
+        print "Forwarded to",nextmodule,"as", carvpath
+        kickjob.done()

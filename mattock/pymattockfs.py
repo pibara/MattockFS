@@ -43,6 +43,7 @@ import copy
 import os
 import redislongpathmap as longpathmap
 import pwd
+import json
 
 fuse.fuse_python_api = (0, 2)
 
@@ -353,6 +354,16 @@ class WorkerCtl:
         self.sortre = sortre
         self.selectre = selectre
         self.tick = tick
+        actorname = worker.actorname
+        self.kickstart_ok = False
+        self.loadbalance_ok = False
+        with  open("/etc/mattockfs.json") as config_file:
+            conf = json.loads(config_file.read())
+            if "thin_air_jobs" in conf and actorname in conf["thin_air_jobs"]:
+               self.kickstart_ok = True
+            if "steal_jobs"  in conf and actorname in conf["steal_jobs"]:
+               self.loadbalance_ok = True
+            
     def getattr(self):
         return defaultstat(STAT_MODE_FILE_RO)
 
@@ -363,16 +374,24 @@ class WorkerCtl:
         return -errno.EINVAL
 
     def listxattr(self):  # pragma: no cover
-        return ["user.job_select_policy",
-                "user.actor_select_policy",
-                "user.unregister",
-                "user.accept_job"]
+        if self.loadbalance_ok == True :
+            return ["user.job_select_policy",
+                    "user.actor_select_policy",
+                    "user.unregister",
+                    "user.accept_job"]
+        else:
+            return ["user.job_select_policy",
+                    "user.unregister",
+                    "user.accept_job"]
 
     def getxattr(self, name, size):  # pragma: no cover
         if name == "user.job_select_policy":
             return self.worker.job_select_policy
         if name == "user.actor_select_policy":
-            return self.worker.module_select_policy
+            if self.loadbalance_ok == True:
+                return self.worker.module_select_policy
+            else:
+                return -errno.ENODATA
         if name == "user.unregister":
             return "0"
         if name == "user.accept_job":
@@ -391,17 +410,22 @@ class WorkerCtl:
 
     def setxattr(self, name, val):
         if name == "user.job_select_policy":
+            if self.kickstart_ok == False:
+                val = re.sub('[kK]', '', val)
             ok = bool(self.sortre.search(val))
             if ok:
                 # Set the job select pollicy for this worker.
                 self.worker.job_select_policy = val
             return 0
         if name == "user.actor_select_policy":
-            ok = bool(self.selectre.search(val))
-            if ok:
-                # For a load balancer: set the module select policy.
-                self.worker.module_select_policy = val
-            return 0
+            if self.loadbalance_ok == True:
+                ok = bool(self.selectre.search(val))
+                if ok:
+                    # For a load balancer: set the module select policy.
+                    self.worker.module_select_policy = val
+                return 0
+            else:
+                return -errno.ENODATA
         if name == "user.unregister":
             if val == "1":
                 # Unregister as worker. A worker should do this prior
