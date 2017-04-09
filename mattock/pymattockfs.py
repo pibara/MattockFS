@@ -696,13 +696,12 @@ class CarvPathLink:
         return -errno.EPERM
 
 class EtcLink:
-    def __init__(self,entity):
+    def __init__(self,entity,rep):
         self.entity=entity
+        self.rep = rep
         self.link = "/etc/mattockfs.d/" + entity
-        print "ETCLINK:",self.link
-
     def getattr(self):
-        return defaultstat(STAT_MODE_LINK)
+        return defaultstat(STAT_MODE_FILE)
 
     def opendir(self):  # pragma: no cover
         return -errno.ENOTDIR
@@ -711,12 +710,17 @@ class EtcLink:
         return self.link
 
     def listxattr(self):  # pragma: no cover
-        return []
+        return ["user.snapshot"]
 
     def getxattr(self, name, size):  # pragma: no cover
+        if name == "user.snapshot":
+            with open(self.link,"r") as f:
+                return self.rep.snapshot(f.read())
         return -errno.ENODATA
 
     def setxattr(self, name, val):  # pragma: no cover
+        if name == "user.snapshot":
+            return -errno.EPERM
         return -errno.ENODATA
 
     def open(self, flags, path):  # pragma: no cover
@@ -782,7 +786,7 @@ class MattockFS(fuse.Fuse):
                 # All other level 1 directories are unlistable.
                 return self.nolistdir
             if len(tokens) == 2 and tokens[0] == "etc":
-                return EtcLink(tokens[1])
+                return EtcLink(tokens[1],self.rep)
             if tokens[0] == "carvpath":
                 lastpart = tokens[1].split(".")
                 # At most one dot in valid carvpath.

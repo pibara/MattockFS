@@ -217,7 +217,19 @@ class Repository:
         self.top.grow(chunk=cursize + chunksize - self.top.size)
         return cursize
 
-    # It multiple instances of MattockFS use the smae repository,
+    def snapshot(self,data):
+        chunksize = len(data)
+        offset = self._grow(chunksize=chunksize)
+        os.lseek(self.fd, offset, 0)
+        os.write(self.fd, data)
+        cp = str(carvpath._Entity(lpmap=self.context.longpathmap,
+                                  maxfstoken=self.context.maxfstoken,
+                                  fragments=[
+                                     carvpath.Fragment(offset=offset,
+                                                       size=chunksize)]))
+        return cp
+
+    # It multiple instances of MattockFS use the same repository,
     # sync archive size with the underlying file size.
     def multi_sync(self):
         cursize = os.lseek(self.fd, 0, os.SEEK_END)
