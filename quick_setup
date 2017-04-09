@@ -32,3 +32,5 @@ fi
 #Copy the start, stop and test scripts to /usr/local/bin
 sudo cp bin/* /usr/local/bin/
 sudo cp mattockfs.json /etc/
+sudo mkdir /etc/mattockfs.d
+sudo touch /etc/mattockfs.d/test

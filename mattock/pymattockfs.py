@@ -118,6 +118,7 @@ class TopDir:
         yield fuse.Direntry("worker")
         yield fuse.Direntry("job")
         yield fuse.Direntry("mutable")
+        yield fuse.Direntry("etc")
 
     def readlink(self):  # pragma: no cover
         return -errno.EINVAL
@@ -188,6 +189,32 @@ class ActorDir:
     def open(self, flags, path):
         return -errno.EPERM
 
+class EtcDir:
+    def getattr(self):
+        return defaultstat(STAT_MODE_DIR)
+
+    def readdir(self):  # pragma: no cover
+        for entry in os.listdir("/etc/mattockfs.d"):
+            if os.path.isfile("/etc/mattockfs.d/" + entry ):
+                yield fuse.Direntry(entry)
+
+    def opendir(self):
+        return 0
+
+    def readlink(self):
+        return -errno.EINVAL
+
+    def listxattr(self):
+        return []
+
+    def getxattr(self, name, size):
+        return -errno.ENODATA
+
+    def setxattr(self, name, val):
+        return -errno.ENODATA
+
+    def open(self, flags, path):
+        return -errno.EPERM
  
 
 # Top level mattockfs.ctl control file.
@@ -668,6 +695,32 @@ class CarvPathLink:
     def open(self, flags, path):  # pragma: no cover
         return -errno.EPERM
 
+class EtcLink:
+    def __init__(self,entity):
+        self.entity=entity
+        self.link = "/etc/mattockfs.d/" + entity
+        print "ETCLINK:",self.link
+
+    def getattr(self):
+        return defaultstat(STAT_MODE_LINK)
+
+    def opendir(self):  # pragma: no cover
+        return -errno.ENOTDIR
+
+    def readlink(self):
+        return self.link
+
+    def listxattr(self):  # pragma: no cover
+        return []
+
+    def getxattr(self, name, size):  # pragma: no cover
+        return -errno.ENODATA
+
+    def setxattr(self, name, val):  # pragma: no cover
+        return -errno.ENODATA
+
+    def open(self, flags, path):  # pragma: no cover
+        return -errno.EPERM
 
 # The actual FUSE MattockFS file-system.
 class MattockFS(fuse.Fuse):
@@ -695,6 +748,7 @@ class MattockFS(fuse.Fuse):
             context=self.context,
             stack=self.rep.stack,
             col=self.rep.col)
+        self.etcdir = EtcDir()
         self.topctl = TopCtl(rep=self.rep, context=self.context)
         self.actordir = ActorDir(actors=self.ms)
         self.needinit = True
@@ -713,7 +767,8 @@ class MattockFS(fuse.Fuse):
                          "worker",
                          "job",
                          "mutable",
-                         "mattockfs.ctl"):
+                         "mattockfs.ctl",
+                         "etc"):
             # Only the carvpath directory does to 3 levels deep.
             if len(tokens) > 2 and tokens[0] != "carvpath":
                 return NoEnt()
@@ -722,8 +777,12 @@ class MattockFS(fuse.Fuse):
                     return self.topctl
                 if tokens[0] == "actor":
                     return self.actordir
+                if tokens[0] == "etc":
+                    return self.etcdir
                 # All other level 1 directories are unlistable.
                 return self.nolistdir
+            if len(tokens) == 2 and tokens[0] == "etc":
+                return EtcLink(tokens[1])
             if tokens[0] == "carvpath":
                 lastpart = tokens[1].split(".")
                 # At most one dot in valid carvpath.
