@@ -37,6 +37,7 @@ import random
 import re
 import carvpath
 import repository
+import merkletree
 import opportunistic_hash
 import sys
 import copy
@@ -729,7 +730,7 @@ class EtcLink:
 # The actual FUSE MattockFS file-system.
 class MattockFS(fuse.Fuse):
     def __init__(self, dash_s_do, version, usage, dd, lpdb, journal,
-                 provenance_log, ohash_log, refcount_log):
+                 provenance_log, ohash_log, refcount_log, mtlog):
         super(MattockFS, self).__init__(version=version, usage=usage,
                                         dash_s_do=dash_s_do)
         self.longpathdb = lpdb
@@ -740,11 +741,13 @@ class MattockFS(fuse.Fuse):
         self.selectre = re.compile(r'^[SVDWC]{1,5}$')
         self.sortre = re.compile(r'^(K|[RrOHDdWS]{1,6})$')
         self.archive_dd = dd
+        self.mtlog = mtlog = merkletree.MerkleTreeLog(mtlog)
         self.rep = repository.Repository(
             reppath=self.archive_dd,
             context=self.context,
             ohash_log=ohash_log,
-            refcount_log=refcount_log)
+            refcount_log=refcount_log,
+            mtlog = self.mtlog)
         self.ms = anycast.Actors(
             rep=self.rep,
             journal=journal,
@@ -967,6 +970,8 @@ def run(mattockitem="0"):
     ohash_log = mattockdir + "/log/" + mattockitem + ".ohash"
     # Debugging log for reference count logging.
     refcount_log = mattockdir + "/log/" + mattockitem + ".refcount"
+    #Merkletree log
+    merkletree_log = mattockdir + "/log/" + mattockitem + ".merkletree"
     # Mountpoint.
     mp = mattockdir + "/mnt/" + mattockitem
     sys.argv.append(mp)
@@ -979,7 +984,8 @@ def run(mattockitem="0"):
                   journal=journal,
                   provenance_log=provenance_log,
                   ohash_log=ohash_log,
-                  refcount_log=refcount_log)
+                  refcount_log=refcount_log,
+                  mtlog=merkletree_log)
     mattockfs.parse(errex=1)
     mattockfs.flags = 0
     mattockfs.multithreaded = 0

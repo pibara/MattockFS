@@ -131,8 +131,9 @@ class _Opportunistic_Hash:
 
 # Class to represent a single opportunistic hashing candidate CarvPath.
 class _OH_Entity:
-    def __init__(self, entity, log):
+    def __init__(self, entity, log, mtlog):
         self.log = log
+        self.mtlog = mtlog
         self.ent = entity.copy()
         self.ohash = _Opportunistic_Hash(size=self.ent.totalsize)
         # The shifting range-of-interest for reading operations for CarvPath.
@@ -217,6 +218,7 @@ class _OH_Entity:
                     # than log the new hash.
                     self.log.write(str(self.ent) + ":" + self.ohash.result +
                                    "\n")
+                    self.mtlog.add(str(self.ent), self.ohash.result)
 
     # Process a written chunk
     def written_parent_chunk(self, data, parentoffset):
@@ -253,19 +255,20 @@ class _OH_Entity:
 # Collection of repository CarvPath's still active in MattockFS and possible
 # candidates for opportunistic hashing.
 class OpportunisticHashCollection:
-    def __init__(self, carvpathcontext, ohash_log):
+    def __init__(self, carvpathcontext, ohash_log, mtlog):
         self.context = carvpathcontext
         self.ohash = dict()  # Start off with an empty collection of
         #                      opportunistic hashing candidates,
         self.log = open(ohash_log, "a", 0)  # Open a log file to keep track of
         #                                     successfull opportunistic hashing
+        self.mtlog = mtlog #Experimental merkletree logging for opportunistic hashing.
 
     # Add a new carvpath to the collection.
     def add_carvpath(self, carvpath):
         # Parse the carvpath.
         ent = self.context.parse(path=carvpath)
         # Create a new opportunistic hashing candidate.
-        self.ohash[carvpath] = _OH_Entity(entity=ent, log=self.log)
+        self.ohash[carvpath] = _OH_Entity(entity=ent, log=self.log, mtlog=self.mtlog)
 
     # Drop a candidate from the collection.
     def remove_carvpath(self, carvpath):

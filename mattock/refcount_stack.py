@@ -445,9 +445,11 @@ if __name__ == "__main__":  # pragma: no cover
                 print "FakeFadviseFunctor: ", offset, size, "DONTNEED"
     import carvpath
     import opportunistic_hash
+    import merkletree
     fadvise = FakeFadviseFunctor()
+    mtlog = merkletree.MerkleTreeLog()
     context = carvpath.Context({}, 160)
-    col = opportunistic_hash.OpportunisticHashCollection(context, "./test.log")
+    col = opportunistic_hash.OpportunisticHashCollection(context, "./test.log",mtlog)
     stack = CarvpathRefcountStack(context, fadvise, col, "./test2.log")
     stack.add_carvpath("181481349+1234567")
     print str(stack)
@@ -473,3 +475,4 @@ if __name__ == "__main__":  # pragma: no cover
     print str(stack)
     stack.remove_carvpath("182715916+1234567")
     print str(stack)
+    mtlog.flush()

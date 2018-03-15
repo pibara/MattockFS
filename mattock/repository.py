@@ -171,12 +171,13 @@ class _OpenFile:
 
 
 class Repository:
-    def __init__(self, reppath, context, ohash_log, refcount_log):
+    def __init__(self, reppath, context, ohash_log, refcount_log, mtlog):
         self.context = context
         # Create a new opportunistic hash collection.
         self.col = opportunistic_hash.OpportunisticHashCollection(
                          carvpathcontext=context,
-                         ohash_log=ohash_log)
+                         ohash_log=ohash_log,
+                         mtlog=mtlog)
         # We start off with zero open files
         self.openfiles = {}
         # Open the underlying data file and create if needed.
@@ -419,11 +420,14 @@ class Repository:
 if __name__ == "__main__":  # pragma: no cover
     import carvpath
     import opportunistic_hash
+    import merkletree
+    mtlog = merkletree.MerkleTreeLog("merkletree.log")
     context = carvpath.Context(lpmap={}, maxtokenlen=160)
     rep = Repository(reppath="/var/mattock/archive/0.dd",
                      context=context,
                      ohash_log="test3.log",
-                     refcount_log="test4.log")
+                     refcount_log="test4.log",
+                     mtlog=mtlog)
     entity = context.parse(path="1234+5678")
     f1 = rep.open(carvpath="1234+5678", path="/frozen/1234+5678.dat")
     print rep.volume()
