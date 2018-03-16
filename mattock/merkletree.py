@@ -64,6 +64,7 @@ class MerkleTreeLog:
             mtree = json.dumps(self.entries.pop(0),sort_keys=True)
             self.log.write(mtree + "\n")
             self.starttime = time.time()
+            self.entries = list()
 
 
 
