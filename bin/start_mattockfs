@@ -1,2 +1,3 @@
 #!/bin/bash
 sudo su mattockfs -c '/usr/local/bin/start_mattockfs.py -o allow_other'
+sudo su mattockfs -c '/usr/local/bin/mattockfs_tick.py' 2>&1 >/dev/null &

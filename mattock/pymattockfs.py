@@ -220,9 +220,10 @@ class EtcDir:
 
 # Top level mattockfs.ctl control file.
 class TopCtl:
-    def __init__(self, rep, context):
+    def __init__(self, rep, context, mtlog):
         self.rep = rep
         self.context = context
+        self.mtlog = mtlog
 
     def getattr(self):
         return defaultstat(STAT_MODE_FILE_RO)
@@ -236,7 +237,8 @@ class TopCtl:
     def listxattr(self):  # pragma: no cover
         return ["user.fadvise_status",
                 "user.full_archive",
-                "user.add_longpath"]
+                "user.add_longpath",
+                "user.tick"]
 
     def getxattr(self, name, size):
         if name == "user.fadvise_status":
@@ -248,11 +250,15 @@ class TopCtl:
             return "carvpath/" + str(self.rep.top.topentity) + ".raw"
         if name == "user.add_longpath":
             return ""
+        if name == "user.tick":
+            self.mtlog.tick()
+            return ""
         return -errno.ENODATA
 
     def setxattr(self, name, val):  # pragma: no cover
         if name in ("user.fadvise_status",
-                    "user.full_archive"):
+                    "user.full_archive",
+                    "user.tick"):
             return -errno.EPERM
         if name == "user.add_longpath":
             val = val.split("carvpath/")[-1].split(".")[0]
@@ -741,7 +747,7 @@ class MattockFS(fuse.Fuse):
         self.selectre = re.compile(r'^[SVDWC]{1,5}$')
         self.sortre = re.compile(r'^(K|[RrOHDdWS]{1,6})$')
         self.archive_dd = dd
-        self.mtlog = mtlog = merkletree.MerkleTreeLog(mtlog)
+        self.mtlog = merkletree.MerkleTreeLog(mtlog)
         self.rep = repository.Repository(
             reppath=self.archive_dd,
             context=self.context,
@@ -756,7 +762,7 @@ class MattockFS(fuse.Fuse):
             stack=self.rep.stack,
             col=self.rep.col)
         self.etcdir = EtcDir()
-        self.topctl = TopCtl(rep=self.rep, context=self.context)
+        self.topctl = TopCtl(rep=self.rep, context=self.context, mtlog=self.mtlog)
         self.actordir = ActorDir(actors=self.ms)
         self.needinit = True
     # Helper used by multiple fuse hooks to create one of the node type

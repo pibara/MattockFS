@@ -1,2 +1,3 @@
 #!/bin/bash
+sudo /usr/bin/killall mattockfs_tick.py
 sudo su mattockfs -c 'python /usr/local/bin/stop_mattockfs.py'
