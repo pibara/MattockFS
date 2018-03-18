@@ -1,6 +1,6 @@
 { 
   "instance_count" : 4 ,
-  "thin_air_jobs" : ["ewf2mattock","cpkick","resubmit"] ,
+  "thin_air_jobs" : ["ewf2mattock","cpkick","resubmit","mtloopbck"] ,
   "steal_jobs" : ["loadbalance"] ,
   "secondary_oh" : ["scalpelcp"]
 }
