@@ -1,3 +1,5 @@
 #!/bin/bash
-sudo /usr/bin/killall mattockfs_tick.py
+sudo su mattockfs -c '/usr/bin/killall mattockfs_tick.py'
+sudo su mattockfs -c '/usr/bin/killall merkletree-loopback.py'
+sudo su mattockfs -c '/usr/bin/killall tail'
 sudo su mattockfs -c 'python /usr/local/bin/stop_mattockfs.py'
