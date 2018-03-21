@@ -40,6 +40,6 @@ setup(
     keywords='computer forensics',
     #install_requires=['pyblake2','fuse-python','redis','fadvise','xattr'],
     #FIXME, removed a few as to help with deb file creation.
-    install_requires=['pyblake2','fadvise'],
+    install_requires=['pyblake2','fadvise','sh'],
     packages=find_packages(exclude=['bin']),
 )
