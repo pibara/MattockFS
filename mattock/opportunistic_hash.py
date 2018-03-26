@@ -218,7 +218,7 @@ class _OH_Entity:
                     # than log the new hash.
                     self.log.write(str(self.ent) + ":" + self.ohash.result +
                                    "\n")
-                    self.mtlog.add(str(self.ent), self.ohash.result)
+                    self.mtlog.add_ohash(str(self.ent), self.ohash.result)
 
     # Process a written chunk
     def written_parent_chunk(self, data, parentoffset):

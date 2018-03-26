@@ -1,2 +1,4 @@
 #!/bin/bash
+sudo su mattockfs -c '/usr/local/bin/mattockfs_tick.py' 2>&1 >/dev/null &
+sudo su mattockfs -c '/usr/local/bin/merkletree-loopback.py' 2>&1 >/dev/null &
 sudo su mattockfs -c '/usr/local/bin/start_mattockfs.py -o allow_other -f'

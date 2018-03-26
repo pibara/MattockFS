@@ -760,7 +760,8 @@ class MattockFS(fuse.Fuse):
             provenance=provenance_log,
             context=self.context,
             stack=self.rep.stack,
-            col=self.rep.col)
+            col=self.rep.col,
+            mt=self.mtlog)
         self.etcdir = EtcDir()
         self.topctl = TopCtl(rep=self.rep, context=self.context, mtlog=self.mtlog)
         self.actordir = ActorDir(actors=self.ms)

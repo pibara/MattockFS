@@ -188,7 +188,7 @@ class Job:
     def __init__(self, jobhandle, actorname, carvpath, router_state,
                  mime_type, file_extension, actors, context, stack,
                  journal, prov_log, jobs, capgen, newdata, col, rep,
-                 provenance=None,worker=None):
+                 provenance=None,worker=None, mt=None):
         self.jobhandle = jobhandle
         self.actorname = actorname
         # Process the carvpath and flatten or replace with longpath digest if
@@ -218,6 +218,7 @@ class Job:
         if worker != None:
             user = worker.user
             command = worker.command
+        self.mt = mt
         # Create a brand new provenance structure if non was passed in the
         # constructor.
         if provenance is None:
@@ -231,7 +232,8 @@ class Job:
               journal=self.journal,
               provenance_log=prov_log,
               user=user,
-              command=command)
+              command=command,
+              mt=mt)
         else:
             # Otherwise append some data to the existing structure.
             self.provenance = provenance
@@ -317,7 +319,8 @@ class Job:
                         journal=self.journal,
                         provenance_log=self.actors.provenance_log,
                         user=self.worker.user,
-                        command=self.worker.command)
+                        command=self.worker.command,
+                        mt = self.mt)
         # Add new child job to the anycast set of the indicated nexthop actor.
         self.actors[nexthop].anycast_add(carvpath=carvpath,
                                          router_state=routerstate,
@@ -333,7 +336,7 @@ class Job:
 # workers are pressent.
 class Actor:
     def __init__(self, actorname, capgen, actors, rep, workers, journal,
-                 provenance_log, jobs, newdata, context, stack, col):
+                 provenance_log, jobs, newdata, context, stack, col, mt=None):
         self.name = actorname
         self.allworkers = workers
         self.journal = journal
@@ -351,6 +354,7 @@ class Actor:
         self.overflow = 10             # rw extended attribute
         self.actors = actors
         self.rep = rep
+        self.mt = mt
 
     def restorepoint(self):
         for jobname in self.anycast:
@@ -417,7 +421,8 @@ class Actor:
                                       newdata=self.newdata,
                                       col=self.col,
                                       rep=self.rep,
-                                      worker=worker)
+                                      worker=worker,
+                                      mt=self.mt)
         return
     # Get a job to do a kickstart with.
     def get_kickjob(self,worker=None):
@@ -473,11 +478,12 @@ class JournalFile:
 
 # State shared between different actors and a central coordination point.
 class Actors:
-    def __init__(self, rep, journal, provenance, context, stack, col):
+    def __init__(self, rep, journal, provenance, context, stack, col, mt = None):
         self.rep = rep
         self.context = context
         self.stack = stack
         self.col = col
+        self.mt = mt
         self.actors = {}
         self.workers = {}
         self.jobs = {}
@@ -542,7 +548,8 @@ class Actors:
                                      newdata=self.newdata,
                                      context=self.context,
                                      stack=self.stack,
-                                     col=self.rep.col)
+                                     col=self.rep.col,
+                                     mt = self.mt)
         # self.tick()
         # Return the new or already existing actor object.
         return self.actors[key]
@@ -576,7 +583,8 @@ class Actors:
                                                   provenance_log=self.provenance_log,
                                                   user=pl0["user"],
                                                   command=pl0["command"],
-                                                  restore=True)
+                                                  restore=True,
+                                                  mt = self.mt)
              for subseq in journal_records[1:-1]:
                  newpl(jobid=subseq["jobid"],
                        actor=subseq["actor"],

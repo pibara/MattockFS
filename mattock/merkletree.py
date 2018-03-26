@@ -36,11 +36,22 @@ class MerkleTreeLog:
         self.maxbacklogtime = 900 #At least 15 minutes between merkletree flushes
         self.entries = list()
         self.log = self.log = open(logpath, "a", 0)
-    def add(self,cp,digest):
+    def add_ohash(self,cp,digest):
         rec = dict()
         rec["cp"] = cp
         rec["hs"] = digest
         rec["mh"] = blake2b(cp,digest_size=32,key=digest).hexdigest()
+        self.entries.append(rec)
+        timepassed = time.time() - self.starttime
+        if timepassed > self.maxbacklogtime and len(self.entries) > 1:
+            self.flush()
+    def add_provenance(self,jid,cp,hsh):
+        rec = dict()
+        rec["cp"] = cp
+        rec["jid"] = jid
+        rec["hs"] = hsh
+        k = blake2b(jid,digest_size=32,key=hsh).hexdigest()
+        rec["mh"] = blake2b(cp,digest_size=32,key=k).hexdigest()
         self.entries.append(rec)
         timepassed = time.time() - self.starttime
         if timepassed > self.maxbacklogtime and len(self.entries) > 1:

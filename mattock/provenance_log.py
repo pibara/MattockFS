@@ -33,6 +33,8 @@
 import time
 import json
 from pyblake2 import blake2b
+import bencode
+import datetime
 
 
 # This class keeps track of provenance info during the lifetime of a CarvPath
@@ -40,7 +42,7 @@ from pyblake2 import blake2b
 class ProvenanceLog:
     def __init__(self, jobid, actor, router_state, carvpath, mimetype,
                  extension, parentcp=None, parentjob=None, journal=None,
-                 provenance_log=None, restore=False, user=None, command=None):
+                 provenance_log=None, restore=False, user=None, command=None, mt = None):
         if parentjob == jobid:
             parentjob = None
         self.log = []  # Start with an empty provenance log.
@@ -52,7 +54,7 @@ class ProvenanceLog:
         # Fill the first record in the provenance log with basic info.
         rec = {"jobid": jobid, "actor": actor, "router_state": router_state,
                "carvpath": carvpath, "mime": mimetype, "extension": extension, "active": True }
-        rec["time"] = time.time()  # Log creation time
+        rec["time"] = datetime.datetime.now().isoformat()  # Log creation time
         # If there was a parent carvpath: make a note of it in the creation
         # record.
         if parentcp is not None:
@@ -64,6 +66,7 @@ class ProvenanceLog:
             rec["user"] = user
         if command is not None:
             rec["command"] = command
+        self.mt = mt
         # Store our first record in the provenance log array.
         self.log.append(rec)
         # Don't log to journal if constructed in restore mode.
@@ -76,7 +79,7 @@ class ProvenanceLog:
     def __del__(self):
         # When the ProvenanceLog object is deleted, create one last record.
         rec = {}
-        rec["time"] = time.time()  # Make note of the time.
+        rec["time"] = datetime.datetime.now().isoformat()  # Make note of the time.
         rec["active"] = False
         self.log.append(rec)
         # Retreive the unique key to use in the journal.
@@ -86,15 +89,27 @@ class ProvenanceLog:
         # Write it to the journal.
         self.journal.write(json.dumps(journal_rec,sort_keys=True))
         self.journal.write("\n")
+        # Create object that can be signed canonically
+        hsh = ""
+        if self.mt != None and len(self.log) > 0 and "jobid" in self.log[0] and "carvpath" in self.log[0]:
+            #Experimental, we take the job id and carvpath of the first entry in the log as anchor.
+            jid = self.log[0]["jobid"]
+            cp  = self.log[0]["carvpath"] 
+            #We use bencode to cononicalize the data structure before hashing.
+            coded = bencode.bencode(self.log)
+            hsh = blake2b(coded.encode(),digest_size=32).hexdigest()
+            self.mt.add_provenance(jid,cp,hsh)
+        else:
+            print "ERR",self.mt != None,len(self.log) > 0,"jobid" in self.log[0],"carvpath" in self.log[0]
+        rec = { "hsh" : hsh, "provenance" : self.log }
         # Write the full provenance log to the provenance logging file.
-        self.provenance.write(json.dumps(self.log,sort_keys=True))
+        self.provenance.write(json.dumps(rec,sort_keys=True))
         self.provenance.write("\n")
-
     def __call__(self, jobid, actor, router_state="", restore=False,command=None, user=None):
         newobj = {"jobid": jobid,
                   "actor": actor,
                   "router_state": router_state,
-                  "time" : time.time(),
+                  "time" : datetime.datetime.now().isoformat(),
                   "active" : False}
         if user != None:
             newobj["user"] = user
@@ -115,7 +130,7 @@ class ProvenanceLog:
             self.journal.write("\n")
     def accept(self,actor,command,user):
         newobj = {"actor": actor,
-                  "time" : time.time(),
+                  "time" : datetime.datetime.now().isoformat(),
                   "user" : user,
                   "command" : command,
                   "active" : True }
